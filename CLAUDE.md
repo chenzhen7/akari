@@ -27,10 +27,8 @@ Diff: Monaco Editor
 终端复用: node-pty
 Git 操作: simple-git
 文件监听: chokidar
-通信: WebSocket / IPC (Electron)
+通信: WebSocket
 数据库: SQLite (better-sqlite3)
-
-桌面端: Electron 28+
 ```
 
 ## 项目结构
@@ -38,11 +36,15 @@ Git 操作: simple-git
 ```
 akari/
 ├── apps/
-│   ├── electron/              # Electron 主进程
-│   │   ├── main.ts
-│   │   ├── ipc-handlers/
-│   │   └── preload.ts
-│   └── web/                   # Web 前端 (React)
+│   ├── server/                # Node.js 后端 (Fastify + WebSocket)
+│   │   ├── src/
+│   │   │   ├── session-manager.ts
+│   │   │   ├── worktree-manager.ts
+│   │   │   ├── terminal-mux.ts
+│   │   │   ├── approval-workflow.ts
+│   │   │   └── agent-adapters/
+│   │   └── package.json
+│   └── web/                   # Web 前端 (React + Vite)
 │       ├── components/
 │       │   ├── Canvas/        # 无限画布 (ReactFlow)
 │       │   ├── Kanban/        # 看板
@@ -52,12 +54,6 @@ akari/
 │       ├── stores/            # Zustand stores
 │       └── hooks/
 ├── packages/
-│   ├── core/                  # 共享核心逻辑
-│   │   ├── session-manager.ts
-│   │   ├── worktree-manager.ts
-│   │   ├── terminal-mux.ts
-│   │   ├── approval-workflow.ts
-│   │   └── agent-adapters/
 │   └── shared-types/          # 共享类型定义
 └── package.json               # Monorepo (pnpm workspaces)
 ```

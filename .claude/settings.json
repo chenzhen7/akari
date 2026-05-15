@@ -9,13 +9,14 @@
       "Bash(npx eslint *)",
       "Bash(npx jest *)",
       "Bash(npx vitest *)",
-      "Bash(ls -R)",
+      "Bash(ls *)",
       "Bash(grep *)",
       "Bash(find *)",
       "Bash(cat *)",
       "Bash(mkdir -p *)",
       "Bash(touch *)",
-      "Bash(xxd)"
+      "Bash(xxd)",
+      "Bash(find *)"
     ]
   },
   "enabledPlugins": {}
