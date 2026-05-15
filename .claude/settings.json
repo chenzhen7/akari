@@ -18,7 +18,5 @@
       "Bash(xxd)"
     ]
   },
-  "enabledPlugins": {
-    "superpowers@claude-plugins-official": false
-  }
+  "enabledPlugins": {}
 }
