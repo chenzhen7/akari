@@ -2,9 +2,13 @@
 
 本文件为 Claude Code (claude.ai/code) 提供在本仓库中工作的指导。
 
+> **接手前必读**：[docs/progress.md](docs/progress.md) — 当前开发进度快照，包含已完成模块、正在进行的任务和前置依赖关系。
+
 ## 项目概述
 
-**Akari** 是一个 AI Agent 并行开发管理平台。完整的产品架构和需求文档见 [docs/设计文档.md](docs/设计文档.md)。目前代码库处于初始化阶段，是一个基于 Vite + React + shadcn/ui 的前端脚手架。规划中的架构包括：无限画布、看板视图、标签页会话视图、终端多路复用、Git worktree 管理以及 Agent 适配器（Claude、Aider 等）。
+**Akari** 是一个 AI Agent 并行开发管理平台。完整产品架构见 [docs/设计文档.md](docs/设计文档.md)，开发计划见 [docs/开发计划.md](docs/开发计划.md)。
+
+**当前状态**：前端 UI 骨架已完成（画布、看板、终端面板、指挥中心均为静态 Mock 数据）；后端尚未启动，Monorepo 结构尚未改造。架构包括：无限画布、看板视图、标签页会话视图、终端多路复用、Git worktree 管理以及 Agent 适配器（Claude、Aider 等）。
 
 **核心理念：「指挥中心」模式**
 - 用户是指挥官，Agent 是并行执行的士兵
@@ -33,29 +37,46 @@ Git 操作: simple-git
 
 ## 项目结构
 
+### 当前实际结构（单包，Monorepo 改造前）
+
+```
+akari/
+├── src/
+│   ├── types/index.ts              # AgentSession / SessionStatus / KanbanColumn
+│   ├── stores/session-store.ts     # Zustand store（含 Mock 数据）
+│   ├── components/
+│   │   ├── canvas/                 # CanvasView + SessionNode (@xyflow/react)
+│   │   ├── kanban/                 # KanbanView + KanbanCard + KanbanColumn (@dnd-kit)
+│   │   ├── session/                # SessionDetail + TaskPanel + TerminalPanel
+│   │   ├── command-center/         # CommandCenter（广播 + 批量审批面板）
+│   │   ├── create-session/         # CreateSessionDialog
+│   │   ├── layout/                 # AppShell + TopNav
+│   │   └── ui/                     # shadcn/ui 组件
+│   └── lib/utils.ts
+└── docs/
+    ├── 设计文档.md
+    ├── 开发计划.md
+    └── progress.md
+```
+
+### 目标结构（Monorepo 改造后）
+
 ```
 akari/
 ├── apps/
-│   ├── server/                # Node.js 后端 (Fastify + WebSocket)
-│   │   ├── src/
-│   │   │   ├── session-manager.ts
-│   │   │   ├── worktree-manager.ts
-│   │   │   ├── terminal-mux.ts
-│   │   │   ├── approval-workflow.ts
-│   │   │   └── agent-adapters/
-│   │   └── package.json
-│   └── web/                   # Web 前端 (React + Vite)
+│   ├── server/src/                 # Node.js 后端 (Fastify + WebSocket)
+│   │   ├── index.ts                # 入口，端口 3001
+│   │   ├── session-manager.ts
+│   │   ├── worktree-manager.ts
+│   │   ├── terminal-mux.ts
+│   │   ├── approval-workflow.ts
+│   │   └── agent-adapters/
+│   └── web/src/                    # 前端迁移至此
 │       ├── components/
-│       │   ├── Canvas/        # 无限画布 (ReactFlow)
-│       │   ├── Kanban/        # 看板
-│       │   ├── Terminal/      # 终端组件
-│       │   ├── DiffViewer/    # Diff 展示
-│       │   └── CommandCenter/ # 指挥中心面板
-│       ├── stores/            # Zustand stores
-│       └── hooks/
-├── packages/
-│   └── shared-types/          # 共享类型定义
-└── package.json               # Monorepo (pnpm workspaces)
+│       ├── stores/
+│       └── hooks/useWebSocket.ts   # 新增
+├── packages/shared-types/src/      # 前后端共享类型
+└── package.json                    # pnpm workspaces
 ```
 
 ## 编码规范
@@ -114,14 +135,45 @@ interface AgentAdapter {
 3. **终端即真相**：Agent 的输出通过终端复用器捕获，不通过自定义协议通信
 4. **审批不可绕过**：危险操作（ destructive ops ）必须经用户审批，Agent 适配器不得自动确认
 
+## WebSocket 事件协议
+
+前后端通过以下事件通信（实现时严格遵守字段名）：
+
+| 事件名 | 方向 | 关键 Payload 字段 |
+|--------|------|-------------------|
+| `session:created` | S→C | `session: AgentSession` |
+| `session:status` | S→C | `id, status, progress` |
+| `terminal:data` | S→C | `sessionId, data: string` |
+| `terminal:input` | C→S | `sessionId, data: string` |
+| `diff:update` | S→C | `sessionId, diff: GitDiff` |
+| `approval:required` | S→C | `sessionId, request: ApprovalRequest, diff` |
+| `approval:decision` | C→S | `sessionId, decision: 'approved' \| 'rejected'` |
+| `broadcast:send` | C→S | `message: string, targets?: string[]` |
+
+## 开发注意事项
+
+- **node-pty on Windows**：需要 VC++ Build Tools，建议在 WSL2 / macOS 开发；Windows 可降级用 `child_process.spawn` 模拟
+- **xterm.js + React 18 Strict Mode**：用 `useRef` 保护 Terminal 实例初始化，`useEffect` 必须返回 `dispose()`，防止双重挂载内存泄露
+- **Monaco Editor**：动态 `import()` 懒加载，体积约 2MB，不可同步引入
+- **`.agent-worktrees/`**：Monorepo 改造时立即加入 `.gitignore`
+
 ## 开发任务优先级
 
-1. 核心骨架：Worktree 管理 + 终端复用 + IPC
-2. 视图系统：画布 + 看板 + Tab 联动
-3. 审批工作流：Checkpoint 检测 + UI
-4. Git 集成：实时 Diff + 合并
-5. Agent 适配：Claude Code / Aider / 自定义
+| 模块 | 前置 | 说明 |
+|------|------|------|
+| F0 工程化基础 | — | Monorepo + 后端骨架 + WebSocket 联通 |
+| F1 会话管理 | F0 | SessionManager + SQLite + REST API |
+| F2 Worktree 管理 | F1 | WorktreeManager (simple-git) |
+| F3 终端多路复用 | F1 | TerminalMux (node-pty) + xterm.js |
+| F4 实时 Diff | F2 | chokidar + git diff + Monaco |
+| F5 审批工作流 | F3+F4 | ApprovalWorkflow + 审批 UI |
+| F6 Agent 适配器 | F2+F3 | Claude / Aider / 自定义 Shell |
+| F7 收尾打磨 | F1-F6 | 错误处理 + 测试 + UX |
 
 ## 文档索引
 
-- [docs/设计文档.md](docs/设计文档.md) - 完整产品架构、数据模型、视图设计
+> Agent 必读：执行任务前必须先按需加载以下规则
+
+- [docs/progress.md](docs/progress.md) — **开发进度快照**（接手新任务前必读）
+- [docs/设计文档.md](docs/设计文档.md) — 完整产品架构、数据模型、视图设计、代码示例
+- [docs/开发计划.md](docs/开发计划.md) — 分阶段任务拆解、依赖关系、里程碑
