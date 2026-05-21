@@ -2,136 +2,6 @@ import { create } from 'zustand'
 import type { AgentSession, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
 import type { ConnectionStatus } from '@/hooks/useWebSocket'
 
-const mockSessions: AgentSession[] = [
-  {
-    id: 'sess-1',
-    name: 'feat/user-auth',
-    task: '实现用户认证模块：JWT token 管理、OAuth 集成、权限中间件',
-    status: 'running',
-    agentType: 'claude',
-    worktreePath: '.agent-worktrees/sess-1',
-    branchName: 'agent/feat-user-auth-sess1',
-    baseBranch: 'main',
-    progress: 67,
-    kanbanColumn: 'in-progress',
-    canvasPosition: { x: 100, y: 100 },
-    canvasSize: { width: 280, height: 220 },
-    terminalId: 'term-1',
-    terminalOutput: [
-      '$ claude --continue',
-      '> Reading src/auth/login.ts...',
-      '> Implementing JWT validation middleware',
-      '> Writing tests for auth module...',
-      '> ✓ Created src/auth/jwt.ts',
-      '> Running tests...',
-      '> ████████░░ 4/5 tests passing',
-    ],
-    diffSummary: `src/auth/login.ts       +45  -3
-src/auth/jwt.ts         +89  -0
-src/middleware/auth.ts  +34 -12`,
-    createdAt: new Date(Date.now() - 3600000 * 2),
-    tags: ['auth', 'backend'],
-  },
-  {
-    id: 'sess-2',
-    name: 'feat/payment',
-    task: '实现支付模块：Stripe 集成、订单状态机、退款处理',
-    status: 'waiting',
-    agentType: 'claude',
-    worktreePath: '.agent-worktrees/sess-2',
-    branchName: 'agent/feat-payment-sess2',
-    baseBranch: 'main',
-    progress: 100,
-    kanbanColumn: 'waiting-review',
-    canvasPosition: { x: 500, y: 80 },
-    canvasSize: { width: 280, height: 220 },
-    terminalId: 'term-2',
-    terminalOutput: [
-      '$ claude --continue',
-      '> Payment module completed',
-      '> [APPROVAL_REQUIRED] type=destructive command="rm -rf dist"',
-      '> Waiting for user approval...',
-    ],
-    diffSummary: `src/payment/stripe.ts   +234 -12
-src/payment/order.ts    +156  -8
-src/payment/refund.ts   +89  -0`,
-    createdAt: new Date(Date.now() - 3600000 * 4),
-    tags: ['payment', 'backend'],
-  },
-  {
-    id: 'sess-3',
-    name: 'feat/dashboard',
-    task: '实现管理后台仪表盘：数据可视化、实时图表、权限控制',
-    status: 'failed',
-    agentType: 'claude',
-    worktreePath: '.agent-worktrees/sess-3',
-    branchName: 'agent/feat-dashboard-sess3',
-    baseBranch: 'main',
-    progress: 30,
-    kanbanColumn: 'in-progress',
-    canvasPosition: { x: 150, y: 400 },
-    canvasSize: { width: 280, height: 220 },
-    terminalId: 'term-3',
-    terminalOutput: [
-      '$ claude --continue',
-      '> Setting up dashboard layout...',
-      '> Error: Connection timeout after 30000ms',
-      '> Task failed',
-    ],
-    diffSummary: `src/dashboard/layout.ts  +12  -3
-src/dashboard/chart.ts   +0   -0`,
-    createdAt: new Date(Date.now() - 3600000 * 1),
-    tags: ['dashboard', 'frontend'],
-  },
-  {
-    id: 'sess-4',
-    name: 'feat/api-refactor',
-    task: '重构 API 层：统一错误处理、提取公共中间件、OpenAPI 文档生成',
-    status: 'initializing',
-    agentType: 'claude',
-    worktreePath: '.agent-worktrees/sess-4',
-    branchName: 'agent/feat-api-refactor-sess4',
-    baseBranch: 'main',
-    progress: 0,
-    kanbanColumn: 'backlog',
-    canvasPosition: { x: 550, y: 450 },
-    canvasSize: { width: 280, height: 220 },
-    terminalId: 'term-4',
-    terminalOutput: [
-      '> Creating worktree...',
-      '> Setting up branch agent/feat-api-refactor-sess4',
-    ],
-    diffSummary: '',
-    createdAt: new Date(),
-    tags: ['api', 'refactor'],
-  },
-  {
-    id: 'sess-5',
-    name: 'feat/logging',
-    task: '实现结构化日志系统：Pino 集成、日志轮转、ELK 导出',
-    status: 'completed',
-    agentType: 'claude',
-    worktreePath: '.agent-worktrees/sess-5',
-    branchName: 'agent/feat-logging-sess5',
-    baseBranch: 'main',
-    progress: 100,
-    kanbanColumn: 'done',
-    canvasPosition: { x: 900, y: 200 },
-    canvasSize: { width: 280, height: 220 },
-    terminalId: 'term-5',
-    terminalOutput: [
-      '$ claude --continue',
-      '> Implementing Pino logger...',
-      '> All tests passed',
-      '> ✅ Task completed successfully',
-    ],
-    diffSummary: `src/logger/pino.ts      +120  -0
-src/logger/rotate.ts    +45   -0
-src/logger/elk.ts       +67   -0`,
-    createdAt: new Date(Date.now() - 3600000 * 8),
-    tags: ['logging', 'infrastructure'],
-  },
-]
 
 interface SessionStore {
   sessions: AgentSession[]
@@ -165,7 +35,7 @@ interface SessionStore {
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
-  sessions: mockSessions,
+  sessions: [],
   viewMode: 'canvas',
   openTabs: [],
   activeTabId: null,

@@ -9,6 +9,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useSessionStore } from '@/stores/session-store'
 import { SessionNode } from './SessionNode'
+import { Loader2, ServerOff, LayoutGrid } from 'lucide-react'
 
 const nodeTypes = {
   sessionNode: SessionNode as any,
@@ -16,6 +17,7 @@ const nodeTypes = {
 
 export function CanvasView() {
   const sessions = useSessionStore(s => s.sessions)
+  const connectionStatus = useSessionStore(s => s.connectionStatus)
   const openTab = useSessionStore(s => s.openTab)
   const updateCanvasPosition = useSessionStore(s => s.updateCanvasPosition)
 
@@ -95,8 +97,10 @@ export function CanvasView() {
     [updateCanvasPosition]
   )
 
+  const isEmpty = sessions.length === 0
+
   return (
-    <div className="h-full w-full">
+    <div className="relative h-full w-full">
       <ReactFlow
         nodes={nodes}
         nodeTypes={nodeTypes}
@@ -109,6 +113,31 @@ export function CanvasView() {
         <Background gap={16} size={1} />
         <Controls />
       </ReactFlow>
+
+      {isEmpty && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
+            {connectionStatus === 'connecting' && (
+              <>
+                <Loader2 className="h-8 w-8 animate-spin opacity-40" />
+                <p className="text-sm">正在连接后端服务…</p>
+              </>
+            )}
+            {(connectionStatus === 'disconnected' || connectionStatus === 'failed') && (
+              <>
+                <ServerOff className="h-8 w-8 opacity-40" />
+                <p className="text-sm">后端未连接，请启动服务后刷新</p>
+              </>
+            )}
+            {connectionStatus === 'connected' && (
+              <>
+                <LayoutGrid className="h-8 w-8 opacity-40" />
+                <p className="text-sm">暂无会话，点击「新建会话」开始</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
