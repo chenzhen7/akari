@@ -46,7 +46,8 @@ type SessionStatus =
   | 'approved'       // 已批准，即将继续
   | 'completed'      // 执行完成
   | 'failed'         // 执行失败
-  | 'merged';        // 已合并到主分支
+  | 'merged'         // 已合并到主分支
+  | 'archived';      // 已归档（进程终止，Worktree 保留）
 
 type KanbanColumn =
   | 'backlog'
@@ -91,11 +92,12 @@ interface DiffFile {
 ```typescript
 // 服务端 → 客户端
 type ServerMessage =
-  | { event: 'session:created';  payload: AgentSession }
-  | { event: 'session:status';   payload: { id: string; status: SessionStatus; progress: number } }
-  | { event: 'terminal:data';    payload: { sessionId: string; data: string } }
-  | { event: 'diff:update';      payload: { sessionId: string; diff: GitDiff } }
-  | { event: 'approval:required'; payload: { sessionId: string; request: ApprovalRequest; diff: GitDiff } };
+  | { event: 'session:created';    payload: AgentSession }
+  | { event: 'session:status';     payload: { id: string; status: SessionStatus; progress: number } }
+  | { event: 'terminal:data';      payload: { sessionId: string; data: string } }
+  | { event: 'diff:update';        payload: { sessionId: string; diff: GitDiff } }
+  | { event: 'approval:required';  payload: { sessionId: string; request: ApprovalRequest; diff: GitDiff } }
+  | { event: 'checkpoint:reached'; payload: { sessionId: string; description: string; timestamp: Date } };
 
 // 客户端 → 服务端
 type ClientMessage =
@@ -111,7 +113,10 @@ initializing → running
 running      → waiting | paused | completed | failed
 waiting      → running（approved）| paused（rejected）
 paused       → running
-completed    → merged
+completed    → merged | archived
+failed       → archived
+merged       → archived
+archived     → （终态，只能彻底删除）
 ```
 
 > 后端 `SessionManager` 必须校验状态转换合法性，非法转换抛出错误。
