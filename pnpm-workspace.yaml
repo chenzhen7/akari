@@ -1,0 +1,6 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+allowBuilds:
+  esbuild: false
+  msw: false
