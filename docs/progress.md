@@ -11,9 +11,9 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ---
 
-## 当前状态（2026-05-21）
+## 当前状态（2026-05-22）
 
-**整体进度**：**阶段一（F0 工程化基础）已完成**。Monorepo 改造、后端骨架、WebSocket 联通均已完成；前端通过 WebSocket 接收实时事件，Session Store 由事件驱动，TopNav 显示连接状态。
+**整体进度**：**阶段二（核心后端模块）已完成**。WorktreeManager、TerminalMultiplexer、SessionManager + SQLite 持久化均已实现并验证，`index.ts` 已完全重构使用真实 SessionManager。
 
 ### ✅ 已完成
 
@@ -21,7 +21,11 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 |------|----------|------|
 | 核心类型 | `packages/shared-types/src/index.ts` | `AgentSession` / `ServerMessage` / `ClientMessage` 等 |
 | pnpm Monorepo | `pnpm-workspace.yaml` | apps/* + packages/* |
-| Fastify 后端骨架 | `apps/server/src/index.ts` | port 3001，REST + WebSocket，含状态机校验 |
+| Fastify 后端骨架 | `apps/server/src/index.ts` | port 3001，REST + WebSocket，使用 SessionManager |
+| WorktreeManager | `apps/server/src/worktree-manager.ts` | git worktree 创建/删除/diff/watch，分支自动回退 |
+| TerminalMultiplexer | `apps/server/src/terminal-mux.ts` | child_process PTY，环形 Buffer 5000 行，Checkpoint/Approval 检测 |
+| SessionManager | `apps/server/src/session-manager.ts` | SQLite 持久化，状态机，协调 WorktreeManager + TerminalMux |
+| SQLite 数据库 | `apps/server/data/akari.db` | better-sqlite3，服务重启后会话可恢复 |
 | WebSocket Hook | `apps/web/src/hooks/useWebSocket.ts` | 指数退避自动重连，最多 10 次 |
 | Session Store | `apps/web/src/stores/session-store.ts` | WebSocket 事件驱动，addSession/approve 调后端 API |
 | 连接状态指示器 | `apps/web/src/components/layout/TopNav.tsx` | 绿/黄脉冲/橙/红，断线计时 |
@@ -47,7 +51,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ## 当前正在进行
 
-> 📌 **无** — 等待分配（下一步建议：F1 会话管理 CRUD）
+> 📌 **无** — 等待分配（下一步建议：F3 前端终端接入 xterm.js / F4 实时 Diff 前端展示）
 
 ---
 
@@ -57,8 +61,13 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 ```
 akari/
 ├── apps/
-│   ├── server/src/
-│   │   └── index.ts               # ✅ Fastify 入口，端口 3001
+│   ├── server/
+│   │   ├── data/akari.db          # ✅ SQLite 持久化数据库
+│   │   └── src/
+│   │       ├── index.ts           # ✅ Fastify 入口，端口 3001
+│   │       ├── session-manager.ts # ✅ SessionManager（SQLite + 状态机）
+│   │       ├── worktree-manager.ts# ✅ WorktreeManager（git worktree + chokidar diff）
+│   │       └── terminal-mux.ts    # ✅ TerminalMultiplexer（child_process + 环形 Buffer）
 │   └── web/src/
 │       ├── components/            # ✅ 全部前端组件
 │       ├── stores/session-store.ts  # ✅ WebSocket 驱动

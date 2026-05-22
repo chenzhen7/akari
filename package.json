@@ -19,6 +19,8 @@
     "typescript": "~5.9.3"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "msw", "@tailwindcss/oxide"]
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   }
 }

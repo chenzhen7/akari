@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ArrowLeft } from 'lucide-react'
 import { useSessionStore } from '@/stores/session-store'
+import { useWebSocket } from '@/hooks/useWebSocket'
 import { TaskPanel } from './TaskPanel'
 import { TerminalPanel } from './TerminalPanel'
 
@@ -10,7 +11,7 @@ export function SessionDetail() {
   const activeTabId = useSessionStore(s => s.activeTabId)
   const sessions = useSessionStore(s => s.sessions)
   const setActiveTab = useSessionStore(s => s.setActiveTab)
-  const addTerminalLine = useSessionStore(s => s.addTerminalLine)
+  const { send } = useWebSocket()
   const [message, setMessage] = useState('')
 
   const session = sessions.find(s => s.id === activeTabId)
@@ -18,8 +19,7 @@ export function SessionDetail() {
 
   function sendMessage() {
     if (!session || !message.trim()) return
-    addTerminalLine(session.id, `$ user: ${message}`)
-    addTerminalLine(session.id, '> Processing your message...')
+    send({ event: 'terminal:input', payload: { sessionId: session.id, data: message + '\n' } })
     setMessage('')
   }
 

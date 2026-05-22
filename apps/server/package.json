@@ -13,10 +13,17 @@
     "@akari/shared-types": "workspace:*",
     "@fastify/cors": "^10.0.2",
     "@fastify/websocket": "^11.0.2",
+    "better-sqlite3": "^12.10.0",
+    "chokidar": "^5.0.0",
+    "execa": "^9.6.1",
     "fastify": "^5.3.3",
-    "nanoid": "^5.1.5"
+    "fs-extra": "^11.3.5",
+    "nanoid": "^5.1.5",
+    "simple-git": "^3.36.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/fs-extra": "^11.0.4",
     "@types/node": "^24.12.0",
     "tsx": "^4.19.4",
     "typescript": "~5.9.3"

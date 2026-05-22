@@ -166,6 +166,12 @@ pnpm --filter @akari/server typecheck
 - 变量：camelCase；常量：UPPER_SNAKE_CASE；类型：PascalCase
 - CSS：Tailwind 优先，复杂样式用 `cn()` 工具函数
 
+### UI 交互规范
+**确认弹窗**
+- 所有需要二次确认的破坏性操作，统一使用 shadcn/ui `<Dialog>` 组件，**禁止使用内联 `confirmXxx` 状态 
+
+**定位 Bug 的纪律**
+- 找到根本原因前，不提交补丁；找到后，**回滚所有错误方向的补丁**，再应用最小化正确修复
 ---
 
 ## Agent 集成协议

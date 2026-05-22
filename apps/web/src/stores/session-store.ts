@@ -25,6 +25,8 @@ interface SessionStore {
   toggleCreateDialog: () => void
   approveSession: (id: string) => void
   rejectSession: (id: string) => void
+  archiveSession: (id: string) => void
+  deleteSession: (id: string) => void
   addTerminalLine: (id: string, line: string) => void
   clearTerminal: (id: string) => void
   setConnectionStatus: (status: ConnectionStatus) => void
@@ -136,6 +138,34 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           : s
       ),
     }))
+  },
+
+  archiveSession: (id) => {
+    fetch(`${API_BASE}/sessions/${id}/archive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+      .then(() => {
+        set(state => ({
+          sessions: state.sessions.map(s =>
+            s.id === id ? { ...s, status: 'archived' as SessionStatus, kanbanColumn: 'done' } : s
+          ),
+        }))
+      })
+      .catch(err => console.error('[archiveSession] failed:', err))
+  },
+
+  deleteSession: (id) => {
+    fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE' })
+      .then(() => {
+        set(state => ({
+          sessions: state.sessions.filter(s => s.id !== id),
+          openTabs: state.openTabs.filter(t => t !== id),
+          activeTabId: state.activeTabId === id ? null : state.activeTabId,
+        }))
+      })
+      .catch(err => console.error('[deleteSession] failed:', err))
   },
 
   addTerminalLine: (id, line) =>
