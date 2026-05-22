@@ -231,4 +231,4 @@ interface AgentAdapter {
 
 - [docs/progress.md](docs/progress.md) — **开发进度快照**（接手新任务前必读）
 - [docs/设计文档.md](docs/设计文档.md) — 完整产品架构、数据模型、视图设计、代码示例
-- [docs/开发计划/开发计划.md](docs/开发计划/开发计划.md) — 分阶段任务拆解、依赖关系、里程碑  
+- [docs/开发计划/phase-N-*.md](docs/开发计划/) — 各阶段详细任务拆解（已合并索引到 progress.md）
