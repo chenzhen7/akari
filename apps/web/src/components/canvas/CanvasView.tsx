@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import {
   ReactFlow,
   Controls,
@@ -9,6 +9,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useSessionStore } from '@/stores/session-store'
 import { SessionNode } from './SessionNode'
+import { CanvasContextMenu } from './CanvasContextMenu'
 import { Loader2, ServerOff, LayoutGrid } from 'lucide-react'
 
 const nodeTypes = {
@@ -23,6 +24,8 @@ export function CanvasView() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[])
   const fitted = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
 
   // 同步节点：精细化比较，只在新增/删除/位置/status/progress 变化时更新
   useEffect(() => {
@@ -97,21 +100,40 @@ export function CanvasView() {
     [updateCanvasPosition]
   )
 
+  const onPaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
+    event.preventDefault()
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setMenuPos({ x: event.clientX - rect.left, y: event.clientY - rect.top })
+  }, [])
+
+  const closeMenu = useCallback(() => setMenuPos(null), [])
+
   const isEmpty = sessions.length === 0
 
   return (
-    <div className="relative h-full w-full">
+    <div ref={containerRef} className="relative h-full w-full">
       <ReactFlow
         nodes={nodes}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onNodeClick={onNodeClick}
         onNodeDragStop={onNodeDragStop}
+        onPaneContextMenu={onPaneContextMenu}
+        onPaneClick={closeMenu}
+        onMoveStart={closeMenu}
         fitView={!fitted.current}
         fitViewOptions={{ padding: 0.2 }}
       >
         <Background gap={16} size={1} />
         <Controls />
+        {menuPos && (
+          <CanvasContextMenu
+            x={menuPos.x}
+            y={menuPos.y}
+            onClose={closeMenu}
+          />
+        )}
       </ReactFlow>
 
       {isEmpty && (
