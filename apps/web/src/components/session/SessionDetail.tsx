@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import { useSessionStore } from '@/stores/session-store'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { TaskPanel } from './TaskPanel'
 import { TerminalPanel } from './TerminalPanel'
+import { DiffViewer } from '@/components/diff/DiffViewer'
 
 export function SessionDetail() {
   const activeTabId = useSessionStore(s => s.activeTabId)
@@ -38,6 +39,9 @@ export function SessionDetail() {
         </Button>
         <div className="h-4 w-px bg-border" />
         <span className="text-sm font-medium">{session.name}</span>
+        {session.status === 'initializing' && (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+        )}
       </div>
 
       {/* Main content */}
@@ -49,22 +53,18 @@ export function SessionDetail() {
             <TaskPanel session={session} />
           </div>
 
-          {/* Right: Diff summary */}
-          <div className="w-1/2 overflow-auto p-4">
-            <h3 className="mb-2 text-sm font-semibold">Git Diff</h3>
-            {session.diffSummary ? (
-              <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 font-mono text-xs text-muted-foreground">
-                {session.diffSummary}
-              </pre>
-            ) : (
-              <p className="text-sm text-muted-foreground">暂无变更</p>
-            )}
+          {/* Right: Diff viewer */}
+          <div className="flex w-1/2 flex-col overflow-hidden p-4">
+            <h3 className="mb-2 shrink-0 text-sm font-semibold">Git Diff</h3>
+            <div className="min-h-0 flex-1">
+              <DiffViewer diffFull={session.diffFull} diffFiles={session.diffFiles} />
+            </div>
           </div>
         </div>
 
         {/* Terminal */}
         <div className="h-[40%] border-t border-border">
-          <TerminalPanel session={session} />
+          <TerminalPanel session={session} send={send} />
         </div>
       </div>
 

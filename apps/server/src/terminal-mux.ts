@@ -1,10 +1,11 @@
 import { EventEmitter } from 'node:events'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import * as pty from 'node-pty'
 import type { ApprovalRequest } from '@akari/shared-types'
 
 interface TerminalEntry {
   sessionId: string
-  proc: ChildProcess
+  pty: pty.IPty
   buffer: string[]
   status: 'running' | 'exited'
 }
@@ -17,37 +18,39 @@ export class TerminalMultiplexer extends EventEmitter {
     if (this.terminals.has(sessionId)) return
 
     const isWindows = process.platform === 'win32'
-    const shell = isWindows ? 'cmd.exe' : (process.env.SHELL ?? 'bash')
-    const args = isWindows ? [] : ['--login']
+    // Prefer PowerShell 7+ (pwsh.exe); fall back to built-in Windows PowerShell 5.x
+    const hasPwsh = existsSync('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
+    const shell = isWindows
+      ? (hasPwsh ? 'pwsh.exe' : 'powershell.exe')
+      : (process.env.SHELL ?? 'bash')
+    const args = isWindows ? ['-NoLogo'] : ['--login']
 
-    const proc = spawn(shell, args, {
+    const proc = pty.spawn(shell, args, {
+      name: 'xterm-256color',
+      cols: 220,
+      rows: 50,
       cwd,
-      env: { ...process.env, AGENT_SESSION_ID: sessionId },
-      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        AGENT_SESSION_ID: sessionId,
+        // Disable git/man pager so output streams directly in PTY
+        GIT_PAGER: 'cat',
+        PAGER: 'cat',
+        LESS: '-FRX',
+      } as Record<string, string>,
     })
 
-    const entry: TerminalEntry = { sessionId, proc, buffer: [], status: 'running' }
+    const entry: TerminalEntry = { sessionId, pty: proc, buffer: [], status: 'running' }
 
-    proc.stdout?.on('data', (chunk: Buffer) => {
-      const data = chunk.toString()
+    proc.onData((data: string) => {
       this.appendBuffer(entry, data)
       this.emit('terminal:data', { sessionId, data })
       this.detectMarkers(sessionId, data)
     })
 
-    proc.stderr?.on('data', (chunk: Buffer) => {
-      const data = chunk.toString()
-      this.appendBuffer(entry, data)
-      this.emit('terminal:data', { sessionId, data })
-    })
-
-    proc.on('exit', (code) => {
+    proc.onExit(({ exitCode }) => {
       entry.status = 'exited'
-      this.emit('terminal:exit', { sessionId, exitCode: code ?? 0 })
-    })
-
-    proc.on('error', (err) => {
-      this.emit('terminal:error', { sessionId, error: err.message })
+      this.emit('terminal:exit', { sessionId, exitCode })
     })
 
     this.terminals.set(sessionId, entry)
@@ -55,8 +58,15 @@ export class TerminalMultiplexer extends EventEmitter {
 
   sendToTerminal(sessionId: string, data: string): void {
     const entry = this.terminals.get(sessionId)
-    if (entry?.status === 'running' && entry.proc.stdin && !entry.proc.stdin.destroyed) {
-      entry.proc.stdin.write(data)
+    if (entry?.status === 'running') {
+      entry.pty.write(data)
+    }
+  }
+
+  resizeTerminal(sessionId: string, cols: number, rows: number): void {
+    const entry = this.terminals.get(sessionId)
+    if (entry?.status === 'running') {
+      entry.pty.resize(cols, rows)
     }
   }
 
@@ -73,7 +83,7 @@ export class TerminalMultiplexer extends EventEmitter {
     const entry = this.terminals.get(sessionId)
     if (entry) {
       if (entry.status === 'running') {
-        entry.proc.kill('SIGTERM')
+        entry.pty.kill()
         entry.status = 'exited'
       }
       this.terminals.delete(sessionId)

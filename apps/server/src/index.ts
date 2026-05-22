@@ -111,6 +111,17 @@ fastify.post<{ Params: { id: string } }>(
   },
 )
 
+fastify.patch<{ Params: { id: string }; Body: { x: number; y: number } }>(
+  '/sessions/:id/canvas',
+  async (request, reply) => {
+    const { id } = request.params
+    const { x, y } = request.body
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    sessionManager.updateCanvasPosition(id, x, y)
+    return { ok: true }
+  },
+)
+
 fastify.delete<{ Params: { id: string } }>(
   '/sessions/:id',
   async (request, reply) => {
@@ -149,6 +160,11 @@ function handleClientMessage(msg: ClientMessage): void {
     case 'terminal:input': {
       const { sessionId, data } = msg.payload
       sessionManager.sendToTerminal(sessionId, data)
+      break
+    }
+    case 'terminal:resize': {
+      const { sessionId, cols, rows } = msg.payload
+      sessionManager.resizeTerminal(sessionId, cols, rows)
       break
     }
     case 'approval:decision': {

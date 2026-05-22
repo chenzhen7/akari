@@ -31,16 +31,16 @@
 前端 (apps/web): React 19 + TypeScript + Vite + Tailwind CSS + shadcn/ui
 画布: @xyflow/react
 看板: @dnd-kit/core
-终端: xterm.js（待接入）
+终端: @xterm/xterm + FitAddon + WebLinksAddon
 状态: Zustand
-Diff: Monaco Editor（待接入）
+Diff: @monaco-editor/react（懒加载）
 
 后端 (apps/server): Node.js + Fastify 5 + @fastify/websocket
-终端复用: node-pty（待实现）
+终端复用: node-pty（PTY，Shell: PowerShell 7 / pwsh.exe）
 Git 操作: simple-git（待实现）
 文件监听: chokidar（待实现）
 通信: WebSocket（ws://localhost:3001/ws）
-数据库: SQLite - better-sqlite3（待实现）
+数据库: SQLite - better-sqlite3
 
 共享类型: packages/shared-types（workspace:*）
 ```
@@ -213,14 +213,19 @@ interface AgentAdapter {
 3. **终端即真相**：Agent 输出通过终端复用器捕获，不通过自定义协议通信
 4. **审批不可绕过**：危险操作必须经用户审批，Agent 适配器不得自动确认
 5. **禁止遗留历史债务**：完成任务后必须同步清理废弃文件、死代码、过时注释和临时脚手架。迁移后旧路径立即删除，重构后旧实现立即移除，不得以「后续清理」为由搁置。AGENT.md / progress.md 中的「待清理」标记视为未完成任务。
-
+6. **重大决策必须先征询用户**：凡涉及以下任一情形， **禁止**自行做出决定并直接实施，必须先向用户说明方案对比、征得明确同意后再动手：
+   - 技术方案降级或替代（如用 `child_process` 替代 `node-pty`、用 mock 替代真实实现）
+   - 架构层面的设计取舍（如数据库选型、通信协议变更、模块拆分方式）
+   - 破坏性 API/类型变更（影响已有接口的签名或行为）
+   - 任何「此方案有明显缺点但省事」的捷径
+   正确做法：先用 `ask_user_question` 工具列出选项和利弊，等待用户选择后再执行。不得在文档中写「降级方案」后自动采用该方案。
 ---
 
 ## 已知问题 / 技术风险
 
 | 问题 | 影响 | 处理建议 |
 |------|------|----------|
-| `node-pty` Windows 需 VC++ Build Tools | F3 开发环境 | 优先在 WSL2 / macOS；Windows 降级用 `child_process.spawn` |
+| `node-pty` Windows 需 VC++ Build Tools | F3 开发环境 | ✅ 已解决：VC++ Build Tools 已安装，node-pty 编译成功；Shell 已切换为 PowerShell 7.6.2 |
 | xterm.js + React 18 Strict Mode 双重挂载 | F3 内存泄露 | `useRef` 保护初始化，`useEffect` 返回 `dispose()` |
 | Monaco Editor 包体积 ~2MB | F4 首屏性能 | 动态 `import()` 懒加载，仅审批弹窗打开时加载 |
 | Node.js 22.10.0 < Vite 7 要求的 22.12+ | 开发环境警告 | 升级 Node.js 到 22.12+ 可消除警告，当前仍可正常运行 |

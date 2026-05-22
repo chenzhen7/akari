@@ -71,19 +71,39 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       ),
     })),
 
-  moveToColumn: (id, column) =>
+  moveToColumn: (id, column) => {
     set(state => ({
       sessions: state.sessions.map(s =>
         s.id === id ? { ...s, kanbanColumn: column } : s
       ),
-    })),
+    }))
+    const KANBAN_STATUS: Partial<Record<KanbanColumn, SessionStatus>> = {
+      'in-progress': 'running',
+      'waiting-review': 'review',
+      'done': 'completed',
+    }
+    const targetStatus = KANBAN_STATUS[column]
+    if (targetStatus) {
+      fetch(`${API_BASE}/sessions/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: targetStatus }),
+      }).catch(err => console.warn('[moveToColumn] status update failed:', err))
+    }
+  },
 
-  updateCanvasPosition: (id, pos) =>
+  updateCanvasPosition: (id, pos) => {
     set(state => ({
       sessions: state.sessions.map(s =>
         s.id === id ? { ...s, canvasPosition: pos } : s
       ),
-    })),
+    }))
+    fetch(`${API_BASE}/sessions/${id}/canvas`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pos),
+    }).catch(err => console.warn('[updateCanvasPosition]', err))
+  },
 
   openTab: (id) =>
     set(state => {
@@ -249,7 +269,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         set(state => ({
           sessions: state.sessions.map(s =>
             s.id === msg.payload.sessionId
-              ? { ...s, diffSummary: msg.payload.diff.stat }
+              ? {
+                  ...s,
+                  diffSummary: msg.payload.diff.stat,
+                  diffFull: msg.payload.diff.fullDiff,
+                  diffFiles: msg.payload.diff.files,
+                }
               : s
           ),
         }))

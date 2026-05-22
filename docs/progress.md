@@ -13,7 +13,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ## 当前状态（2026-05-22）
 
-**整体进度**：**阶段二（核心后端模块）已完成**。WorktreeManager、TerminalMultiplexer、SessionManager + SQLite 持久化均已实现并验证，`index.ts` 已完全重构使用真实 SessionManager。
+**整体进度**：**阶段三（前端真实化）已完成**。xterm.js 终端接入（node-pty PTY + PowerShell 7.6.2）、Monaco Diff Viewer、创建会话 initializing spinner、画布坐标持久化、看板拖拽触发状态流转均已实现并验证。
 
 ### ✅ 已完成
 
@@ -23,7 +23,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | pnpm Monorepo | `pnpm-workspace.yaml` | apps/* + packages/* |
 | Fastify 后端骨架 | `apps/server/src/index.ts` | port 3001，REST + WebSocket，使用 SessionManager |
 | WorktreeManager | `apps/server/src/worktree-manager.ts` | git worktree 创建/删除/diff/watch，分支自动回退 |
-| TerminalMultiplexer | `apps/server/src/terminal-mux.ts` | child_process PTY，环形 Buffer 5000 行，Checkpoint/Approval 检测 |
+| TerminalMultiplexer | `apps/server/src/terminal-mux.ts` | node-pty 真实 PTY（PowerShell 7）；环形 Buffer 5000 行；Checkpoint/Approval 检测；支持 resize 同步 |
 | SessionManager | `apps/server/src/session-manager.ts` | SQLite 持久化，状态机，协调 WorktreeManager + TerminalMux |
 | SQLite 数据库 | `apps/server/data/akari.db` | better-sqlite3，服务重启后会话可恢复 |
 | WebSocket Hook | `apps/web/src/hooks/useWebSocket.ts` | 指数退避自动重连，最多 10 次 |
@@ -31,9 +31,10 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 连接状态指示器 | `apps/web/src/components/layout/TopNav.tsx` | 绿/黄脉冲/橙/红，断线计时 |
 | 无限画布 | `apps/web/src/components/canvas/` | 基于 `@xyflow/react`，节点可拖动 |
 | 看板 | `apps/web/src/components/kanban/` | 基于 `@dnd-kit`，列间拖拽 |
-| 会话详情 / 终端 | `apps/web/src/components/session/` | 终端面板仍为 Mock 输出（xterm.js 待接入） |
+| 会话详情 / 终端 | `apps/web/src/components/session/` | xterm.js 真实终端（node-pty PTY + PowerShell 7），支持完整 ANSI 颜色 |
+| Diff 视图 | `apps/web/src/components/diff/DiffViewer.tsx` | Monaco Editor（diff 语言），懒加载，文件列表摘要 |
 | 指挥中心 | `apps/web/src/components/command-center/` | 广播调后端 `/broadcast` API |
-| 创建会话弹窗 | `apps/web/src/components/create-session/` | 含 agentType 选择（claude/aider/shell） |
+| 创建会话弹窗 | `apps/web/src/components/create-session/` | 含 agentType 选择，initializing spinner，session:created 自动打开 Tab |
 
 ### 🔲 待开发（按功能模块）
 
@@ -51,7 +52,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ## 当前正在进行
 
-> 📌 **无** — 等待分配（下一步建议：F3 前端终端接入 xterm.js / F4 实时 Diff 前端展示）
+> 📌 **无** — 等待分配（下一步建议：F5 审批后端 + 审批 UI，即阶段四）
 
 ---
 
@@ -61,7 +62,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 |------|------|------|------|
 | 阶段一 | Monorepo + 后端骨架 + WebSocket 联通 | ✅ 完成 | [phase-1](./开发计划/phase-1-工程化基础.md) |
 | 阶段二 | WorktreeManager + TerminalMux + SessionManager | ✅ 完成 | [phase-2](./开发计划/phase-2-核心后端.md) |
-| 阶段三 | xterm.js 终端 + Monaco Diff + 创建流程 | 🔲 待开始 | [phase-3](./开发计划/phase-3-前端真实化.md) |
+| 阶段三 | xterm.js 终端 + Monaco Diff + 创建流程 | ✅ 完成 | [phase-3](./开发计划/phase-3-前端真实化.md) |
 | 阶段四 | 审批后端 + 审批 UI | 🔲 待开始 | [phase-4](./开发计划/phase-4-审批工作流.md) |
 | 阶段五 | Claude / Aider / Shell 适配器 | 🔲 待开始 | [phase-5](./开发计划/phase-5-Agent适配器.md) |
 | 阶段六 | 错误处理 + 性能 + 测试 | 🔲 待开始 | [phase-6](./开发计划/phase-6-收尾打磨.md) |
@@ -72,7 +73,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 |--------|---------|------|
 | **M1** Monorepo + WebSocket 联通 | 阶段一 | ✅ |
 | **M2** 会话生命周期完整跑通 | 阶段二 | ✅ |
-| **M3** 真实终端 + Diff + 创建流程 | 阶段三 | 🔲 |
+| **M3** 真实终端 + Diff + 创建流程 | 阶段三 | ✅ |
 | **M4** 审批工作流闭环 | 阶段四 | 🔲 |
 | **M5** Claude Code / Aider 可用 | 阶段五 | 🔲 |
 | **M6** 生产就绪 | 阶段六 | 🔲 |

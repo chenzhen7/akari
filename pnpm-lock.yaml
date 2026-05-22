@@ -50,6 +50,9 @@ importers:
       nanoid:
         specifier: ^5.1.5
         version: 5.1.11
+      node-pty:
+        specifier: ^1.1.0
+        version: 1.1.0
       simple-git:
         specifier: ^3.36.0
         version: 3.36.0
@@ -87,9 +90,21 @@ importers:
       '@fontsource-variable/noto-sans':
         specifier: ^5.2.10
         version: 5.2.10
+      '@monaco-editor/react':
+        specifier: ^4.7.0
+        version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@tailwindcss/vite':
         specifier: ^4.2.1
         version: 4.3.0(vite@7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.3))
+      '@xterm/addon-fit':
+        specifier: ^0.11.0
+        version: 0.11.0
+      '@xterm/addon-web-links':
+        specifier: ^0.12.0
+        version: 0.12.0
+      '@xterm/xterm':
+        specifier: ^6.0.0
+        version: 6.0.0
       '@xyflow/react':
         specifier: ^12.10.2
         version: 12.10.2(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -825,6 +840,16 @@ packages:
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
+
+  '@monaco-editor/loader@1.7.0':
+    resolution: {integrity: sha512-gIwR1HrJrrx+vfyOhYmCZ0/JcWqG5kbfG7+d3f/C1LXk2EvzAbHSg3MQ5lO2sMlo9izoAZ04shohfKLVT6crVA==}
+
+  '@monaco-editor/react@4.7.0':
+    resolution: {integrity: sha512-cyzXQCtO47ydzxpQtCGSQGOC8Gk3ZUeBXFAxD+CWXYFo5OqZyZUonFl0DwUlTyAfRHntBfw2p3w4s9R6oe1eCA==}
+    peerDependencies:
+      monaco-editor: '>= 0.25.0 < 1'
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
   '@mswjs/interceptors@0.41.9':
     resolution: {integrity: sha512-VVPPgHyQ6ShqnrmDWuxjmUIsO9gWyOZFmuOfLd9LfBGQJwZfy0gvv9pbHSJuoFNIYC7ZDX9aoFwowjcdSC4E8w==}
@@ -1875,6 +1900,9 @@ packages:
   '@types/statuses@2.0.6':
     resolution: {integrity: sha512-xMAgYwceFhRA2zY+XbEA7mxYbA093wdiW8Vu6gZPGWy9cmOyU9XesH1tNcEWsKFd5Vzrqx5T3D38PWx1FIIXkA==}
 
+  '@types/trusted-types@2.0.7':
+    resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
+
   '@types/validate-npm-package-name@4.0.2':
     resolution: {integrity: sha512-lrpDziQipxCEeK5kWxvljWYhUvOiB2A9izZd9B2AFarYAkqZshb4lPbRs7zKEic6eGtH8V/2qJW+dPp9OtF6bw==}
 
@@ -1942,6 +1970,15 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     peerDependencies:
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
+
+  '@xterm/addon-fit@0.11.0':
+    resolution: {integrity: sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g==}
+
+  '@xterm/addon-web-links@0.12.0':
+    resolution: {integrity: sha512-4Smom3RPyVp7ZMYOYDoC/9eGJJJqYhnPLGGqJ6wOBfB8VxPViJNSKdgRYb8NpaM6YSelEKbA2SStD7lGyqaobw==}
+
+  '@xterm/xterm@6.0.0':
+    resolution: {integrity: sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==}
 
   '@xyflow/react@12.10.2':
     resolution: {integrity: sha512-CgIi6HwlcHXwlkTpr0fxLv/0sRVNZ8IdwKLzzeCscaYBwpvfcH1QFOCeaTCuEn1FQEs/B8CjnTSjhs8udgmBgQ==}
@@ -2311,6 +2348,9 @@ packages:
   diff@8.0.4:
     resolution: {integrity: sha512-DPi0FmjiSU5EvQV0++GFDOJ9ASQUVFh5kD+OzOnYdi7n3Wpm9hWWGfB/O2blfHcMVTL5WkQXSnRiK9makhrcnw==}
     engines: {node: '>=0.3.1'}
+
+  dompurify@3.2.7:
+    resolution: {integrity: sha512-WhL/YuveyGXJaerVlMYGWhvQswa7myDG17P7Vu65EWC05o8vfeNbvNf4d/BOvH99+ZW+LlQsc1GDKMa1vNK6dw==}
 
   dotenv@17.4.2:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
@@ -3001,6 +3041,11 @@ packages:
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
+  marked@14.0.0:
+    resolution: {integrity: sha512-uIj4+faQ+MgHgwUW1l2PsPglZLOLOT1uErt06dAPtx2kjteLAkbsd/0FiYg/MGS+i7ZKLb7w2WClxHkzOOuryQ==}
+    engines: {node: '>= 18'}
+    hasBin: true
+
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
@@ -3060,6 +3105,9 @@ packages:
   mnemonist@0.40.0:
     resolution: {integrity: sha512-kdd8AFNig2AD5Rkih7EPCXhu/iMvwevQFX/uEiGhZyPZi7fHqOoF4V4kHLpCfysxXMgQ4B52kdPMCwARshKvEg==}
 
+  monaco-editor@0.55.1:
+    resolution: {integrity: sha512-jz4x+TJNFHwHtwuV9vA9rMujcZRb0CEilTEwG2rRSpe/A7Jdkuj8xPKttCgOh+v/lkHy7HsZ64oj+q3xoAFl9A==}
+
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
@@ -3101,6 +3149,9 @@ packages:
     resolution: {integrity: sha512-KdHvFWZjEKDf0cakgFjebl371GPsISX2oZHcuyKqM7DtogIsHrqKeLTo8wBHxaXRAQlY2PsPlZmfo+9ZCxEREQ==}
     engines: {node: '>=10'}
 
+  node-addon-api@7.1.1:
+    resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
+
   node-domexception@1.0.0:
     resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
     engines: {node: '>=10.5.0'}
@@ -3109,6 +3160,9 @@ packages:
   node-fetch@3.3.2:
     resolution: {integrity: sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  node-pty@1.1.0:
+    resolution: {integrity: sha512-20JqtutY6JPXTUnL0ij1uad7Qe1baT46lyolh2sSENDd4sTzKZ4nmAFkeAARDKwmlLjPx6XKRlwRUxwjOy+lUg==}
 
   node-releases@2.0.45:
     resolution: {integrity: sha512-iIbHXV9eBB2nB0wa7oTsrrXq+qQt+9SIlx9AX3T96YgobtEQfis5n6TJ6vV+3QP8DwdriEAcGhARaFCu37peBg==}
@@ -3605,6 +3659,9 @@ packages:
   split2@4.2.0:
     resolution: {integrity: sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==}
     engines: {node: '>= 10.x'}
+
+  state-local@1.0.7:
+    resolution: {integrity: sha512-HTEHMNieakEnoe33shBYcZ7NX83ACUjCu8c40iOGEZsngj9zRnkqS9j1pqQPXwobB0ZcVTk27REb7COQ0UR59w==}
 
   statuses@2.0.2:
     resolution: {integrity: sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw==}
@@ -4595,6 +4652,17 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@3.25.76)
     transitivePeerDependencies:
       - supports-color
+
+  '@monaco-editor/loader@1.7.0':
+    dependencies:
+      state-local: 1.0.7
+
+  '@monaco-editor/react@4.7.0(monaco-editor@0.55.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
+    dependencies:
+      '@monaco-editor/loader': 1.7.0
+      monaco-editor: 0.55.1
+      react: 19.2.6
+      react-dom: 19.2.6(react@19.2.6)
 
   '@mswjs/interceptors@0.41.9':
     dependencies:
@@ -5625,6 +5693,9 @@ snapshots:
 
   '@types/statuses@2.0.6': {}
 
+  '@types/trusted-types@2.0.7':
+    optional: true
+
   '@types/validate-npm-package-name@4.0.2': {}
 
   '@typescript-eslint/eslint-plugin@8.59.4(@typescript-eslint/parser@8.59.4(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)':
@@ -5729,6 +5800,12 @@ snapshots:
       vite: 7.3.3(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.3)
     transitivePeerDependencies:
       - supports-color
+
+  '@xterm/addon-fit@0.11.0': {}
+
+  '@xterm/addon-web-links@0.12.0': {}
+
+  '@xterm/xterm@6.0.0': {}
 
   '@xyflow/react@12.10.2(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
@@ -6062,6 +6139,10 @@ snapshots:
   detect-node-es@1.1.0: {}
 
   diff@8.0.4: {}
+
+  dompurify@3.2.7:
+    optionalDependencies:
+      '@types/trusted-types': 2.0.7
 
   dotenv@17.4.2: {}
 
@@ -6783,6 +6864,8 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  marked@14.0.0: {}
+
   math-intrinsics@1.1.0: {}
 
   media-typer@1.1.0: {}
@@ -6825,6 +6908,11 @@ snapshots:
   mnemonist@0.40.0:
     dependencies:
       obliterator: 2.0.5
+
+  monaco-editor@0.55.1:
+    dependencies:
+      dompurify: 3.2.7
+      marked: 14.0.0
 
   ms@2.1.3: {}
 
@@ -6869,6 +6957,8 @@ snapshots:
     dependencies:
       semver: 7.8.0
 
+  node-addon-api@7.1.1: {}
+
   node-domexception@1.0.0: {}
 
   node-fetch@3.3.2:
@@ -6876,6 +6966,10 @@ snapshots:
       data-uri-to-buffer: 4.0.1
       fetch-blob: 3.2.0
       formdata-polyfill: 4.0.10
+
+  node-pty@1.1.0:
+    dependencies:
+      node-addon-api: 7.1.1
 
   node-releases@2.0.45: {}
 
@@ -7444,6 +7538,8 @@ snapshots:
   source-map@0.6.1: {}
 
   split2@4.2.0: {}
+
+  state-local@1.0.7: {}
 
   statuses@2.0.2: {}
 

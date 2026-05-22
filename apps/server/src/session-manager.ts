@@ -165,6 +165,14 @@ export class SessionManager {
     this.terminalMux.sendToTerminal(sessionId, data)
   }
 
+  resizeTerminal(sessionId: string, cols: number, rows: number): void {
+    this.terminalMux.resizeTerminal(sessionId, cols, rows)
+  }
+
+  updateCanvasPosition(sessionId: string, x: number, y: number): void {
+    this.db.prepare('UPDATE sessions SET canvas_x = ?, canvas_y = ? WHERE id = ?').run(x, y, sessionId)
+  }
+
   broadcastMessage(message: string, sessionIds?: string[]): string[] {
     const sessions = this.listSessions()
     const active = sessions.filter(s => ['running', 'waiting'].includes(s.status))

@@ -62,6 +62,8 @@ export interface AgentSession {
   progress: number
   terminalOutput: string[]
   diffSummary: string
+  diffFull?: string
+  diffFiles?: DiffFile[]
 
   createdAt: Date
   tags: string[]
@@ -79,5 +81,6 @@ export type ServerMessage =
 
 export type ClientMessage =
   | { event: 'terminal:input'; payload: { sessionId: string; data: string } }
+  | { event: 'terminal:resize'; payload: { sessionId: string; cols: number; rows: number } }
   | { event: 'approval:decision'; payload: { sessionId: string; decision: 'approved' | 'rejected'; comment?: string } }
   | { event: 'broadcast:send'; payload: { message: string; targets?: string[] } }
