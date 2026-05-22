@@ -68,36 +68,6 @@ akari/
     └── index.ts
 ```
 
-### WebSocket 事件协议（前后端约定）
-
-| 事件名 | 方向 | Payload 关键字段 |
-|--------|------|-----------------|
-| `session:created` | S→C | `session: AgentSession` |
-| `session:status` | S→C | `id, status, progress` |
-| `terminal:data` | S→C | `sessionId, data: string` |
-| `terminal:input` | C→S | `sessionId, data: string` |
-| `diff:update` | S→C | `sessionId, diff: GitDiff` |
-| `approval:required` | S→C | `sessionId, request: ApprovalRequest, diff` |
-| `approval:decision` | C→S | `sessionId, decision: 'approved' \| 'rejected'` |
-| `broadcast:send` | C→S | `message: string, targets?: string[]` |
-
-### AgentAdapter 接口（后端实现标准）
-```typescript
-interface AgentAdapter {
-  start(task: string, cwd: string): Promise<void>;
-  pause(): Promise<void>;
-  resume(): Promise<void>;
-  sendMessage(msg: string): Promise<void>;
-  onCheckpoint(callback: CheckpointHandler): void;
-}
-```
-
-### Checkpoint 标记格式（终端输出解析）
-```
-[CHECKPOINT] <描述>
-[APPROVAL_REQUIRED] type=destructive command="<命令>"
-[APPROVAL_REQUIRED] type=merge-ready
-```
 
 ### 核心原则（禁止违反）
 1. 每个 Agent 会话必须运行在独立 `git worktree`，禁止直接在主工作区操作
