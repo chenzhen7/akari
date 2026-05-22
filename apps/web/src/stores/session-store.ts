@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { AgentSession, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
 import type { ConnectionStatus } from '@/hooks/useWebSocket'
+import { terminalBus } from '@/lib/terminalBus'
 
 
 interface SessionStore {
@@ -136,11 +137,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ decision: 'approved' }),
     }).catch(err => console.error('[approveSession] failed:', err))
+    terminalBus.emit(id, '\r\n\x1b[32m> ✅ Approved, resuming...\x1b[0m\r\n')
     set(state => ({
       sessions: state.sessions.map(s =>
-        s.id === id
-          ? { ...s, status: 'running' as SessionStatus, terminalOutput: [...s.terminalOutput, '> ✅ Approved, resuming...'] }
-          : s
+        s.id === id ? { ...s, status: 'running' as SessionStatus } : s
       ),
     }))
   },
@@ -151,11 +151,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ decision: 'rejected' }),
     }).catch(err => console.error('[rejectSession] failed:', err))
+    terminalBus.emit(id, '\r\n\x1b[31m> ❌ Rejected, paused\x1b[0m\r\n')
     set(state => ({
       sessions: state.sessions.map(s =>
-        s.id === id
-          ? { ...s, status: 'paused' as SessionStatus, terminalOutput: [...s.terminalOutput, '> ❌ Rejected, paused'] }
-          : s
+        s.id === id ? { ...s, status: 'paused' as SessionStatus } : s
       ),
     }))
   },
@@ -188,19 +187,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       .catch(err => console.error('[deleteSession] failed:', err))
   },
 
-  addTerminalLine: (id, line) =>
-    set(state => ({
-      sessions: state.sessions.map(s =>
-        s.id === id ? { ...s, terminalOutput: [...s.terminalOutput, line] } : s
-      ),
-    })),
+  addTerminalLine: (id, line) => {
+    terminalBus.emit(id, line)
+  },
 
-  clearTerminal: (id) =>
-    set(state => ({
-      sessions: state.sessions.map(s =>
-        s.id === id ? { ...s, terminalOutput: [] } : s
-      ),
-    })),
+  clearTerminal: (id) => {
+    terminalBus.clear(id)
+  },
 
   setConnectionStatus: (status) =>
     set(state => ({
@@ -239,13 +232,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }))
         break
       case 'terminal:data':
-        set(state => ({
-          sessions: state.sessions.map(s =>
-            s.id === msg.payload.sessionId
-              ? { ...s, terminalOutput: [...s.terminalOutput, msg.payload.data].slice(-500) }
-              : s
-          ),
-        }))
+        terminalBus.emit(msg.payload.sessionId, msg.payload.data)
         break
       case 'approval:required':
         set(state => ({
@@ -257,13 +244,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }))
         break
       case 'checkpoint:reached':
-        set(state => ({
-          sessions: state.sessions.map(s =>
-            s.id === msg.payload.sessionId
-              ? { ...s, terminalOutput: [...s.terminalOutput, `[CHECKPOINT] ${msg.payload.description}`].slice(-500) }
-              : s
-          ),
-        }))
+        terminalBus.emit(msg.payload.sessionId, `\r\n\x1b[33m[CHECKPOINT] ${msg.payload.description}\x1b[0m\r\n`)
         break
       case 'diff:update':
         set(state => ({

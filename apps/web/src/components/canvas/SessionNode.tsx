@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useState, useEffect, useRef } from 'react'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Circle, Archive, Trash2 } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
+import { terminalBus } from '@/lib/terminalBus'
 
 type SessionNodeData = {
   session: AgentSession
@@ -52,16 +53,33 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
   const deleteSession = useSessionStore(s => s.deleteSession)
   const [hovered, setHovered] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [miniTerminal, setMiniTerminal] = useState<string[]>(() =>
+    terminalBus.getBuffer(session.id)
+      .slice(-3).map(stripAnsi).filter(l => l.trim()).slice(-2)
+  )
+
+  useEffect(() => {
+    const refresh = () => {
+      setMiniTerminal(
+        terminalBus.getBuffer(session.id)
+          .slice(-3).map(stripAnsi).filter(l => l.trim()).slice(-2)
+      )
+    }
+    return terminalBus.on(session.id, () => {
+      if (!pendingRef.current) {
+        pendingRef.current = setTimeout(() => {
+          pendingRef.current = null
+          refresh()
+        }, 500)
+      }
+    })
+  }, [session.id])
 
   const colorClass = statusColorMap[session.status] ?? 'text-slate-400'
   const borderColorClass = colorClass.replace('text-', 'border-')
   const isArchived = session.status === 'archived'
-
-  const miniTerminal = session.terminalOutput
-    .slice(-3)
-    .map(stripAnsi)
-    .filter(l => l.trim())
-    .slice(-2)
 
   function stopBubble(e: React.MouseEvent | React.PointerEvent) {
     e.stopPropagation()
@@ -196,7 +214,6 @@ function areEqual(
     p.status === n.status &&
     p.progress === n.progress &&
     p.branchName === n.branchName &&
-    p.terminalOutput === n.terminalOutput &&
     p.canvasPosition.x === n.canvasPosition.x &&
     p.canvasPosition.y === n.canvasPosition.y
   )

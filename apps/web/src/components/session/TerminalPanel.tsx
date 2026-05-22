@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Trash2 } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import type { ClientMessage } from '@akari/shared-types'
-import { useSessionStore } from '@/stores/session-store'
+import { terminalBus } from '@/lib/terminalBus'
 
 interface TerminalPanelProps {
   session: AgentSession
@@ -15,13 +15,11 @@ interface TerminalPanelProps {
 }
 
 export function TerminalPanel({ session, send }: TerminalPanelProps) {
-  const clearTerminal = useSessionStore(s => s.clearTerminal)
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
-  const writtenCountRef = useRef(0)
 
-  // Initialize xterm.js — re-runs only when session ID changes
+  // Initialize xterm.js and subscribe to terminalBus — re-runs only when session ID changes
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -62,7 +60,6 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     term.loadAddon(webLinksAddon)
     term.open(container)
 
-    // Delay fit to ensure DOM layout is complete
     requestAnimationFrame(() => {
       try { fitAddon.fit() } catch { /* ignore if disposed */ }
     })
@@ -70,17 +67,18 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     termRef.current = term
     fitAddonRef.current = fitAddon
 
-    // Write existing buffered output
-    const existingOutput = session.terminalOutput
-    existingOutput.forEach(chunk => term.write(chunk))
-    writtenCountRef.current = existingOutput.length
+    // Replay buffered history (bypasses React state entirely)
+    terminalBus.getBuffer(session.id).forEach(chunk => term.write(chunk))
 
-    // Forward user keystrokes to backend terminal
+    // Stream new data directly from bus — no React state, no re-render loop
+    const unsubscribe = terminalBus.on(session.id, data => term.write(data))
+
+    // Forward keystrokes to backend PTY
     term.onData(data => {
       send({ event: 'terminal:input', payload: { sessionId: session.id, data } })
     })
 
-    // Keep terminal sized to container; sync PTY dimensions to backend
+    // Sync PTY dimensions on container resize
     const ro = new ResizeObserver(() => {
       try {
         fitAddon.fit()
@@ -93,7 +91,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     ro.observe(container)
 
     return () => {
-      writtenCountRef.current = 0
+      unsubscribe()
       ro.disconnect()
       term.dispose()
       termRef.current = null
@@ -102,20 +100,9 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id])
 
-  // Write new terminal chunks as they arrive from WebSocket
-  useEffect(() => {
-    const term = termRef.current
-    if (!term) return
-    const output = session.terminalOutput
-    const newChunks = output.slice(writtenCountRef.current)
-    newChunks.forEach(chunk => term.write(chunk))
-    writtenCountRef.current = output.length
-  }, [session.terminalOutput])
-
   function handleClear() {
-    clearTerminal(session.id)
+    terminalBus.clear(session.id)
     termRef.current?.clear()
-    writtenCountRef.current = 0
   }
 
   return (

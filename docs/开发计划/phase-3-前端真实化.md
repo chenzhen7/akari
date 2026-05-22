@@ -44,7 +44,7 @@
 | T2                          | 等待约 2 秒                        | 终端出现 PowerShell 7 提示符（`PS >）`，**文字颜色正常** |
 | T3                          | 在终端区域点击，输入 `ls` 然后回车 | 底部输入栏**不需要**，直接在终端内输入即可；列出 worktree 目录文件 |
 | T4                          | 输入 `echo hello world`            | 终端回显 `hello world`                                       |
-| T5                          | 输入 `ls -la C:\Windows\System32\drivers` | 大量输出时终端可上下滚动查看历史                             |
+| T5                          | 输入 `ls C:\Windows\System32\drivers` | 大量输出时终端可上下滚动查看历史                             |
 | T6                          | 拖拽会话详情面板边界改变窗口大小   | 终端自动 fit，列数行数跟随容器变化                           |
 | T7                          | 点击终端右上角 🗑 清除按钮          | 终端内容清空                                                 |
 
