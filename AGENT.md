@@ -87,10 +87,9 @@ akari/
 │   └── progress.md                    # 进度快照（每次完成阶段后更新）
 ├── pnpm-workspace.yaml
 ├── package.json                       # workspace root，含 dev:all / typecheck 脚本
-└── AGENT.md                           # 本文件
+├── AGENT.md / CLAUDE.md               # AI Agent 上下文（内容相同）
+└── docs/                              # 见文档索引
 ```
-
-**旧 `src/` 目录**（根目录）仍存在但已废弃，将在后续清理。
 
 ---
 
@@ -207,21 +206,7 @@ interface AgentAdapter {
 2. **状态驱动 UI**：所有视图（画布/看板/Tab）共享同一份会话状态，WebSocket 事件驱动更新
 3. **终端即真相**：Agent 输出通过终端复用器捕获，不通过自定义协议通信
 4. **审批不可绕过**：危险操作必须经用户审批，Agent 适配器不得自动确认
-
----
-
-## 开发任务优先级
-
-| 模块 | 状态 | 前置 | 说明 |
-|------|------|------|------|
-| F0 工程化基础 | ✅ 完成 | — | Monorepo + 后端骨架 + WebSocket 联通 |
-| F1 会话管理 | 🔲 待开始 | F0 | SessionManager + SQLite + REST API |
-| F2 Worktree 管理 | 🔲 待开始 | F1 | WorktreeManager (simple-git) |
-| F3 终端多路复用 | 🔲 待开始 | F1 | TerminalMux (node-pty) + xterm.js |
-| F4 实时 Diff | 🔲 待开始 | F2 | chokidar + git diff + Monaco |
-| F5 审批工作流 | 🔲 待开始 | F3+F4 | ApprovalWorkflow + 审批 UI |
-| F6 Agent 适配器 | 🔲 待开始 | F2+F3 | Claude / Aider / 自定义 Shell |
-| F7 收尾打磨 | 🔲 待开始 | F1-F6 | 错误处理 + 测试 + UX |
+5. **禁止遗留历史债务**：完成任务后必须同步清理废弃文件、死代码、过时注释和临时脚手架。迁移后旧路径立即删除，重构后旧实现立即移除，不得以「后续清理」为由搁置。AGENT.md / progress.md 中的「待清理」标记视为未完成任务。
 
 ---
 

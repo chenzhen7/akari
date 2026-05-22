@@ -87,10 +87,9 @@ akari/
 │   └── progress.md                    # 进度快照（每次完成阶段后更新）
 ├── pnpm-workspace.yaml
 ├── package.json                       # workspace root，含 dev:all / typecheck 脚本
-└── AGENT.md                           # 本文件
+├── AGENT.md / CLAUDE.md               # AI Agent 上下文（内容相同）
+└── docs/                              # 见文档索引
 ```
-
-**旧 `src/` 目录**（根目录）仍存在但已废弃，将在后续清理。
 
 ---
 
@@ -207,6 +206,8 @@ interface AgentAdapter {
 2. **状态驱动 UI**：所有视图（画布/看板/Tab）共享同一份会话状态，WebSocket 事件驱动更新
 3. **终端即真相**：Agent 输出通过终端复用器捕获，不通过自定义协议通信
 4. **审批不可绕过**：危险操作必须经用户审批，Agent 适配器不得自动确认
+5. **禁止遗留历史债务**：完成任务后必须同步清理废弃文件、死代码、过时注释和临时脚手架。迁移后旧路径立即删除，重构后旧实现立即移除，不得以「后续清理」为由搁置。AGENT.md / progress.md 中的「待清理」标记视为未完成任务。
+6. **根目录只放配置**：禁止在仓库根目录创建 `src/`、`index.html`、`vite.config.ts`、`tsconfig.app.json`、`tsconfig.node.json`、`components.json`、`eslint.config.js` 等应用级文件。前端代码属于 `apps/web/`，后端代码属于 `apps/server/`，共享类型属于 `packages/shared-types/`。根目录仅保留 monorepo 配置（`package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`）和文档。
 
 ---
 
