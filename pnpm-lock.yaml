@@ -56,6 +56,9 @@ importers:
       simple-git:
         specifier: ^3.36.0
         version: 3.36.0
+      ws:
+        specifier: ^8.18.2
+        version: 8.20.1
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.13
