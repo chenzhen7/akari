@@ -7,6 +7,7 @@ import { CommandCenter } from '@/components/command-center/CommandCenter'
 import { CreateSessionDialog } from '@/components/create-session/CreateSessionDialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useWebSocket } from '@/hooks/useWebSocket'
+import { Toaster } from 'sonner'
 
 function WebSocketProvider() {
   useWebSocket()
@@ -34,6 +35,7 @@ export function AppShell() {
         <CommandCenter />
         <CreateSessionDialog />
       </div>
+      <Toaster richColors position="bottom-right" />
     </TooltipProvider>
   )
 }

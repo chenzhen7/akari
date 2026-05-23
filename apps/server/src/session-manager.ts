@@ -52,7 +52,7 @@ const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
   approved: ['running'],
   paused: ['running', 'failed'],
   review: ['completed', 'running'],
-  completed: ['merged', 'archived'],
+  completed: ['merged', 'archived', 'running'],
   failed: ['archived', 'running'],
   merged: ['archived'],
   archived: [],

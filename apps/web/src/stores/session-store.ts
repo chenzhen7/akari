@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { toast } from 'sonner'
 import type { AgentSession, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
 import type { ConnectionStatus } from '@/hooks/useWebSocket'
 import { terminalBus } from '@/lib/terminalBus'
@@ -73,6 +74,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     })),
 
   moveToColumn: (id, column) => {
+    const prevColumn = (get().sessions.find(s => s.id === id))?.kanbanColumn
     set(state => ({
       sessions: state.sessions.map(s =>
         s.id === id ? { ...s, kanbanColumn: column } : s
@@ -89,7 +91,21 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus }),
-      }).catch(err => console.warn('[moveToColumn] status update failed:', err))
+      })
+        .then(res => {
+          if (!res.ok) return res.json().then(body => Promise.reject(body?.message ?? res.statusText))
+        })
+        .catch(err => {
+          console.warn('[moveToColumn] status update failed:', err)
+          toast.error(`无法移动卡片: ${err}`)
+          if (prevColumn !== undefined) {
+            set(state => ({
+              sessions: state.sessions.map(s =>
+                s.id === id ? { ...s, kanbanColumn: prevColumn } : s
+              ),
+            }))
+          }
+        })
     }
   },
 
