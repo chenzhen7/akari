@@ -103,6 +103,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
   function handleClear() {
     terminalBus.clear(session.id)
     termRef.current?.clear()
+    send({ event: 'terminal:input', payload: { sessionId: session.id, data: '\x0c' } })
   }
 
   return (
