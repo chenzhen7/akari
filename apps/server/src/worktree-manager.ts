@@ -65,11 +65,16 @@ export class WorktreeManager {
   async getDiff(sessionId: string, baseBranch: string): Promise<GitDiff> {
     const cwd = this.getWorktreePath(sessionId)
     try {
+      // Use merge-base so the diff only reflects agent branch changes,
+      // not new commits that may have landed on baseBranch since the worktree was created.
+      const mergeBase = (await this.git(['merge-base', 'HEAD', baseBranch], cwd).catch(() => '')).trim()
+      const baseRef = mergeBase || baseBranch
+
       const [stat, full, nameStatus, numStat] = await Promise.all([
-        this.git(['diff', '--stat', baseBranch], cwd),
-        this.git(['diff', baseBranch], cwd),
-        this.git(['diff', '--name-status', baseBranch], cwd),
-        this.git(['diff', '--numstat', baseBranch], cwd),
+        this.git(['diff', '--stat', baseRef], cwd),
+        this.git(['diff', baseRef], cwd),
+        this.git(['diff', '--name-status', baseRef], cwd),
+        this.git(['diff', '--numstat', baseRef], cwd),
       ])
 
       const numStatMap = parseNumStat(numStat)
@@ -113,7 +118,11 @@ export class WorktreeManager {
   }
 
   async getFileDiffContent(worktreePath: string, baseBranch: string, filePath: string): Promise<{ original: string; modified: string }> {
-    const original = await execa('git', ['show', `${baseBranch}:${filePath}`], { cwd: worktreePath })
+    const mergeBase = await execa('git', ['merge-base', 'HEAD', baseBranch], { cwd: worktreePath })
+      .then(r => r.stdout.trim())
+      .catch(() => '')
+    const baseRef = mergeBase || baseBranch
+    const original = await execa('git', ['show', `${baseRef}:${filePath}`], { cwd: worktreePath })
       .then(r => r.stdout)
       .catch(() => '')
     const modified = await readFile(join(worktreePath, filePath), 'utf8').catch(() => '')

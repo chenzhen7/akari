@@ -1,7 +1,6 @@
 import Fastify from 'fastify'
 import fastifyCors from '@fastify/cors'
 import fastifyWebsocket from '@fastify/websocket'
-import { WebSocket } from 'ws'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import type { ClientMessage, ServerMessage, SessionStatus } from '@akari/shared-types'
@@ -151,6 +150,25 @@ fastify.get('/ws', { websocket: true }, socket => {
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ event: 'sessions:list', payload: sessionManager.listSessions() }))
   }
+
+  // Push current diffs to the newly connected client so DiffViewer restores after refresh
+  void (async () => {
+    const sessions = sessionManager.listSessions()
+    const active = sessions.filter(s => s.worktreePath && !['archived', 'initializing', 'failed'].includes(s.status))
+    for (const session of active) {
+      try {
+        const diff = await sessionManager.getCurrentDiff(session.id)
+        if (diff.files.length > 0 && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({
+            event: 'diff:update',
+            payload: { sessionId: session.id, diff },
+          } satisfies ServerMessage))
+        }
+      } catch {
+        // ignore individual failures
+      }
+    }
+  })()
 
   socket.on('message', (raw: Buffer | ArrayBuffer | Buffer[]) => {
     try {

@@ -68,10 +68,21 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     fitAddonRef.current = fitAddon
 
     // Replay buffered history (bypasses React state entirely)
-    terminalBus.getBuffer(session.id).forEach(chunk => term.write(chunk))
+    const localBuffer = terminalBus.getBuffer(session.id)
+    localBuffer.forEach(chunk => term.write(chunk))
 
     // Stream new data directly from bus — no React state, no re-render loop
     const unsubscribe = terminalBus.on(session.id, data => term.write(data))
+
+    // If local buffer is empty (e.g. page refreshed), restore history from server
+    if (localBuffer.length === 0) {
+      fetch(`/api/sessions/${session.id}/terminal-buffer`)
+        .then(r => r.json() as Promise<{ buffer: string[] }>)
+        .then(({ buffer }) => {
+          buffer.forEach(chunk => terminalBus.emit(session.id, chunk))
+        })
+        .catch(() => {})
+    }
 
     // Forward keystrokes to backend PTY
     term.onData(data => {

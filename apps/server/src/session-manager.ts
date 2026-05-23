@@ -1,11 +1,12 @@
 import Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, access } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type {
   AgentSession,
   AgentType,
   ApprovalRequest,
+  GitDiff,
   KanbanColumn,
   ServerMessage,
   SessionStatus,
@@ -186,7 +187,15 @@ export class SessionManager {
   }
 
   getTerminalBuffer(sessionId: string): string[] {
-    return this.terminalMux.getBuffer(sessionId)
+    return this.terminalMux.getBuffer(sessionId, 5000)
+  }
+
+  async getCurrentDiff(sessionId: string): Promise<GitDiff> {
+    const session = this.getSession(sessionId)
+    if (!session?.worktreePath) {
+      return { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
+    }
+    return this.worktreeManager.getDiff(sessionId, session.baseBranch)
   }
 
   handleApproval(sessionId: string, decision: 'approved' | 'rejected', comment?: string): void {
@@ -227,6 +236,38 @@ export class SessionManager {
       session.baseBranch,
       filePath,
     )
+  }
+
+  async restoreSessions(): Promise<void> {
+    const sessions = this.listSessions()
+
+    for (const session of sessions) {
+      if (session.status === 'initializing') {
+        this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
+        continue
+      }
+
+      const needsRestore = ['running', 'waiting', 'paused', 'review'].includes(session.status)
+      if (!needsRestore || !session.worktreePath) continue
+
+      const worktreePath = this.worktreeManager.getWorktreePath(session.id)
+      try {
+        await access(worktreePath)
+      } catch {
+        this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
+        continue
+      }
+
+      if (!this.terminalMux.hasTerminal(session.id)) {
+        this.terminalMux.createTerminal(session.id, worktreePath)
+        this.pushTerminalDisplay(session.id, `\r\n\x1b[33m> [Server restarted — terminal restored]\x1b[0m\r\n`)
+      }
+
+      this.worktreeManager.watchDiff(session.id, session.baseBranch, diff => {
+        this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, session.id)
+        this.broadcast({ event: 'diff:update', payload: { sessionId: session.id, diff } })
+      })
+    }
   }
 
   async deleteSession(sessionId: string): Promise<void> {
@@ -430,5 +471,7 @@ export async function createSessionManager(opts: {
   broadcast: (msg: ServerMessage) => void
 }): Promise<SessionManager> {
   await mkdir(dirname(opts.dbPath), { recursive: true })
-  return new SessionManager(opts)
+  const manager = new SessionManager(opts)
+  await manager.restoreSessions()
+  return manager
 }

@@ -20,8 +20,7 @@
     "fs-extra": "^11.3.5",
     "nanoid": "^5.1.5",
     "node-pty": "^1.1.0",
-    "simple-git": "^3.36.0",
-    "ws": "^8.18.2"
+    "simple-git": "^3.36.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
