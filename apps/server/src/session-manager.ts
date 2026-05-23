@@ -219,6 +219,16 @@ export class SessionManager {
     }
   }
 
+  async getFileDiffContent(sessionId: string, filePath: string): Promise<{ original: string; modified: string }> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    return this.worktreeManager.getFileDiffContent(
+      this.worktreeManager.getWorktreePath(sessionId),
+      session.baseBranch,
+      filePath,
+    )
+  }
+
   async deleteSession(sessionId: string): Promise<void> {
     const session = this.getSession(sessionId)
     this.terminalMux.killTerminal(sessionId)
@@ -231,15 +241,15 @@ export class SessionManager {
     try {
       this.pushTerminalDisplay(id, '> Creating git worktree...\r\n')
 
-      const { branchName, worktreePath } = await this.worktreeManager.createWorktree(
+      const { branchName, worktreePath, resolvedBase } = await this.worktreeManager.createWorktree(
         id,
         name,
         baseBranch,
       )
 
       this.db
-        .prepare('UPDATE sessions SET worktree_path = ?, branch_name = ? WHERE id = ?')
-        .run(worktreePath, branchName, id)
+        .prepare('UPDATE sessions SET worktree_path = ?, branch_name = ?, base_branch = ? WHERE id = ?')
+        .run(worktreePath, branchName, resolvedBase, id)
 
       this.pushTerminalDisplay(id, `> Branch: ${branchName}\r\n`)
       this.pushTerminalDisplay(id, `> Worktree: ${worktreePath}\r\n`)
@@ -247,7 +257,7 @@ export class SessionManager {
       this.terminalMux.createTerminal(id, worktreePath)
       this.pushTerminalDisplay(id, `> Terminal ready (agent: ${session.agentType})\r\n`)
 
-      this.worktreeManager.watchDiff(id, baseBranch, diff => {
+      this.worktreeManager.watchDiff(id, resolvedBase, diff => {
         this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, id)
         this.broadcast({ event: 'diff:update', payload: { sessionId: id, diff } })
       })

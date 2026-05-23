@@ -92,6 +92,18 @@ fastify.post<{ Body: { message: string; targets?: string[] } }>(
   },
 )
 
+fastify.get<{ Params: { id: string }; Querystring: { file?: string } }>(
+  '/sessions/:id/diff-content',
+  async (request, reply) => {
+    const { id } = request.params
+    const { file } = request.query
+    if (!file) return reply.status(400).send({ error: 'file query param is required' })
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    const content = await sessionManager.getFileDiffContent(id, file)
+    return content
+  },
+)
+
 fastify.get<{ Params: { id: string } }>(
   '/sessions/:id/terminal-buffer',
   async (request, reply) => {
