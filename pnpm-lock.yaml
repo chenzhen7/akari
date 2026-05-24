@@ -145,6 +145,9 @@ importers:
         specifier: ^5.0.13
         version: 5.0.13(@types/react@19.2.15)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))
     devDependencies:
+      '@babel/core':
+        specifier: ^7.26.0
+        version: 7.29.0
       '@eslint/js':
         specifier: ^9.39.4
         version: 9.39.4
