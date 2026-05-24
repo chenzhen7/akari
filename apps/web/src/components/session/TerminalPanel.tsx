@@ -28,7 +28,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
       cursorBlink: true,
       fontFamily: '"Cascadia Code", "Fira Code", Menlo, "Courier New", monospace',
       fontSize: 12,
-      lineHeight: 1.4,
+      lineHeight: 1.0,
       scrollback: 5000,
       theme: {
         background: '#0d1117',

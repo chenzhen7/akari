@@ -12,6 +12,7 @@ interface TerminalEntry {
 
 export class TerminalMultiplexer extends EventEmitter {
   private readonly terminals = new Map<string, TerminalEntry>()
+  private readonly pendingResizes = new Map<string, { cols: number; rows: number }>()
   private readonly BUFFER_LIMIT = 5000
 
   createTerminal(sessionId: string, cwd: string): void {
@@ -27,8 +28,8 @@ export class TerminalMultiplexer extends EventEmitter {
 
     const proc = pty.spawn(shell, args, {
       name: 'xterm-256color',
-      cols: 220,
-      rows: 50,
+      cols: 80,
+      rows: 24,
       cwd,
       env: {
         ...process.env,
@@ -54,6 +55,12 @@ export class TerminalMultiplexer extends EventEmitter {
     })
 
     this.terminals.set(sessionId, entry)
+
+    const pending = this.pendingResizes.get(sessionId)
+    if (pending) {
+      proc.resize(pending.cols, pending.rows)
+      this.pendingResizes.delete(sessionId)
+    }
   }
 
   sendToTerminal(sessionId: string, data: string): void {
@@ -67,6 +74,8 @@ export class TerminalMultiplexer extends EventEmitter {
     const entry = this.terminals.get(sessionId)
     if (entry?.status === 'running') {
       entry.pty.resize(cols, rows)
+    } else {
+      this.pendingResizes.set(sessionId, { cols, rows })
     }
   }
 
@@ -88,6 +97,7 @@ export class TerminalMultiplexer extends EventEmitter {
       }
       this.terminals.delete(sessionId)
     }
+    this.pendingResizes.delete(sessionId)
   }
 
   hasTerminal(sessionId: string): boolean {
