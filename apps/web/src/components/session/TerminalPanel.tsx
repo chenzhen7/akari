@@ -67,22 +67,39 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     termRef.current = term
     fitAddonRef.current = fitAddon
 
-    // Replay buffered history (bypasses React state entirely)
-    const localBuffer = terminalBus.getBuffer(session.id)
-    localBuffer.forEach(chunk => term.write(chunk))
+    // Subscribe FIRST so no live data is missed while server history loads.
+    // Live data is buffered in pendingLive until the history replay is done.
+    let disposed = false
+    let historyReady = false
+    const pendingLive: string[] = []
+    const unsubscribe = terminalBus.on(session.id, data => {
+      if (disposed) return
+      if (historyReady) {
+        term.write(data)
+      } else {
+        pendingLive.push(data)
+      }
+    })
 
-    // Stream new data directly from bus — no React state, no re-render loop
-    const unsubscribe = terminalBus.on(session.id, data => term.write(data))
-
-    // If local buffer is empty (e.g. page refreshed), restore history from server
-    if (localBuffer.length === 0) {
-      fetch(`/api/sessions/${session.id}/terminal-buffer`)
-        .then(r => r.json() as Promise<{ buffer: string[] }>)
-        .then(({ buffer }) => {
-          buffer.forEach(chunk => terminalBus.emit(session.id, chunk))
-        })
-        .catch(() => {})
+    // Always fetch authoritative history from server (local, < 20 ms).
+    // Only replay from the last full-screen clear to avoid stacking TUI frames.
+    const drainPending = () => {
+      historyReady = true
+      if (!disposed) pendingLive.forEach(d => term.write(d))
+      pendingLive.length = 0
     }
+    fetch(`/api/sessions/${session.id}/terminal-buffer`)
+      .then(r => r.json() as Promise<{ buffer: string[] }>)
+      .then(({ buffer }) => {
+        if (disposed) return
+        if (buffer.length > 0) {
+          const full = buffer.join('')
+          const from = Math.max(full.lastIndexOf('\x1b[?1049h'), full.lastIndexOf('\x1b[2J'))
+          term.write(from >= 0 ? full.slice(from) : full)
+        }
+        drainPending()
+      })
+      .catch(() => drainPending())
 
     // Forward keystrokes to backend PTY
     term.onData(data => {
@@ -102,6 +119,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     ro.observe(container)
 
     return () => {
+      disposed = true
       unsubscribe()
       ro.disconnect()
       term.dispose()
