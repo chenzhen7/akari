@@ -213,12 +213,13 @@ interface AgentAdapter {
 3. **终端即真相**：Agent 输出通过终端复用器捕获，不通过自定义协议通信
 4. **审批不可绕过**：危险操作必须经用户审批，Agent 适配器不得自动确认
 5. **禁止遗留历史债务**：完成任务后必须同步清理废弃文件、死代码、过时注释和临时脚手架。迁移后旧路径立即删除，重构后旧实现立即移除，不得以「后续清理」为由搁置。AGENT.md / progress.md 中的「待清理」标记视为未完成任务。
-6. **重大决策必须先征询用户**：凡涉及以下任一情形， **禁止**自行做出决定并直接实施，必须先向用户说明方案对比、征得明确同意后再动手：
+6. **重大决策必须先征询用户**：凡涉及以下任一情形，**禁止**自行做出决定并直接实施，必须先向用户说明方案对比、征得明确同意后再动手：
    - 技术方案降级或替代（如用 `child_process` 替代 `node-pty`、用 mock 替代真实实现）
    - 架构层面的设计取舍（如数据库选型、通信协议变更、模块拆分方式）
    - 破坏性 API/类型变更（影响已有接口的签名或行为）
    - 任何「此方案有明显缺点但省事」的捷径
    正确做法：先用 `ask_user_question` 工具列出选项和利弊，等待用户选择后再执行。不得在文档中写「降级方案」后自动采用该方案。
+7. **禁止吞异常**：空 `catch {}` / 只写注释的 catch 一律禁止；前端用户操作失败必须 `toast.error()`；后端必须 `log.warn/error()`；状态机非法转换用 `validateTransition()` 守卫而非 try/catch。详见 [.claude/rules/error-handling.md](.claude/rules/error-handling.md)。
 ---
 
 ## 已知问题 / 技术风险
@@ -237,3 +238,4 @@ interface AgentAdapter {
 - [docs/progress.md](docs/progress.md) — **开发进度快照**（接手新任务前必读）
 - [docs/设计文档.md](docs/设计文档.md) — 完整产品架构、数据模型、视图设计、代码示例
 - [docs/开发计划/phase-N-*.md](docs/开发计划/) — 各阶段详细任务拆解（已合并索引到 progress.md）
+- [.claude/rules/error-handling.md](.claude/rules/error-handling.md) — **异常处理规范**：禁止吞异常、前端用 toast 暴露错误、状态机用守卫代替 try/catch

@@ -104,7 +104,10 @@ export class TerminalMultiplexer extends EventEmitter {
     if (approvalMatch) {
       const raw = approvalMatch[1]
       const type = raw.match(/type=(\S+)/)?.[1] ?? 'destructive-op'
-      const command = raw.match(/command="([^"]+)"/)?.[1]
+      const command =
+        raw.match(/command="([^"]+)"/)?.[1] ??
+        raw.match(/command='([^']+)'/)?.[1] ??
+        raw.match(/command=(.+)/)?.[1]?.trim()
       const request: ApprovalRequest = {
         type: type as ApprovalRequest['type'],
         message: raw,

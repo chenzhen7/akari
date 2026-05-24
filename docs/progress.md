@@ -11,9 +11,9 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ---
 
-## 当前状态（2026-05-23）
+## 当前状态（2026-05-24）
 
-**整体进度**：**阶段三（前端真实化）已完成**。xterm.js 终端接入（node-pty PTY + PowerShell 7.6.2）、Monaco Diff Viewer（VS Code 风格 side-by-side）、创建会话 initializing spinner、画布坐标持久化、看板拖拽触发状态流转均已实现并验证。
+**整体进度**：**阶段五（Agent 适配器 — Claude 适配）进行中**。Claude Code 适配器已实现：`AgentAdapter` 接口、`ClaudeAdapter`（`--append-system-prompt` 注入 Akari 协议、交互模式启动、任务自动注入）、`createAgentAdapter()` 工厂函数，SessionManager 已集成适配器自动启动逻辑。
 
 ### ✅ 已完成
 
@@ -35,6 +35,9 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | Diff 视图 | `apps/web/src/components/diff/DiffViewer.tsx` | Monaco **DiffEditor**（side-by-side，VS Code 风格）；左侧文件列表可点击切换；按需调 `GET /sessions/:id/diff-content` 获取 original/modified；`--numstat` 提供准确行数；`resolvedBase` 修复 master 仓库 diff 失效问题 |
 | 指挥中心 | `apps/web/src/components/command-center/` | 广播调后端 `/broadcast` API |
 | 创建会话弹窗 | `apps/web/src/components/create-session/` | 含 agentType 选择，initializing spinner，session:created 自动打开 Tab |
+| AgentAdapter 接口 | `apps/server/src/agent-adapters/base.ts` | `AgentAdapter` 接口 + `PtyCommand` 类型 |
+| ClaudeAdapter | `apps/server/src/agent-adapters/claude.ts` | 交互模式启动 `claude`，`--append-system-prompt` 注入 Akari 协议，2.5s 延迟后自动注入任务 |
+| 适配器工厂 | `apps/server/src/agent-adapters/index.ts` | `createAgentAdapter(agentType)` 工厂，SessionManager 集成 |
 
 ### 🔲 待开发（按功能模块）
 
@@ -52,7 +55,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ## 当前正在进行
 
-> 📌 **无** — 等待分配（下一步建议：F5 审批后端 + 审批 UI，即阶段四）
+> 📌 **F6 Agent 适配器（阶段五）** — Claude 适配已完成，待测试验证；Aider / Shell 适配器为后续任务
 
 ---
 
@@ -64,7 +67,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 阶段二 | WorktreeManager + TerminalMux + SessionManager | ✅ 完成 | [phase-2](./开发计划/phase-2-核心后端.md) |
 | 阶段三 | xterm.js 终端 + Monaco Diff + 创建流程 | ✅ 完成 | [phase-3](./开发计划/phase-3-前端真实化.md) |
 | 阶段四 | 审批后端 + 审批 UI | 🔲 待开始 | [phase-4](./开发计划/phase-4-审批工作流.md) |
-| 阶段五 | Claude / Aider / Shell 适配器 | 🔲 待开始 | [phase-5](./开发计划/phase-5-Agent适配器.md) |
+| 阶段五 | Claude / Aider / Shell 适配器 | � 进行中（Claude ✅，Aider/Shell 待完成） | [phase-5](./开发计划/phase-5-Agent适配器.md) |
 | 阶段六 | 错误处理 + 性能 + 测试 | 🔲 待开始 | [phase-6](./开发计划/phase-6-收尾打磨.md) |
 
 ## 里程碑
@@ -75,7 +78,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | **M2** 会话生命周期完整跑通 | 阶段二 | ✅ |
 | **M3** 真实终端 + Diff + 创建流程 | 阶段三 | ✅ |
 | **M4** 审批工作流闭环 | 阶段四 | 🔲 |
-| **M5** Claude Code / Aider 可用 | 阶段五 | 🔲 |
+| **M5** Claude Code / Aider 可用 | 阶段五 | � Claude 适配已完成，待验证 |
 | **M6** 生产就绪 | 阶段六 | 🔲 |
 
 ---
@@ -92,7 +95,11 @@ akari/
 │   │       ├── index.ts           # ✅ Fastify 入口，端口 3001
 │   │       ├── session-manager.ts # ✅ SessionManager（SQLite + 状态机）
 │   │       ├── worktree-manager.ts# ✅ WorktreeManager（git worktree + chokidar diff）
-│   │       └── terminal-mux.ts    # ✅ TerminalMultiplexer（child_process + 环形 Buffer）
+│   │       ├── terminal-mux.ts    # ✅ TerminalMultiplexer（child_process + 环形 Buffer）
+│       └── agent-adapters/    # ✅ AgentAdapter 接口 + ClaudeAdapter（阶段五）
+│           ├── base.ts        # AgentAdapter 接口 + PtyCommand 类型
+│           ├── claude.ts      # ClaudeAdapter（--append-system-prompt，交互模式）
+│           └── index.ts       # createAgentAdapter() 工厂
 │   └── web/src/
 │       ├── components/            # ✅ 全部前端组件
 │       ├── stores/session-store.ts  # ✅ WebSocket 驱动

@@ -13,6 +13,7 @@ import type {
 } from '@akari/shared-types'
 import { WorktreeManager } from './worktree-manager.js'
 import { TerminalMultiplexer } from './terminal-mux.js'
+import { createAgentAdapter, SHELL_STARTUP_DELAY_MS } from './agent-adapters/index.js'
 
 export interface CreateSessionParams {
   name: string
@@ -47,11 +48,11 @@ interface DbRow {
 
 const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
   initializing: ['running', 'failed'],
-  running: ['waiting', 'paused', 'completed', 'failed'],
-  waiting: ['running', 'paused'],
-  approved: ['running'],
-  paused: ['running', 'failed'],
-  review: ['completed', 'running'],
+  running: ['waiting', 'paused', 'completed', 'failed', 'archived'],
+  waiting: ['running', 'paused', 'archived'],
+  approved: ['running', 'archived'],
+  paused: ['running', 'failed', 'archived'],
+  review: ['completed', 'running', 'archived'],
   completed: ['merged', 'archived', 'running'],
   failed: ['archived', 'running'],
   merged: ['archived'],
@@ -297,6 +298,22 @@ export class SessionManager {
 
       this.terminalMux.createTerminal(id, worktreePath)
       this.pushTerminalDisplay(id, `> Terminal ready (agent: ${session.agentType})\r\n`)
+
+      const adapter = createAgentAdapter(session.agentType)
+      if (adapter) {
+        this.pushTerminalDisplay(id, `> Launching ${session.agentType}...\r\n`)
+        const commands = await adapter.prepare(worktreePath, session.task, id)
+        let cumulativeDelay = SHELL_STARTUP_DELAY_MS
+        for (const { cmd, delayMs = 0 } of commands) {
+          cumulativeDelay += delayMs
+          const delay = cumulativeDelay
+          setTimeout(() => {
+            if (this.terminalMux.hasTerminal(id)) {
+              this.terminalMux.sendToTerminal(id, cmd)
+            }
+          }, delay)
+        }
+      }
 
       this.worktreeManager.watchDiff(id, resolvedBase, diff => {
         this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, id)
