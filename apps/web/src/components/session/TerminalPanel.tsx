@@ -103,8 +103,13 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
           .filter(chunk => !chunk.includes('\x1b[H'))
           .forEach(chunk => term.write(chunk))
         term.write('\x1b[2J\x1b[H')  // clear active screen (keeps scrollback); ConPTY dump fills it fresh
-        pendingChunks = []  // server buffer already contains this data
+        // Write pending chunks AFTER clearing: if ConPTY dump arrived before fetch completed
+        // (a race condition), it would have been buffered in pendingChunks and must not be
+        // discarded — its \x1b[H will correctly repaint the active screen from (0,0).
+        const pending = pendingChunks
+        pendingChunks = []
         historyLoaded = true
+        pending.forEach(chunk => term.write(chunk))
       })
       .catch((err: unknown) => {
         console.error('[TerminalPanel] failed to fetch terminal buffer:', err)
