@@ -1,17 +1,19 @@
 import Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, access } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type {
   AgentSession,
   AgentType,
   ApprovalRequest,
+  GitDiff,
   KanbanColumn,
   ServerMessage,
   SessionStatus,
 } from '@akari/shared-types'
 import { WorktreeManager } from './worktree-manager.js'
 import { TerminalMultiplexer } from './terminal-mux.js'
+import { createAgentAdapter, SHELL_STARTUP_DELAY_MS } from './agent-adapters/index.js'
 
 export interface CreateSessionParams {
   name: string
@@ -46,12 +48,12 @@ interface DbRow {
 
 const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
   initializing: ['running', 'failed'],
-  running: ['waiting', 'paused', 'completed', 'failed'],
-  waiting: ['running', 'paused'],
-  approved: ['running'],
-  paused: ['running', 'failed'],
-  review: ['completed', 'running'],
-  completed: ['merged', 'archived'],
+  running: ['waiting', 'paused', 'completed', 'failed', 'archived'],
+  waiting: ['running', 'paused', 'archived'],
+  approved: ['running', 'archived'],
+  paused: ['running', 'failed', 'archived'],
+  review: ['completed', 'running', 'archived'],
+  completed: ['merged', 'archived', 'running'],
   failed: ['archived', 'running'],
   merged: ['archived'],
   archived: [],
@@ -186,7 +188,15 @@ export class SessionManager {
   }
 
   getTerminalBuffer(sessionId: string): string[] {
-    return this.terminalMux.getBuffer(sessionId)
+    return this.terminalMux.getBuffer(sessionId, 5000)
+  }
+
+  async getCurrentDiff(sessionId: string): Promise<GitDiff> {
+    const session = this.getSession(sessionId)
+    if (!session?.worktreePath) {
+      return { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
+    }
+    return this.worktreeManager.getDiff(sessionId, session.baseBranch)
   }
 
   handleApproval(sessionId: string, decision: 'approved' | 'rejected', comment?: string): void {
@@ -219,6 +229,48 @@ export class SessionManager {
     }
   }
 
+  async getFileDiffContent(sessionId: string, filePath: string): Promise<{ original: string; modified: string }> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    return this.worktreeManager.getFileDiffContent(
+      this.worktreeManager.getWorktreePath(sessionId),
+      session.baseBranch,
+      filePath,
+    )
+  }
+
+  async restoreSessions(): Promise<void> {
+    const sessions = this.listSessions()
+
+    for (const session of sessions) {
+      if (session.status === 'initializing') {
+        this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
+        continue
+      }
+
+      const needsRestore = ['running', 'waiting', 'paused', 'review'].includes(session.status)
+      if (!needsRestore || !session.worktreePath) continue
+
+      const worktreePath = this.worktreeManager.getWorktreePath(session.id)
+      try {
+        await access(worktreePath)
+      } catch {
+        this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
+        continue
+      }
+
+      if (!this.terminalMux.hasTerminal(session.id)) {
+        this.terminalMux.createTerminal(session.id, worktreePath)
+        this.pushTerminalDisplay(session.id, `\r\n\x1b[33m> [Server restarted — terminal restored]\x1b[0m\r\n`)
+      }
+
+      this.worktreeManager.watchDiff(session.id, session.baseBranch, diff => {
+        this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, session.id)
+        this.broadcast({ event: 'diff:update', payload: { sessionId: session.id, diff } })
+      })
+    }
+  }
+
   async deleteSession(sessionId: string): Promise<void> {
     const session = this.getSession(sessionId)
     this.terminalMux.killTerminal(sessionId)
@@ -231,15 +283,15 @@ export class SessionManager {
     try {
       this.pushTerminalDisplay(id, '> Creating git worktree...\r\n')
 
-      const { branchName, worktreePath } = await this.worktreeManager.createWorktree(
+      const { branchName, worktreePath, resolvedBase } = await this.worktreeManager.createWorktree(
         id,
         name,
         baseBranch,
       )
 
       this.db
-        .prepare('UPDATE sessions SET worktree_path = ?, branch_name = ? WHERE id = ?')
-        .run(worktreePath, branchName, id)
+        .prepare('UPDATE sessions SET worktree_path = ?, branch_name = ?, base_branch = ? WHERE id = ?')
+        .run(worktreePath, branchName, resolvedBase, id)
 
       this.pushTerminalDisplay(id, `> Branch: ${branchName}\r\n`)
       this.pushTerminalDisplay(id, `> Worktree: ${worktreePath}\r\n`)
@@ -247,7 +299,23 @@ export class SessionManager {
       this.terminalMux.createTerminal(id, worktreePath)
       this.pushTerminalDisplay(id, `> Terminal ready (agent: ${session.agentType})\r\n`)
 
-      this.worktreeManager.watchDiff(id, baseBranch, diff => {
+      const adapter = createAgentAdapter(session.agentType)
+      if (adapter) {
+        this.pushTerminalDisplay(id, `> Launching ${session.agentType}...\r\n`)
+        const commands = await adapter.prepare(worktreePath, session.task, id)
+        let cumulativeDelay = SHELL_STARTUP_DELAY_MS
+        for (const { cmd, delayMs = 0 } of commands) {
+          cumulativeDelay += delayMs
+          const delay = cumulativeDelay
+          setTimeout(() => {
+            if (this.terminalMux.hasTerminal(id)) {
+              this.terminalMux.sendToTerminal(id, cmd)
+            }
+          }, delay)
+        }
+      }
+
+      this.worktreeManager.watchDiff(id, resolvedBase, diff => {
         this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, id)
         this.broadcast({ event: 'diff:update', payload: { sessionId: id, diff } })
       })
@@ -427,5 +495,7 @@ export async function createSessionManager(opts: {
   broadcast: (msg: ServerMessage) => void
 }): Promise<SessionManager> {
   await mkdir(dirname(opts.dbPath), { recursive: true })
-  return new SessionManager(opts)
+  const manager = new SessionManager(opts)
+  await manager.restoreSessions()
+  return manager
 }

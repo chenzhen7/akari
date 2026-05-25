@@ -12,6 +12,10 @@
     "format": "prettier --write \"**/*.{ts,tsx}\" --ignore-path .prettierignore",
     "typecheck": "pnpm -r typecheck"
   },
+  "engines": {
+    "node": ">=24.15.0",
+    "pnpm": ">=11"
+  },
   "devDependencies": {
     "concurrently": "^9.1.2",
     "prettier": "^3.8.1",

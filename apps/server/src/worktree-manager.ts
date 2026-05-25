@@ -1,6 +1,6 @@
 import { execa } from 'execa'
 import { watch, type FSWatcher } from 'chokidar'
-import { mkdir, symlink, rm, access, constants } from 'node:fs/promises'
+import { mkdir, symlink, rm, access, constants, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { GitDiff, DiffFile } from '@akari/shared-types'
 
@@ -18,7 +18,7 @@ export class WorktreeManager {
     sessionId: string,
     taskName: string,
     baseBranch = 'main',
-  ): Promise<{ branchName: string; worktreePath: string }> {
+  ): Promise<{ branchName: string; worktreePath: string; resolvedBase: string }> {
     const safeName = taskName
       .replace(/[^a-zA-Z0-9]/g, '-')
       .toLowerCase()
@@ -41,7 +41,7 @@ export class WorktreeManager {
     await this.git(['worktree', 'add', '-b', branchName, worktreePath, resolvedBase])
     await this.linkNodeModules(worktreePath)
 
-    return { branchName, worktreePath }
+    return { branchName, worktreePath, resolvedBase }
   }
 
   async removeWorktree(sessionId: string, branchName?: string): Promise<void> {
@@ -65,20 +65,68 @@ export class WorktreeManager {
   async getDiff(sessionId: string, baseBranch: string): Promise<GitDiff> {
     const cwd = this.getWorktreePath(sessionId)
     try {
-      const [stat, full, nameStatus] = await Promise.all([
-        this.git(['diff', '--stat', baseBranch], cwd),
-        this.git(['diff', baseBranch], cwd),
-        this.git(['diff', '--name-status', baseBranch], cwd),
+      // Use merge-base so the diff only reflects agent branch changes,
+      // not new commits that may have landed on baseBranch since the worktree was created.
+      const mergeBase = (await this.git(['merge-base', 'HEAD', baseBranch], cwd).catch(() => '')).trim()
+      const baseRef = mergeBase || baseBranch
+
+      const [stat, full, nameStatus, numStat] = await Promise.all([
+        this.git(['diff', '--stat', baseRef], cwd),
+        this.git(['diff', baseRef], cwd),
+        this.git(['diff', '--name-status', baseRef], cwd),
+        this.git(['diff', '--numstat', baseRef], cwd),
       ])
+
+      const numStatMap = parseNumStat(numStat)
+
+      // git diff only covers tracked files; also capture untracked files
+      const untrackedRaw = await this.git(['ls-files', '--others', '--exclude-standard'], cwd).catch(() => '')
+      const untrackedFiles = untrackedRaw.trim() ? untrackedRaw.trim().split('\n').filter(Boolean) : []
+
+      let extraDiff = ''
+      const extraFiles: DiffFile[] = []
+      for (const file of untrackedFiles) {
+        // git diff --no-index exits with code 1 when differences exist (normal, not an error)
+        const fileDiff = await execa('git', ['diff', '--no-index', '--', '/dev/null', file], { cwd })
+          .then(r => r.stdout)
+          .catch((e: unknown) => {
+            const err = e as { exitCode?: number; stdout?: string }
+            return err.exitCode === 1 ? (err.stdout ?? '') : ''
+          })
+        if (fileDiff) {
+          extraDiff += fileDiff + '\n'
+          const added = fileDiff.split('\n').filter(l => l.startsWith('+') && !l.startsWith('+++')).length
+          extraFiles.push({ path: file, status: 'A', additions: added, deletions: 0 })
+        }
+      }
+
+      const trackedFiles = parseFileStatus(nameStatus).map(f => ({
+        ...f,
+        additions: numStatMap.get(f.path)?.additions ?? 0,
+        deletions: numStatMap.get(f.path)?.deletions ?? 0,
+      }))
+
       return {
         stat,
-        fullDiff: full,
-        files: parseFileStatus(nameStatus),
+        fullDiff: full + extraDiff,
+        files: [...trackedFiles, ...extraFiles],
         summary: parseStat(stat),
       }
     } catch {
       return { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
     }
+  }
+
+  async getFileDiffContent(worktreePath: string, baseBranch: string, filePath: string): Promise<{ original: string; modified: string }> {
+    const mergeBase = await execa('git', ['merge-base', 'HEAD', baseBranch], { cwd: worktreePath })
+      .then(r => r.stdout.trim())
+      .catch(() => '')
+    const baseRef = mergeBase || baseBranch
+    const original = await execa('git', ['show', `${baseRef}:${filePath}`], { cwd: worktreePath })
+      .then(r => r.stdout)
+      .catch(() => '')
+    const modified = await readFile(join(worktreePath, filePath), 'utf8').catch(() => '')
+    return { original, modified }
   }
 
   watchDiff(sessionId: string, baseBranch: string, callback: (diff: GitDiff) => void): FSWatcher {
@@ -156,6 +204,20 @@ function parseFileStatus(output: string): DiffFile[] {
       if (!path) return []
       return [{ path, status, additions: 0, deletions: 0 }]
     })
+}
+
+function parseNumStat(output: string): Map<string, { additions: number; deletions: number }> {
+  const map = new Map<string, { additions: number; deletions: number }>()
+  if (!output.trim()) return map
+  for (const line of output.trim().split('\n')) {
+    const parts = line.split('\t')
+    if (parts.length < 3) continue
+    const additions = parseInt(parts[0] ?? '0') || 0
+    const deletions = parseInt(parts[1] ?? '0') || 0
+    const path = parts.slice(2).join('\t')
+    if (path) map.set(path, { additions, deletions })
+  }
+  return map
 }
 
 function parseStat(stat: string): { additions: number; deletions: number; files: number } {

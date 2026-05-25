@@ -57,7 +57,7 @@ export function SessionDetail() {
           <div className="flex w-1/2 flex-col overflow-hidden p-4">
             <h3 className="mb-2 shrink-0 text-sm font-semibold">Git Diff</h3>
             <div className="min-h-0 flex-1">
-              <DiffViewer diffFull={session.diffFull} diffFiles={session.diffFiles} />
+              <DiffViewer sessionId={session.id} diffFiles={session.diffFiles} />
             </div>
           </div>
         </div>
