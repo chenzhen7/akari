@@ -1,6 +1,5 @@
 import { useDraggable } from '@dnd-kit/core'
 import { Card, CardContent } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
 import { Circle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import type { AgentSession } from '@/types'
@@ -64,15 +63,9 @@ export function KanbanCard({ session }: KanbanCardProps) {
             {session.name}
           </span>
         </div>
-        <div className="flex items-center justify-between">
-          <Badge variant="secondary" className="text-[10px]">
-            {statusLabelMap[session.status] || session.status}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            {session.progress}%
-          </span>
-        </div>
-        <Progress value={session.progress} className="h-1" />
+        <Badge variant="secondary" className="text-[10px]">
+          {statusLabelMap[session.status] || session.status}
+        </Badge>
       </CardContent>
     </Card>
   )

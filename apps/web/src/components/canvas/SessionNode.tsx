@@ -1,7 +1,6 @@
 import { memo, useState, useEffect, useRef } from 'react'
 import type { Node, NodeProps } from '@xyflow/react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
 import {
   Dialog,
   DialogContent,
@@ -134,13 +133,11 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
         </CardHeader>
 
         <CardContent className="space-y-2 p-3 pt-0">
-          <div className="flex items-center justify-between text-xs">
+          <div className="text-xs">
             <span className={`font-medium ${colorClass}`}>
               {statusLabelMap[session.status] ?? session.status}
             </span>
-            <span className="text-muted-foreground">{session.progress}%</span>
           </div>
-          <Progress value={session.progress} className="h-1.5" />
 
           {/* Mini terminal preview */}
           <div className="min-h-[28px] space-y-0.5 rounded bg-muted/50 p-1.5 font-mono text-[10px] text-muted-foreground">

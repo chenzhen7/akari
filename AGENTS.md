@@ -231,7 +231,7 @@ interface AgentAdapter {
 | 问题 | 影响 | 处理建议 |
 |------|------|----------|
 | `node-pty` Windows 需 VC++ Build Tools | F3 开发环境 | ✅ 已解决：VC++ Build Tools 已安装，node-pty 编译成功；Shell 已切换为 PowerShell 7.6.2 |
-| xterm.js + React 18 Strict Mode 双重挂载 | F3 内存泄露 | `useRef` 保护初始化，`useEffect` 返回 `dispose()` |
+| ~~xterm.js + React 18 Strict Mode 双重挂载~~ | ~~F3 内存泄露~~ | ✅ 已解决：`TerminalPanel` 改用模块级 `terminalInstances` Map 保活 xterm 实例，切 Tab 不再 dispose/重建，terminalBus 订阅全程存活 |
 | Monaco Editor 包体积 ~2MB | F4 首屏性能 | 动态 `import()` 懒加载，仅审批弹窗打开时加载 |
 | Node.js 22.10.0 < Vite 7 要求的 22.12+ | 开发环境警告 | 升级 Node.js 到 22.12+ 可消除警告，当前仍可正常运行 |
 

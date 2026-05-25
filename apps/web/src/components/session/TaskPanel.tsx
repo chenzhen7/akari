@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import {
@@ -66,14 +65,6 @@ export function TaskPanel({ session }: TaskPanelProps) {
         <Badge variant={statusVariantMap[session.status] || 'secondary'}>
           {statusLabelMap[session.status] || session.status}
         </Badge>
-      </div>
-
-      <div className="space-y-1">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">进度</span>
-          <span>{session.progress}%</span>
-        </div>
-        <Progress value={session.progress} />
       </div>
 
       <div className="space-y-1 text-sm">

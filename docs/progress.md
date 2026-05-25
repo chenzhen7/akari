@@ -31,7 +31,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 连接状态指示器 | `apps/web/src/components/layout/TopNav.tsx` | 绿/黄脉冲/橙/红，断线计时 |
 | 无限画布 | `apps/web/src/components/canvas/` | 基于 `@xyflow/react`，节点可拖动 |
 | 看板 | `apps/web/src/components/kanban/` | 基于 `@dnd-kit`，列间拖拽 |
-| 会话详情 / 终端 | `apps/web/src/components/session/` | xterm.js 真实终端（node-pty PTY + PowerShell 7），支持完整 ANSI 颜色 |
+| 会话详情 / 终端 | `apps/web/src/components/session/` | xterm.js 真实终端（node-pty PTY + PowerShell 7），支持完整 ANSI 颜色；`TerminalPanel` 用模块级 `terminalInstances` Map 保活实例，切 Tab 仅 DOM reparent，无重复/乱版 |
 | Diff 视图 | `apps/web/src/components/diff/DiffViewer.tsx` | Monaco **DiffEditor**（side-by-side，VS Code 风格）；左侧文件列表可点击切换；按需调 `GET /sessions/:id/diff-content` 获取 original/modified；`--numstat` 提供准确行数；`resolvedBase` 修复 master 仓库 diff 失效问题 |
 | 指挥中心 | `apps/web/src/components/command-center/` | 广播调后端 `/broadcast` API |
 | 创建会话弹窗 | `apps/web/src/components/create-session/` | 含 agentType 选择，initializing spinner，session:created 自动打开 Tab |
@@ -136,7 +136,7 @@ pnpm add xterm xterm-addon-fit xterm-addon-web-links @monaco-editor/react
 | 问题 | 影响 | 处理建议 |
 |------|------|----------|
 | `node-pty` Windows 需 VC++ Build Tools | F3 开发环境 | ✅ 已解决：VC++ Build Tools 已安装，node-pty 编译成功；Shell 已切换为 PowerShell 7.6.2 |
-| xterm.js + React 18 Strict Mode 双重挂载 | F3 内存泄露 | `useRef` 保护初始化，`useEffect` 返回 `dispose()` |
+| ~~xterm.js + React 18 Strict Mode 双重挂载~~ | ~~F3 内存泄露~~ | ✅ 已解决：`TerminalPanel` 改用模块级 `terminalInstances` Map 保活 xterm 实例，切 Tab 不再 dispose/重建，订阅全程存活 |
 | Monaco Editor 包体积 ~2MB | F4 首屏性能 | 动态 `import()` 懒加载，仅审批弹窗打开时加载 |
 | ~~`.agent-worktrees/` 未加入 `.gitignore`~~ | ~~F2 误提交~~ | ✅ 已在 `.gitignore` 中添加 |
 
