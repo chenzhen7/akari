@@ -273,6 +273,13 @@ export class SessionManager {
     )
 
     this.terminalMux.on(
+      'terminal:ready',
+      ({ sessionId }: { sessionId: string }) => {
+        this.broadcast({ event: 'terminal:ready', payload: { sessionId } })
+      },
+    )
+
+    this.terminalMux.on(
       'approval:required',
       ({ sessionId, request }: { sessionId: string; request: ApprovalRequest }) => {
         const timestamp = new Date().toISOString()

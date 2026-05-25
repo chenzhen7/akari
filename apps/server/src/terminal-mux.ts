@@ -12,6 +12,7 @@ interface TerminalEntry {
 
 export class TerminalMultiplexer extends EventEmitter {
   private readonly terminals = new Map<string, TerminalEntry>()
+  private readonly pendingResize = new Map<string, { cols: number; rows: number }>()
   private readonly BUFFER_LIMIT = 5000
 
   createTerminal(sessionId: string, cwd: string): void {
@@ -25,10 +26,15 @@ export class TerminalMultiplexer extends EventEmitter {
       : (process.env.SHELL ?? 'bash')
     const args = isWindows ? ['-NoLogo'] : ['--login']
 
+    const pending = this.pendingResize.get(sessionId)
+    const cols = pending?.cols ?? 80
+    const rows = pending?.rows ?? 24
+    this.pendingResize.delete(sessionId)
+
     const proc = pty.spawn(shell, args, {
       name: 'xterm-256color',
-      cols: 220,
-      rows: 50,
+      cols,
+      rows,
       cwd,
       env: {
         ...process.env,
@@ -54,6 +60,7 @@ export class TerminalMultiplexer extends EventEmitter {
     })
 
     this.terminals.set(sessionId, entry)
+    this.emit('terminal:ready', { sessionId })
   }
 
   sendToTerminal(sessionId: string, data: string): void {
@@ -67,6 +74,8 @@ export class TerminalMultiplexer extends EventEmitter {
     const entry = this.terminals.get(sessionId)
     if (entry?.status === 'running') {
       entry.pty.resize(cols, rows)
+    } else {
+      this.pendingResize.set(sessionId, { cols, rows })
     }
   }
 
@@ -88,6 +97,7 @@ export class TerminalMultiplexer extends EventEmitter {
       }
       this.terminals.delete(sessionId)
     }
+    this.pendingResize.delete(sessionId)
   }
 
   hasTerminal(sessionId: string): boolean {

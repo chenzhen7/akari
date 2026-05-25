@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useSessionStore } from '@/stores/session-store'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -18,6 +19,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const terminalReadyTick = useSessionStore(s => s.terminalReadyTick[session.id] ?? 0)
 
   // Initialize xterm.js and subscribe to terminalBus — re-runs only when session ID changes
   useEffect(() => {
@@ -61,7 +63,13 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     term.open(container)
 
     requestAnimationFrame(() => {
-      try { fitAddon.fit() } catch { /* ignore if disposed */ }
+      try {
+        fitAddon.fit()
+        send({
+          event: 'terminal:resize',
+          payload: { sessionId: session.id, cols: term.cols, rows: term.rows },
+        })
+      } catch { /* ignore if disposed */ }
     })
 
     termRef.current = term
@@ -99,6 +107,21 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id])
+
+  // Re-sync PTY size when terminal:ready is received from server (PTY just created)
+  useEffect(() => {
+    if (terminalReadyTick === 0) return
+    const fit = fitAddonRef.current
+    const term = termRef.current
+    if (!fit || !term) return
+    try {
+      fit.fit()
+      send({
+        event: 'terminal:resize',
+        payload: { sessionId: session.id, cols: term.cols, rows: term.rows },
+      })
+    } catch { /* ignore */ }
+  }, [terminalReadyTick, session.id, send])
 
   function handleClear() {
     terminalBus.clear(session.id)

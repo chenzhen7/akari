@@ -13,6 +13,8 @@
     "@akari/shared-types": "workspace:*",
     "@fastify/cors": "^10.0.2",
     "@fastify/websocket": "^11.0.2",
+    "@xterm/addon-serialize": "^0.14.0",
+    "@xterm/headless": "^6.0.0",
     "better-sqlite3": "^12.10.0",
     "chokidar": "^5.0.0",
     "execa": "^9.6.1",

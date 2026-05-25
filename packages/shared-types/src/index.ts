@@ -74,6 +74,7 @@ export type ServerMessage =
   | { event: 'session:updated'; payload: AgentSession }
   | { event: 'session:status'; payload: { id: string; status: SessionStatus; progress: number } }
   | { event: 'terminal:data'; payload: { sessionId: string; data: string } }
+  | { event: 'terminal:ready'; payload: { sessionId: string } }
   | { event: 'diff:update'; payload: { sessionId: string; diff: GitDiff } }
   | { event: 'approval:required'; payload: { sessionId: string; request: ApprovalRequest } }
   | { event: 'checkpoint:reached'; payload: { sessionId: string; description: string; timestamp: string } }

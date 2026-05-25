@@ -20,7 +20,7 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "node-pty"
+      "better-sqlite3"
     ]
   }
 }

@@ -13,6 +13,7 @@ interface SessionStore {
   createDialogOpen: boolean
   connectionStatus: ConnectionStatus
   disconnectedAt: number | null
+  terminalReadyTick: Record<string, number>
 
   addSession: (name: string, task: string, baseBranch?: string, agentType?: 'claude' | 'aider' | 'shell') => void
   updateStatus: (id: string, status: SessionStatus) => void
@@ -46,6 +47,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   createDialogOpen: false,
   connectionStatus: 'connecting',
   disconnectedAt: null,
+  terminalReadyTick: {},
 
   addSession: (name, task, baseBranch = 'main', agentType = 'claude') => {
     const body = JSON.stringify({ name: name.trim(), task: task.trim(), baseBranch, agentType })
@@ -233,6 +235,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         break
       case 'terminal:data':
         terminalBus.emit(msg.payload.sessionId, msg.payload.data)
+        break
+      case 'terminal:ready':
+        set(state => ({
+          terminalReadyTick: {
+            ...state.terminalReadyTick,
+            [msg.payload.sessionId]: (state.terminalReadyTick[msg.payload.sessionId] ?? 0) + 1,
+          },
+        }))
         break
       case 'approval:required':
         set(state => ({
