@@ -1,6 +1,4 @@
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { useSessionStore } from '@/stores/session-store'
 import { useWebSocket } from '@/hooks/useWebSocket'
@@ -13,16 +11,9 @@ export function SessionDetail() {
   const sessions = useSessionStore(s => s.sessions)
   const setActiveTab = useSessionStore(s => s.setActiveTab)
   const { send } = useWebSocket()
-  const [message, setMessage] = useState('')
 
   const session = sessions.find(s => s.id === activeTabId)
   if (!session) return null
-
-  function sendMessage() {
-    if (!session || !message.trim()) return
-    send({ event: 'terminal:input', payload: { sessionId: session.id, data: message + '\n' } })
-    setMessage('')
-  }
 
   return (
     <div className="flex h-full flex-col">
@@ -68,17 +59,6 @@ export function SessionDetail() {
         </div>
       </div>
 
-      {/* Message input */}
-      <div className="flex gap-2 border-t border-border px-4 py-2">
-        <Input
-          placeholder="向此 Agent 发送消息..."
-          value={message}
-          onChange={e => setMessage(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && sendMessage()}
-          className="flex-1"
-        />
-        <Button onClick={sendMessage}>发送</Button>
-      </div>
     </div>
   )
 }
