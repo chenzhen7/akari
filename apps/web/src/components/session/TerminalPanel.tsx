@@ -10,6 +10,8 @@ import type { AgentSession } from '@/types'
 import type { ClientMessage } from '@akari/shared-types'
 import { terminalBus } from '@/lib/terminalBus'
 
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
+
 interface TerminalPanelProps {
   session: AgentSession
   send: (msg: ClientMessage) => void
@@ -75,11 +77,31 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     termRef.current = term
     fitAddonRef.current = fitAddon
 
-    // Replay buffered history (bypasses React state entirely)
-    terminalBus.getBuffer(session.id).forEach(chunk => term.write(chunk))
+    // Subscribe first so no streaming data is missed during the history fetch
+    let historyLoaded = false
+    let pendingChunks: string[] = []
+    let fetchAborted = false
 
-    // Stream new data directly from bus — no React state, no re-render loop
-    const unsubscribe = terminalBus.on(session.id, data => term.write(data))
+    const unsubscribe = terminalBus.on(session.id, data => {
+      if (historyLoaded) {
+        term.write(data)
+      } else {
+        pendingChunks.push(data)
+      }
+    })
+
+    // Always fetch full history from server (survives page refresh)
+    fetch(`${API_BASE}/sessions/${session.id}/terminal-buffer`)
+      .then(r => r.json())
+      .then(({ buffer }: { buffer: string[] }) => {
+        if (fetchAborted) return
+        buffer.forEach(chunk => term.write(chunk))
+        pendingChunks = []  // server buffer already contains this data
+        historyLoaded = true
+      })
+      .catch((err: unknown) => {
+        console.error('[TerminalPanel] failed to fetch terminal buffer:', err)
+      })
 
     // Forward keystrokes to backend PTY
     term.onData(data => {
@@ -99,6 +121,8 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     ro.observe(container)
 
     return () => {
+      fetchAborted = true
+      pendingChunks = []
       unsubscribe()
       ro.disconnect()
       term.dispose()

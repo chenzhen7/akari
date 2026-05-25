@@ -84,8 +84,8 @@ export class TerminalMultiplexer extends EventEmitter {
     for (const id of targets) this.sendToTerminal(id, data)
   }
 
-  getBuffer(sessionId: string, lastN = 100): string[] {
-    return this.terminals.get(sessionId)?.buffer.slice(-lastN) ?? []
+  getBuffer(sessionId: string): string[] {
+    return this.terminals.get(sessionId)?.buffer.slice() ?? []
   }
 
   killTerminal(sessionId: string): void {
