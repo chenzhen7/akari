@@ -96,6 +96,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
       .then(({ buffer }: { buffer: string[] }) => {
         if (fetchAborted) return
         buffer.forEach(chunk => term.write(chunk))
+        term.write('\x1b[2J\x1b[H')  // clear active screen (keeps scrollback); ConPTY dump fills it fresh
         pendingChunks = []  // server buffer already contains this data
         historyLoaded = true
       })
@@ -108,21 +109,28 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
       send({ event: 'terminal:input', payload: { sessionId: session.id, data } })
     })
 
-    // Sync PTY dimensions on container resize
+    // Sync PTY dimensions on container resize (debounced to prevent rapid ConPTY dumps)
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null
     const ro = new ResizeObserver(() => {
-      try {
-        fitAddon.fit()
-        send({
-          event: 'terminal:resize',
-          payload: { sessionId: session.id, cols: term.cols, rows: term.rows },
-        })
-      } catch { /* ignore if disposed */ }
+      try { fitAddon.fit() } catch { /* ignore if disposed */ }
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => {
+        resizeTimer = null
+        try {
+          if (historyLoaded) term.write('\x1b[2J\x1b[H')  // clear before ConPTY dump
+          send({
+            event: 'terminal:resize',
+            payload: { sessionId: session.id, cols: term.cols, rows: term.rows },
+          })
+        } catch { /* ignore if disposed */ }
+      }, 100)
     })
     ro.observe(container)
 
     return () => {
       fetchAborted = true
       pendingChunks = []
+      if (resizeTimer) clearTimeout(resizeTimer)
       unsubscribe()
       ro.disconnect()
       term.dispose()
