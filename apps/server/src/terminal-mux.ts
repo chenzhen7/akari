@@ -14,8 +14,6 @@ export class TerminalMultiplexer extends EventEmitter {
   private readonly terminals = new Map<string, TerminalEntry>()
   private readonly pendingResize = new Map<string, { cols: number; rows: number }>()
   private readonly BUFFER_LIMIT = 5000
-  /** Index into entry.buffer where the current animation frame starts (-1 = not in animation) */
-  private readonly frameStart = new Map<string, number>()
 
   createTerminal(sessionId: string, cwd: string): void {
     if (this.terminals.has(sessionId)) return
@@ -100,7 +98,6 @@ export class TerminalMultiplexer extends EventEmitter {
       this.terminals.delete(sessionId)
     }
     this.pendingResize.delete(sessionId)
-    this.frameStart.delete(sessionId)
   }
 
   hasTerminal(sessionId: string): boolean {
@@ -108,18 +105,6 @@ export class TerminalMultiplexer extends EventEmitter {
   }
 
   private appendBuffer(entry: TerminalEntry, data: string): void {
-    if (data.includes('\x1b[H')) {
-      // Cursor-home = start of a new full-screen animation frame.
-      // Truncate the previous frame (and its continuation chunks) so only the latest frame survives.
-      const prev = this.frameStart.get(entry.sessionId) ?? -1
-      if (prev >= 0 && prev < entry.buffer.length) {
-        entry.buffer.splice(prev)
-      }
-      this.frameStart.set(entry.sessionId, entry.buffer.length)
-    } else {
-      // Linear content (response text, prompts) — reset animation frame tracking
-      this.frameStart.set(entry.sessionId, -1)
-    }
     if (entry.buffer.length >= this.BUFFER_LIMIT) entry.buffer.shift()
     entry.buffer.push(data)
   }

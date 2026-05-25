@@ -95,7 +95,13 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
       .then(r => r.json())
       .then(({ buffer }: { buffer: string[] }) => {
         if (fetchAborted) return
-        buffer.forEach(chunk => term.write(chunk))
+        // Skip TUI full-screen animation frames (\x1b[H = cursor home).
+        // These frames re-render the entire conversation history each tick;
+        // replaying them in xterm.js pushes duplicate history into scrollback.
+        // The current screen state is restored by \x1b[2J\x1b[H + ConPTY dump below.
+        buffer
+          .filter(chunk => !chunk.includes('\x1b[H'))
+          .forEach(chunk => term.write(chunk))
         term.write('\x1b[2J\x1b[H')  // clear active screen (keeps scrollback); ConPTY dump fills it fresh
         pendingChunks = []  // server buffer already contains this data
         historyLoaded = true
