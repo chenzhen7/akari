@@ -69,6 +69,30 @@ export interface AgentSession {
   tags: string[]
 }
 
+export interface GitCommit {
+  hash: string
+  shortHash: string
+  message: string
+  author: string
+  email: string
+  date: string
+  parents: string[]
+  refs: string[]
+}
+
+export interface GitBranch {
+  name: string
+  commit: string
+  isCurrent: boolean
+  isRemote: boolean
+}
+
+export interface GitLogResponse {
+  commits: GitCommit[]
+  branches: GitBranch[]
+  head: string
+}
+
 export type ServerMessage =
   | { event: 'session:created'; payload: AgentSession }
   | { event: 'session:updated'; payload: AgentSession }
@@ -79,6 +103,7 @@ export type ServerMessage =
   | { event: 'approval:required'; payload: { sessionId: string; request: ApprovalRequest } }
   | { event: 'checkpoint:reached'; payload: { sessionId: string; description: string; timestamp: string } }
   | { event: 'sessions:list'; payload: AgentSession[] }
+  | { event: 'git:log-updated'; payload: { sessionId: string } & GitLogResponse }
 
 export type ClientMessage =
   | { event: 'terminal:input'; payload: { sessionId: string; data: string } }

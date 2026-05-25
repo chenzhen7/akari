@@ -6,7 +6,9 @@ import type {
   AgentSession,
   AgentType,
   ApprovalRequest,
+  GitBranch,
   GitDiff,
+  GitLogResponse,
   KanbanColumn,
   ServerMessage,
   SessionStatus,
@@ -188,7 +190,7 @@ export class SessionManager {
   }
 
   getTerminalBuffer(sessionId: string): string[] {
-    return this.terminalMux.getBuffer(sessionId, 5000)
+    return this.terminalMux.getBuffer(sessionId)
   }
 
   async getCurrentDiff(sessionId: string): Promise<GitDiff> {
@@ -229,6 +231,40 @@ export class SessionManager {
     }
   }
 
+  async getGitLog(sessionId: string, limit = 100): Promise<GitLogResponse> {
+    const session = this.getSession(sessionId)
+    if (!session?.worktreePath) return { commits: [], branches: [], head: '' }
+    return this.worktreeManager.getGitLog(sessionId, limit)
+  }
+
+  async getGitBranches(sessionId: string): Promise<GitBranch[]> {
+    const session = this.getSession(sessionId)
+    if (!session?.worktreePath) return []
+    return this.worktreeManager.getGitBranches(sessionId)
+  }
+
+  async commitAll(sessionId: string, message: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.worktreeManager.commitAll(sessionId, message)
+    const log = await this.worktreeManager.getGitLog(sessionId)
+    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+  }
+
+  async checkoutBranch(sessionId: string, branch: string, createNew = false): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.worktreeManager.checkoutBranch(sessionId, branch, createNew)
+  }
+
+  async worktreeMerge(sessionId: string, sourceBranch: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.worktreeManager.mergeToBase(sourceBranch, session.branchName, 'merge')
+    const log = await this.worktreeManager.getGitLog(sessionId)
+    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+  }
+
   async getFileDiffContent(sessionId: string, filePath: string): Promise<{ original: string; modified: string }> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
@@ -264,9 +300,15 @@ export class SessionManager {
         this.pushTerminalDisplay(session.id, `\r\n\x1b[33m> [Server restarted — terminal restored]\x1b[0m\r\n`)
       }
 
-      this.worktreeManager.watchDiff(session.id, session.baseBranch, diff => {
+      this.worktreeManager.watchDiff(session.id, session.baseBranch, async diff => {
         this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, session.id)
         this.broadcast({ event: 'diff:update', payload: { sessionId: session.id, diff } })
+        try {
+          const log = await this.worktreeManager.getGitLog(session.id)
+          this.broadcast({ event: 'git:log-updated', payload: { sessionId: session.id, ...log } })
+        } catch {
+          // git log failure is non-fatal
+        }
       })
     }
   }
@@ -315,9 +357,15 @@ export class SessionManager {
         }
       }
 
-      this.worktreeManager.watchDiff(id, resolvedBase, diff => {
+      this.worktreeManager.watchDiff(id, resolvedBase, async diff => {
         this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, id)
         this.broadcast({ event: 'diff:update', payload: { sessionId: id, diff } })
+        try {
+          const log = await this.worktreeManager.getGitLog(id)
+          this.broadcast({ event: 'git:log-updated', payload: { sessionId: id, ...log } })
+        } catch {
+          // git log failure is non-fatal
+        }
       })
 
       this.updateStatus(id, 'running')

@@ -2,7 +2,7 @@ import { execa } from 'execa'
 import { watch, type FSWatcher } from 'chokidar'
 import { mkdir, symlink, rm, access, constants, readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import type { GitDiff, DiffFile } from '@akari/shared-types'
+import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse } from '@akari/shared-types'
 
 export class WorktreeManager {
   private readonly baseRepoPath: string
@@ -163,6 +163,82 @@ export class WorktreeManager {
       await this.git(['merge', '--no-ff', '-m', `Merge ${branchName}`, branchName])
     } else {
       await this.git(['rebase', branchName])
+    }
+  }
+
+  async getGitLog(sessionId: string, limit = 100): Promise<GitLogResponse> {
+    const cwd = this.getWorktreePath(sessionId)
+    try {
+      const sep = '||'
+      const fmt = `%H${sep}%h${sep}%s${sep}%an${sep}%ae${sep}%aI${sep}%P${sep}%D`
+      const raw = await this.git(
+        ['log', '--all', '--topo-order', `--max-count=${limit}`, `--format=${fmt}`],
+        cwd,
+      )
+      const commits: GitCommit[] = raw
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map(line => {
+          const parts = line.split(sep)
+          const hash = parts[0] ?? ''
+          const shortHash = parts[1] ?? ''
+          const message = parts[2] ?? ''
+          const author = parts[3] ?? ''
+          const email = parts[4] ?? ''
+          const date = parts[5] ?? ''
+          const parents = (parts[6] ?? '').trim() ? (parts[6] ?? '').trim().split(' ') : []
+          const decorations = parts[7] ?? ''
+          const refs = decorations
+            .split(',')
+            .map(r => r.trim())
+            .filter(r => r && r !== 'HEAD')
+            .map(r => r.replace(/^HEAD -> /, '').replace(/^tag: /, ''))
+          return { hash, shortHash, message, author, email, date, parents, refs }
+        })
+
+      const head = (await this.git(['rev-parse', 'HEAD'], cwd).catch(() => '')).trim()
+      const branches = await this.getGitBranches(sessionId)
+      return { commits, branches, head }
+    } catch {
+      return { commits: [], branches: [], head: '' }
+    }
+  }
+
+  async getGitBranches(sessionId: string): Promise<GitBranch[]> {
+    const cwd = this.getWorktreePath(sessionId)
+    try {
+      const raw = await this.git(['branch', '-a', '--format=%(refname:short)|%(objectname:short)|%(HEAD)'], cwd)
+      return raw
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map(line => {
+          const parts = line.split('|')
+          const name = (parts[0] ?? '').trim()
+          const commit = (parts[1] ?? '').trim()
+          const isCurrent = (parts[2] ?? '').trim() === '*'
+          const isRemote = name.startsWith('remotes/') || name.startsWith('origin/')
+          return { name: name.replace(/^remotes\//, ''), commit, isCurrent, isRemote }
+        })
+        .filter(b => b.name && b.name !== 'HEAD')
+    } catch {
+      return []
+    }
+  }
+
+  async commitAll(sessionId: string, message: string): Promise<void> {
+    const cwd = this.getWorktreePath(sessionId)
+    await this.git(['add', '-A'], cwd)
+    await this.git(['commit', '-m', message], cwd)
+  }
+
+  async checkoutBranch(sessionId: string, branch: string, createNew = false): Promise<void> {
+    const cwd = this.getWorktreePath(sessionId)
+    if (createNew) {
+      await this.git(['checkout', '-b', branch], cwd)
+    } else {
+      await this.git(['checkout', branch], cwd)
     }
   }
 

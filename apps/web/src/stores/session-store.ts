@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import { toast } from 'sonner'
-import type { AgentSession, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
+import type { AgentSession, GitLogResponse, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
 import type { ConnectionStatus } from '@/hooks/useWebSocket'
 import { terminalBus } from '@/lib/terminalBus'
 
 
 interface SessionStore {
   sessions: AgentSession[]
+  gitLogs: Record<string, GitLogResponse>
   viewMode: 'canvas' | 'kanban'
   openTabs: string[]
   activeTabId: string | null
@@ -32,6 +33,7 @@ interface SessionStore {
   deleteSession: (id: string) => void
   addTerminalLine: (id: string, line: string) => void
   clearTerminal: (id: string) => void
+  setGitLog: (sessionId: string, log: GitLogResponse) => void
   setConnectionStatus: (status: ConnectionStatus) => void
   handleServerMessage: (msg: ServerMessage) => void
 }
@@ -41,6 +43,7 @@ const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
+  gitLogs: {},
   viewMode: 'canvas',
   openTabs: [],
   activeTabId: null,
@@ -213,6 +216,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     terminalBus.clear(id)
   },
 
+  setGitLog: (sessionId, log) =>
+    set(state => ({ gitLogs: { ...state.gitLogs, [sessionId]: log } })),
+
   setConnectionStatus: (status) =>
     set(state => ({
       connectionStatus: status,
@@ -286,6 +292,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ),
         }))
         break
+      case 'git:log-updated': {
+        const { sessionId, commits, branches, head } = msg.payload
+        set(state => ({
+          gitLogs: { ...state.gitLogs, [sessionId]: { commits, branches, head } },
+        }))
+        break
+      }
     }
   },
 }))

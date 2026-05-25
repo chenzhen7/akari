@@ -143,6 +143,77 @@ fastify.delete<{ Params: { id: string } }>(
   },
 )
 
+fastify.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
+  '/sessions/:id/git-log',
+  async (request, reply) => {
+    const { id } = request.params
+    const limit = parseInt(request.query.limit ?? '100') || 100
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    return sessionManager.getGitLog(id, limit)
+  },
+)
+
+fastify.get<{ Params: { id: string } }>(
+  '/sessions/:id/git-branches',
+  async (request, reply) => {
+    const { id } = request.params
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    return sessionManager.getGitBranches(id)
+  },
+)
+
+fastify.post<{ Params: { id: string }; Body: { message: string } }>(
+  '/sessions/:id/git/commit',
+  async (request, reply) => {
+    const { id } = request.params
+    const { message } = request.body
+    if (!message?.trim()) return reply.status(400).send({ error: 'message is required' })
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    try {
+      await sessionManager.commitAll(id, message.trim())
+      return { ok: true }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(422).send({ error: msg })
+    }
+  },
+)
+
+fastify.post<{ Params: { id: string }; Body: { sourceBranch: string } }>(
+  '/sessions/:id/git/merge',
+  async (request, reply) => {
+    const { id } = request.params
+    const { sourceBranch } = request.body
+    if (!sourceBranch?.trim()) return reply.status(400).send({ error: 'sourceBranch is required' })
+    const session = sessionManager.getSession(id)
+    if (!session) return reply.status(404).send({ error: 'session not found' })
+    try {
+      await sessionManager.worktreeMerge(id, sourceBranch.trim())
+      return { ok: true }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(422).send({ error: msg })
+    }
+  },
+)
+
+fastify.post<{ Params: { id: string }; Body: { branch: string; createNew?: boolean } }>(
+  '/sessions/:id/git/checkout',
+  async (request, reply) => {
+    const { id } = request.params
+    const { branch, createNew = false } = request.body
+    if (!branch?.trim()) return reply.status(400).send({ error: 'branch is required' })
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    try {
+      await sessionManager.checkoutBranch(id, branch.trim(), createNew)
+      return { ok: true }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(422).send({ error: msg })
+    }
+  },
+)
+
 fastify.get('/ws', { websocket: true }, socket => {
   clients.add(socket)
   fastify.log.info(`WebSocket client connected (total: ${clients.size})`)
