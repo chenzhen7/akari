@@ -84,33 +84,6 @@ export function SessionInfoPanel({ session }: SessionInfoPanelProps) {
         </div>
       )}
 
-      {/* Changed files */}
-      {session.diffFiles && session.diffFiles.length > 0 && (
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">变更文件</p>
-          <div className="rounded-md border border-border bg-muted/30 p-2 space-y-0.5">
-            {session.diffFiles.map(f => (
-              <div key={f.path} className="flex items-center gap-1.5 text-xs font-mono">
-                <span className={
-                  f.status === 'A' ? 'w-3 text-green-500' :
-                  f.status === 'D' ? 'w-3 text-red-500' :
-                  f.status === 'R' ? 'w-3 text-blue-500' :
-                  'w-3 text-amber-500'
-                }>
-                  {f.status}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-foreground">{f.path}</span>
-                <span className="shrink-0 text-green-500">+{f.additions}</span>
-                <span className="shrink-0 text-red-400">-{f.deletions}</span>
-              </div>
-            ))}
-          </div>
-          {session.diffSummary && (
-            <p className="mt-1 text-xs text-muted-foreground">{session.diffSummary}</p>
-          )}
-        </div>
-      )}
-
       {/* Spacer */}
       <div className="flex-1" />
 
