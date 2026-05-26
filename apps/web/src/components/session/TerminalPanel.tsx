@@ -237,6 +237,27 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
   )
 }
 
+/**
+ * Read the last `maxLines` non-empty lines from the currently visible xterm viewport.
+ * Returns [] if the terminal instance hasn't been created yet.
+ */
+export function getTerminalViewportLines(sessionId: string, maxLines = 5): string[] {
+  const entry = terminalInstances.get(sessionId)
+  if (!entry) return []
+  const { term } = entry
+  const buf = term.buffer.active
+  const viewportY = buf.viewportY
+  const viewportEnd = viewportY + term.rows - 1
+  const result: string[] = []
+  for (let row = viewportEnd; row >= viewportY && result.length < maxLines; row--) {
+    const line = buf.getLine(row)
+    if (!line) continue
+    const text = line.translateToString(true).trimEnd()
+    if (text) result.unshift(text)
+  }
+  return result
+}
+
 /** Call when a session is permanently deleted to free xterm resources. */
 export function destroyTerminalInstance(sessionId: string): void {
   const entry = terminalInstances.get(sessionId)

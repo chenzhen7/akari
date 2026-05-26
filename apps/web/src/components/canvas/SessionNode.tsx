@@ -9,10 +9,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { GitBranch, Archive, Trash2 } from 'lucide-react'
+import { GitBranch, Archive, Trash2, Bot, Code2, Terminal } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
 import { terminalBus } from '@/lib/terminalBus'
+import { getTerminalViewportLines } from '@/components/session/TerminalPanel'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +23,12 @@ type SessionNodeData = {
 }
 
 type SessionNodeType = Node<SessionNodeData>
+
+const agentConfig: Record<string, { bg: string; Icon: LucideIcon }> = {
+  claude: { bg: '#7c3aed', Icon: Bot },
+  aider:  { bg: '#2563eb', Icon: Code2 },
+  shell:  { bg: '#374151', Icon: Terminal },
+}
 
 const statusConfig: Record<string, { color: string; label: string }> = {
   running:      { color: '#22c55e', label: '运行中'   },
@@ -33,8 +41,24 @@ const statusConfig: Record<string, { color: string; label: string }> = {
   archived:     { color: '#64748b', label: '已归档'   },
 }
 
-// Strip ANSI escape codes for mini-terminal preview
-const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*[mGKHF]/g, '').replace(/[\x00-\x09\x0b-\x1f]/g, '')
+function getDisplayLines(sessionId: string, maxLines: number): string[] {
+  // Primary: read directly from xterm's rendered viewport (accurate, same as real terminal)
+  const vtLines = getTerminalViewportLines(sessionId, maxLines)
+  if (vtLines.length > 0) return vtLines
+  // Fallback: parse raw PTY buffer (before detail panel is ever opened)
+  const chunks = terminalBus.getBuffer(sessionId)
+  if (chunks.length === 0) return []
+  const raw = chunks.join('')
+  const lastClear = raw.lastIndexOf('\x1b[2J')
+  const text = lastClear >= 0 ? raw.slice(lastClear) : raw
+  return text
+    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+    .replace(/[\x00-\x09\x0b-\x1f\x7f]/g, '')
+    .split(/\r?\n/)
+    .map(l => l.trimEnd())
+    .filter(l => l.trim())
+    .slice(-maxLines)
+}
 
 function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
   const session = data.session
@@ -44,17 +68,11 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const [miniTerminal, setMiniTerminal] = useState<string[]>(() =>
-    terminalBus.getBuffer(session.id)
-      .slice(-3).map(stripAnsi).filter(l => l.trim()).slice(-2)
-  )
+  const [miniTerminal, setMiniTerminal] = useState<string[]>(() => getDisplayLines(session.id, 5))
 
   useEffect(() => {
     const refresh = () => {
-      setMiniTerminal(
-        terminalBus.getBuffer(session.id)
-          .slice(-3).map(stripAnsi).filter(l => l.trim()).slice(-2)
-      )
+      setMiniTerminal(getDisplayLines(session.id, 5))
     }
     return terminalBus.on(session.id, () => {
       if (!pendingRef.current) {
@@ -137,34 +155,55 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
         </div>
 
         {/* Header */}
-        <div className="px-3.5 pt-3 pb-2">
-          <div className="flex items-center gap-2.5 pr-9">
-            {/* Status glow dot */}
-            <span
-              className="relative mt-px h-2 w-2 shrink-0 rounded-full"
-              style={{ background: color, boxShadow: `0 0 6px ${color}` }}
-            >
-              {session.status === 'running' && (
-                <span
-                  className="absolute inset-0 rounded-full animate-ping opacity-60"
-                  style={{ background: color }}
-                />
-              )}
-            </span>
-            <span className="min-w-0 truncate text-[13px] font-bold tracking-tight text-foreground">
-              {session.name}
-            </span>
-          </div>
-          <div className="mt-1.5 flex items-center gap-1.5 pl-[18px]">
-            <GitBranch className="h-3 w-3 shrink-0" style={{ color: `${color}99` }} />
-            <span className="min-w-0 truncate font-mono text-[10px]" style={{ color: '#8b949e' }}>
-              {session.branchName}
-            </span>
+        <div className="px-4 pt-4 pb-3">
+          <div className="flex items-stretch gap-3 pr-9">
+            {/* Agent avatar (rounded-xl, stretches to match title+branch height) + status badge */}
+            {(() => {
+              const ac = agentConfig[session.agentType] ?? agentConfig.shell
+              const Icon = ac.Icon
+              return (
+                <div className="relative w-10 shrink-0">
+                  <div
+                    className="flex h-full w-full items-center justify-center rounded-xl"
+                    style={{ background: ac.bg }}
+                  >
+                    <Icon className="h-4 w-4 text-white" />
+                  </div>
+                  <span
+                    className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-[2px]"
+                    style={{
+                      background: color,
+                      borderColor: 'hsl(var(--background))',
+                      boxShadow: `0 0 5px ${color}`,
+                    }}
+                  >
+                    {session.status === 'running' && (
+                      <span
+                        className="absolute inset-0 rounded-full animate-ping opacity-70"
+                        style={{ background: color }}
+                      />
+                    )}
+                  </span>
+                </div>
+              )
+            })()}
+            {/* Title + branch column */}
+            <div className="flex min-w-0 flex-col justify-center">
+              <span className="min-w-0 truncate text-[13px] font-bold tracking-tight text-foreground">
+                {session.name}
+              </span>
+              <div className="mt-1 flex items-center gap-1.5">
+                <GitBranch className="h-3 w-3 shrink-0" style={{ color: `${color}99` }} />
+                <span className="min-w-0 truncate font-mono text-[10px]" style={{ color: '#8b949e' }}>
+                  {session.branchName}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Status + agent type pills */}
-        <div className="flex items-center gap-1.5 px-3.5 pb-2.5">
+        <div className="flex items-center gap-1.5 px-4 pb-3">
           <span
             className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
             style={{ background: `${color}18`, color, border: `1px solid ${color}35` }}
@@ -179,7 +218,7 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
         </div>
 
         {/* Mini terminal */}
-        <div className="mx-2.5 mb-3 overflow-hidden rounded-xl" style={{ background: '#0d1117' }}>
+        <div className="mx-3 mb-4 overflow-hidden rounded-xl" style={{ background: '#0d1117' }}>
           {/* Terminal title bar */}
           <div className="flex items-center gap-1.5 px-3 py-1.5" style={{ background: '#161b22' }}>
             <span className="h-2 w-2 rounded-full" style={{ background: '#ff5f57' }} />
@@ -190,7 +229,7 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
             </span>
           </div>
           <div
-            className="min-h-[32px] px-3 py-2 font-mono text-[10px] leading-relaxed"
+            className="min-h-[72px] px-3 py-2 font-mono text-[8px] leading-relaxed"
             style={{ color: '#8b949e' }}
           >
             {miniTerminal.length > 0 ? (
