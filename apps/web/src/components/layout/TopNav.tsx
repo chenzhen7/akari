@@ -73,7 +73,10 @@ export function TopNav() {
       <div className="px-2">
         <Tabs
           value={viewMode}
-          onValueChange={v => setViewMode(v as 'canvas' | 'kanban')}
+          onValueChange={v => {
+            setViewMode(v as 'canvas' | 'kanban')
+            setActiveTab(null)
+          }}
         >
           <TabsList className="h-7">
             <TabsTrigger value="canvas" className="gap-1.5 px-2.5 text-xs">
