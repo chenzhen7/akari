@@ -14,6 +14,7 @@ import { Circle, Archive, Trash2 } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
 import { terminalBus } from '@/lib/terminalBus'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 type SessionNodeData = {
   session: AgentSession
@@ -102,22 +103,30 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
             onPointerUp={stopBubble}
           >
             {!isArchived && (
-              <button
-                className="rounded bg-background/90 p-1 text-muted-foreground ring-1 ring-border transition-colors hover:bg-muted hover:text-foreground"
-                title="归档（终止进程，保留 Worktree）"
-                onClick={() => archiveSession(session.id)}
-              >
-                <Archive className="h-3.5 w-3.5" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="rounded bg-background/90 p-1 text-muted-foreground ring-1 ring-border transition-colors hover:bg-muted hover:text-foreground"
+                    onClick={() => archiveSession(session.id)}
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">归档（终止进程，保留 Worktree）</TooltipContent>
+              </Tooltip>
             )}
             {isArchived && (
-              <button
-                className="rounded bg-background/90 p-1 text-destructive ring-1 ring-border transition-colors hover:bg-destructive hover:text-destructive-foreground"
-                title="彻底删除"
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="rounded bg-background/90 p-1 text-destructive ring-1 ring-border transition-colors hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">彻底删除</TooltipContent>
+              </Tooltip>
             )}
           </div>
         )}

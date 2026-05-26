@@ -214,6 +214,21 @@ fastify.post<{ Params: { id: string }; Body: { branch: string; createNew?: boole
   },
 )
 
+fastify.post<{ Params: { id: string } }>(
+  '/sessions/:id/git/discard',
+  async (request, reply) => {
+    const { id } = request.params
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    try {
+      await sessionManager.discardAll(id)
+      return { ok: true }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(422).send({ error: msg })
+    }
+  },
+)
+
 fastify.get('/ws', { websocket: true }, socket => {
   clients.add(socket)
   fastify.log.info(`WebSocket client connected (total: ${clients.size})`)

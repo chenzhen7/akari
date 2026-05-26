@@ -233,6 +233,12 @@ export class WorktreeManager {
     await this.git(['commit', '-m', message], cwd)
   }
 
+  async discardAll(sessionId: string): Promise<void> {
+    const cwd = this.getWorktreePath(sessionId)
+    await this.git(['checkout', '--', '.'], cwd)
+    await this.git(['clean', '-fd'], cwd)
+  }
+
   async checkoutBranch(sessionId: string, branch: string, createNew = false): Promise<void> {
     const cwd = this.getWorktreePath(sessionId)
     if (createNew) {

@@ -251,6 +251,12 @@ export class SessionManager {
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
   }
 
+  async discardAll(sessionId: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.worktreeManager.discardAll(sessionId)
+  }
+
   async checkoutBranch(sessionId: string, branch: string, createNew = false): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)

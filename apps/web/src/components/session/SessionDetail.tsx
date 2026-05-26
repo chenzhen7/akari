@@ -62,7 +62,7 @@ export function SessionDetail() {
             <GitGraphPanel sessionId={session.id} />
           </div>
           <div className={cn('absolute inset-0 overflow-hidden', activePanel !== 'diff' && 'hidden')}>
-            <DiffViewer sessionId={session.id} diffFiles={session.diffFiles} />
+            <DiffViewer session={session} />
           </div>
           <div className={cn('absolute inset-0 overflow-hidden', activePanel !== 'info' && 'hidden')}>
             <SessionInfoPanel session={session} />
