@@ -9,13 +9,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { GitBranch, Archive, Trash2, Bot, Code2, Terminal } from 'lucide-react'
+import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Bell } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
 import { terminalBus } from '@/lib/terminalBus'
 import { getTerminalViewportLines } from '@/components/session/TerminalPanel'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 type SessionNodeData = {
@@ -204,17 +205,27 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
 
         {/* Status + agent type pills */}
         <div className="flex items-center gap-1.5 px-4 pb-3">
-          <span
-            className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-            style={{ background: `${color}18`, color, border: `1px solid ${color}35` }}
+          <Badge
+            variant="outline"
+            className={cn(
+              'h-auto py-0.5 text-[10px] font-semibold',
+              session.status === 'waiting' && 'animate-pulse',
+            )}
+            style={{ background: `${color}18`, color, borderColor: `${color}35` }}
           >
+            {session.status === 'waiting' && <Bell />}
             {cfg.label}
-          </span>
-          {session.agentType && (
-            <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] text-muted-foreground">
-              {session.agentType}
-            </span>
-          )}
+          </Badge>
+          {session.agentType && (() => {
+            const ac = agentConfig[session.agentType] ?? agentConfig.shell
+            const Icon = ac.Icon
+            return (
+              <Badge variant="outline" className="h-auto py-0.5 text-[10px]">
+                <Icon style={{ color: ac.bg }} />
+                {session.agentType}
+              </Badge>
+            )
+          })()}
         </div>
 
         {/* Mini terminal */}
