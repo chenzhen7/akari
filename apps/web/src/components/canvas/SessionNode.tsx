@@ -228,7 +228,6 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
           <Badge
             variant="outline"
             className={cn(
-              'h-auto py-0.5 text-[10px] font-semibold',
               session.status === 'waiting' && 'animate-pulse',
             )}
             style={{ background: `${color}18`, color, borderColor: `${color}35` }}
@@ -240,7 +239,7 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
             const ac = agentConfig[session.agentType] ?? agentConfig.shell
             const Icon = ac.Icon
             return (
-              <Badge variant="outline" className="h-auto py-0.5 text-[10px]">
+              <Badge variant="outline">
                 <Icon style={{ color: ac.bg }} />
                 {session.agentType}
               </Badge>
