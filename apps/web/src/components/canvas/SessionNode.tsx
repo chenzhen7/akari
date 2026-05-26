@@ -1,6 +1,5 @@
 import { memo, useState, useEffect, useRef } from 'react'
 import type { Node, NodeProps } from '@xyflow/react'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -10,11 +9,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Circle, Archive, Trash2 } from 'lucide-react'
+import { GitBranch, Archive, Trash2 } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
 import { terminalBus } from '@/lib/terminalBus'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 
 type SessionNodeData = {
   session: AgentSession
@@ -22,26 +22,15 @@ type SessionNodeData = {
 
 type SessionNodeType = Node<SessionNodeData>
 
-const statusColorMap: Record<string, string> = {
-  running: 'text-green-500',
-  waiting: 'text-amber-500',
-  failed: 'text-red-500',
-  completed: 'text-blue-500',
-  initializing: 'text-slate-400',
-  paused: 'text-orange-500',
-  review: 'text-purple-500',
-  archived: 'text-slate-400',
-}
-
-const statusLabelMap: Record<string, string> = {
-  running: '运行中',
-  waiting: '待审批',
-  failed: '失败',
-  completed: '已完成',
-  initializing: '初始化中',
-  paused: '已暂停',
-  review: '审查中',
-  archived: '已归档',
+const statusConfig: Record<string, { color: string; label: string }> = {
+  running:      { color: '#22c55e', label: '运行中'   },
+  waiting:      { color: '#f59e0b', label: '待审批'   },
+  failed:       { color: '#ef4444', label: '失败'     },
+  completed:    { color: '#3b82f6', label: '已完成'   },
+  initializing: { color: '#94a3b8', label: '初始化中' },
+  paused:       { color: '#f97316', label: '已暂停'   },
+  review:       { color: '#a855f7', label: '审查中'   },
+  archived:     { color: '#64748b', label: '已归档'   },
 }
 
 // Strip ANSI escape codes for mini-terminal preview
@@ -77,9 +66,9 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
     })
   }, [session.id])
 
-  const colorClass = statusColorMap[session.status] ?? 'text-slate-400'
-  const borderColorClass = colorClass.replace('text-', 'border-')
+  const cfg = statusConfig[session.status] ?? statusConfig.initializing
   const isArchived = session.status === 'archived'
+  const color = cfg.color
 
   function stopBubble(e: React.MouseEvent | React.PointerEvent) {
     e.stopPropagation()
@@ -88,78 +77,132 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
 
   return (
     <>
-      <Card
-        className={`relative w-[280px] cursor-pointer select-none border-2 ${borderColorClass} bg-card shadow-md transition-shadow hover:shadow-lg`}
+      <div
+        className="relative w-[268px] cursor-pointer select-none overflow-hidden rounded-2xl transition-all duration-200"
+        style={{
+          background: 'linear-gradient(145deg, hsl(var(--card)) 0%, hsl(var(--background)) 100%)',
+          border: `1px solid ${color}30`,
+          boxShadow: hovered
+            ? `0 0 0 1px ${color}50, 0 8px 32px ${color}25, 0 2px 8px rgba(0,0,0,0.4)`
+            : `0 0 0 1px ${color}18, 0 4px 16px ${color}10, 0 2px 8px rgba(0,0,0,0.25)`,
+        }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* Hover action buttons */}
-        {hovered && (
-          <div
-            className="absolute right-2 top-2 z-10 flex items-center gap-1"
-            onClick={stopBubble}
-            onMouseDown={stopBubble}
-            onPointerDown={stopBubble}
-            onPointerUp={stopBubble}
-          >
-            {!isArchived && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    className="rounded bg-background/90 p-1 text-muted-foreground ring-1 ring-border transition-colors hover:bg-muted hover:text-foreground"
-                    onClick={() => archiveSession(session.id)}
-                  >
-                    <Archive className="h-3.5 w-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top">归档（终止进程，保留 Worktree）</TooltipContent>
-              </Tooltip>
-            )}
-            {isArchived && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    className="rounded bg-background/90 p-1 text-destructive ring-1 ring-border transition-colors hover:bg-destructive hover:text-destructive-foreground"
-                    onClick={() => setDeleteOpen(true)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top">彻底删除</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-        )}
+        {/* Subtle inner glow at top */}
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-16 opacity-10"
+          style={{ background: `radial-gradient(ellipse at 50% -20%, ${color}, transparent 70%)` }}
+        />
 
-        <CardHeader className="flex flex-row items-center gap-2 p-3 pb-2">
-          <Circle className={`h-3 w-3 shrink-0 fill-current ${colorClass}`} />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-sm font-medium">{session.name}</span>
-            <span className="truncate text-xs text-muted-foreground">
+        {/* Hover action buttons */}
+        <div
+          className={cn(
+            'absolute right-2.5 top-3 z-10 flex items-center gap-1 transition-all duration-150',
+            hovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none',
+          )}
+          onClick={stopBubble}
+          onMouseDown={stopBubble}
+          onPointerDown={stopBubble}
+          onPointerUp={stopBubble}
+        >
+          {!isArchived && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
+                  onClick={() => archiveSession(session.id)}
+                >
+                  <Archive className="h-3 w-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">归档（终止进程，保留 Worktree）</TooltipContent>
+            </Tooltip>
+          )}
+          {isArchived && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="rounded-lg p-1.5 text-red-400 transition-colors hover:bg-red-500 hover:text-white"
+                  style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">彻底删除</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+
+        {/* Header */}
+        <div className="px-3.5 pt-3 pb-2">
+          <div className="flex items-center gap-2.5 pr-9">
+            {/* Status glow dot */}
+            <span
+              className="relative mt-px h-2 w-2 shrink-0 rounded-full"
+              style={{ background: color, boxShadow: `0 0 6px ${color}` }}
+            >
+              {session.status === 'running' && (
+                <span
+                  className="absolute inset-0 rounded-full animate-ping opacity-60"
+                  style={{ background: color }}
+                />
+              )}
+            </span>
+            <span className="min-w-0 truncate text-[13px] font-bold tracking-tight text-foreground">
+              {session.name}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-center gap-1.5 pl-[18px]">
+            <GitBranch className="h-3 w-3 shrink-0" style={{ color: `${color}99` }} />
+            <span className="min-w-0 truncate font-mono text-[10px]" style={{ color: '#8b949e' }}>
               {session.branchName}
             </span>
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="space-y-2 p-3 pt-0">
-          <div className="text-xs">
-            <span className={`font-medium ${colorClass}`}>
-              {statusLabelMap[session.status] ?? session.status}
+        {/* Status + agent type pills */}
+        <div className="flex items-center gap-1.5 px-3.5 pb-2.5">
+          <span
+            className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            style={{ background: `${color}18`, color, border: `1px solid ${color}35` }}
+          >
+            {cfg.label}
+          </span>
+          {session.agentType && (
+            <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] text-muted-foreground">
+              {session.agentType}
+            </span>
+          )}
+        </div>
+
+        {/* Mini terminal */}
+        <div className="mx-2.5 mb-3 overflow-hidden rounded-xl" style={{ background: '#0d1117' }}>
+          {/* Terminal title bar */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5" style={{ background: '#161b22' }}>
+            <span className="h-2 w-2 rounded-full" style={{ background: '#ff5f57' }} />
+            <span className="h-2 w-2 rounded-full" style={{ background: '#febc2e' }} />
+            <span className="h-2 w-2 rounded-full" style={{ background: '#28c840' }} />
+            <span className="ml-auto font-mono text-[9px]" style={{ color: '#484f58' }}>
+              {session.id.slice(0, 8)}
             </span>
           </div>
-
-          {/* Mini terminal preview */}
-          <div className="min-h-[28px] space-y-0.5 rounded bg-muted/50 p-1.5 font-mono text-[10px] text-muted-foreground">
+          <div
+            className="min-h-[32px] px-3 py-2 font-mono text-[10px] leading-relaxed"
+            style={{ color: '#8b949e' }}
+          >
             {miniTerminal.length > 0 ? (
               miniTerminal.map((line, i) => (
                 <div key={i} className="truncate">{line}</div>
               ))
             ) : (
-              <span className="opacity-40">等待输出...</span>
+              <span style={{ color: '#484f58' }}>等待输出…</span>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Delete confirmation dialog
           NOTE: React Portal events still bubble through the React tree.
