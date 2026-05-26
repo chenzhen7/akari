@@ -4,8 +4,6 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import { Button } from '@/components/ui/button'
-import { Trash2 } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import type { ClientMessage } from '@akari/shared-types'
 import { terminalBus } from '@/lib/terminalBus'
@@ -232,20 +230,9 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     } catch { /* ignore */ }
   }, [terminalReadyTick, session.id, send])
 
-  function handleClear() {
-    terminalBus.clear(session.id)
-    terminalInstances.get(session.id)?.term.clear()
-  }
-
   return (
-    <div className="flex h-full flex-col" style={{ background: '#0d1117' }}>
-      <div className="flex items-center justify-between border-b border-border/50 px-3 py-1.5">
-        <span className="text-xs font-medium text-muted-foreground">终端</span>
-        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleClear}>
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      </div>
-      <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden" />
+    <div className="h-full" style={{ background: '#0d1117' }}>
+      <div ref={containerRef} className="h-full overflow-hidden" />
     </div>
   )
 }
