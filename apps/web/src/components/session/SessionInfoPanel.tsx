@@ -10,11 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { GitCommit, GitMerge } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
-import { GitCommitDialog } from '@/components/git/GitCommitDialog'
-import { GitMergeDialog } from '@/components/git/GitMergeDialog'
 
 const statusLabelMap: Record<string, string> = {
   running: '运行中',
@@ -46,11 +43,8 @@ export function SessionInfoPanel({ session }: SessionInfoPanelProps) {
   const archiveSession = useSessionStore(s => s.archiveSession)
   const deleteSession = useSessionStore(s => s.deleteSession)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [commitDialogOpen, setCommitDialogOpen] = useState(false)
-  const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
 
   const isTerminal = ['archived', 'merged'].includes(session.status)
-  const canGitOp = !['archived', 'initializing', 'failed'].includes(session.status)
 
   return (
     <div className="flex h-full flex-col overflow-y-auto px-3 py-3 space-y-4">
@@ -117,33 +111,6 @@ export function SessionInfoPanel({ session }: SessionInfoPanelProps) {
         </div>
       )}
 
-      {/* Git operations */}
-      {canGitOp && (
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Git 操作</p>
-          <div className="space-y-1.5">
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full justify-start gap-2"
-              onClick={() => setCommitDialogOpen(true)}
-            >
-              <GitCommit className="h-3.5 w-3.5" />
-              提交变更
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full justify-start gap-2"
-              onClick={() => setMergeDialogOpen(true)}
-            >
-              <GitMerge className="h-3.5 w-3.5" />
-              合并分支
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* Spacer */}
       <div className="flex-1" />
 
@@ -170,21 +137,6 @@ export function SessionInfoPanel({ session }: SessionInfoPanelProps) {
           </Button>
         )}
       </div>
-
-      {/* Dialogs */}
-      <GitCommitDialog
-        open={commitDialogOpen}
-        onOpenChange={setCommitDialogOpen}
-        sessionId={session.id}
-        diffFiles={session.diffFiles ?? []}
-      />
-
-      <GitMergeDialog
-        open={mergeDialogOpen}
-        onOpenChange={setMergeDialogOpen}
-        sessionId={session.id}
-        currentBranch={session.branchName}
-      />
 
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent showCloseButton={false}>
