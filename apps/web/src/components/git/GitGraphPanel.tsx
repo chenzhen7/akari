@@ -90,6 +90,11 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
     [filteredCommits],
   )
 
+  const localBranchNames = useMemo(
+    () => new Set(logData?.branches.map(b => b.name) ?? []),
+    [logData],
+  )
+
   const gColW = graphColWidth(maxLane)
   const svgH = ROW_H * filteredCommits.length
 
@@ -261,7 +266,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
                   style={{ paddingLeft: gColW }}
                 >
                   {branchRefs.slice(0, 3).map((ref, ri) => {
-                    const isRemote = ref.includes('/')
+                    const isRemote = ref.includes('/') && !localBranchNames.has(ref)
                     const isTag = ref.startsWith('tag:')
                     const isHead = commit.hash === logData.head && ri === 0
                     const label = isTag ? ref.replace('tag: ', '') : ref
