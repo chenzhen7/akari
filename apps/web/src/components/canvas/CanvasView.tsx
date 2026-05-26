@@ -5,12 +5,16 @@ import {
   Background,
   useNodesState,
   type Node,
+  type Viewport,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useSessionStore } from '@/stores/session-store'
 import { SessionNode } from './SessionNode'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import { Loader2, ServerOff, LayoutGrid } from 'lucide-react'
+
+/** 模块级：跨组件挂载/卸载周期持久化 viewport，不写入 store */
+let _savedViewport: Viewport | null = null
 
 const nodeTypes = {
   sessionNode: SessionNode as any,
@@ -23,7 +27,8 @@ export function CanvasView() {
   const updateCanvasPosition = useSessionStore(s => s.updateCanvasPosition)
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[])
-  const fitted = useRef(false)
+  // 本次挂载是否应 fitView：仅当还没有保存的 viewport 时才自动适配
+  const [fitOnMount] = useState(() => _savedViewport === null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
 
@@ -79,12 +84,9 @@ export function CanvasView() {
     })
   }, [sessions, setNodes])
 
-  // 只在首次有节点时 fitView
-  useEffect(() => {
-    if (!fitted.current && nodes.length > 0) {
-      fitted.current = true
-    }
-  }, [nodes])
+  const onMoveEnd = useCallback((_evt: unknown, viewport: Viewport) => {
+    _savedViewport = viewport
+  }, [])
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
@@ -122,8 +124,10 @@ export function CanvasView() {
         onPaneContextMenu={onPaneContextMenu}
         onPaneClick={closeMenu}
         onMoveStart={closeMenu}
-        fitView={!fitted.current}
+        defaultViewport={_savedViewport ?? undefined}
+        fitView={fitOnMount}
         fitViewOptions={{ padding: 0.2 }}
+        onMoveEnd={onMoveEnd}
       >
         <Background gap={16} size={1} />
         <Controls />
