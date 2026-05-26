@@ -97,21 +97,41 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
   return (
     <>
       <div
-        className="relative w-[268px] cursor-pointer select-none overflow-hidden rounded-2xl transition-all duration-200"
+        className="relative w-[268px] cursor-pointer select-none overflow-hidden rounded-[22px]"
         style={{
-          background: 'linear-gradient(145deg, hsl(var(--card)) 0%, hsl(var(--background)) 100%)',
-          border: `1px solid ${color}30`,
+          background: 'radial-gradient(ellipse at 50% 0%, #242424 0%, #111111 75%)',
           boxShadow: hovered
-            ? `0 0 0 1px ${color}50, 0 8px 32px ${color}25, 0 2px 8px rgba(0,0,0,0.4)`
-            : `0 0 0 1px ${color}18, 0 4px 16px ${color}10, 0 2px 8px rgba(0,0,0,0.25)`,
+            ? [
+                'inset 0 14px 3px -13px rgba(255,255,255,0.22)',
+                '0 0 0 1px rgba(255,255,255,0.10)',
+                `0 0 0 1px ${color}45`,
+                `0 0 24px ${color}20`,
+                '0 20px 48px rgba(0,0,0,0.80)',
+              ].join(', ')
+            : [
+                'inset 0 14px 3px -13px rgba(255,255,255,0.10)',
+                '0 0 0 1px rgba(255,255,255,0.06)',
+                `0 0 0 1px ${color}28`,
+                '0 8px 24px rgba(0,0,0,0.65)',
+              ].join(', '),
+          transition: 'box-shadow 0.2s ease',
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        {/* Subtle inner glow at top */}
+        {/* Luminous top radial glow */}
         <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-16 opacity-10"
-          style={{ background: `radial-gradient(ellipse at 50% -20%, ${color}, transparent 70%)` }}
+          className="pointer-events-none absolute inset-x-0 top-0 h-28"
+          style={{ background: 'radial-gradient(ellipse at 50% -15%, rgba(255,255,255,0.07) 0%, transparent 65%)' }}
+        />
+        {/* Luminous slit — horizontal light line */}
+        <div
+          className="pointer-events-none absolute inset-x-0"
+          style={{
+            top: '46px',
+            height: '1px',
+            background: 'linear-gradient(90deg, transparent 8%, rgba(255,255,255,0.10) 50%, transparent 92%)',
+          }}
         />
 
         {/* Hover action buttons */}
@@ -228,10 +248,13 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
           })()}
         </div>
 
+        {/* Luminous separator */}
+        <div className="mx-4 mb-3 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
         {/* Mini terminal */}
-        <div className="mx-3 mb-4 overflow-hidden rounded-xl" style={{ background: '#0d1117' }}>
+        <div className="mx-3 mb-4 overflow-hidden rounded-[12px]" style={{ background: '#0a0a0a', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 1px rgba(255,255,255,0.04)' }}>
           {/* Terminal title bar */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5" style={{ background: '#161b22' }}>
+          <div className="flex items-center gap-1.5 px-3 py-1.5" style={{ background: '#111111', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
             <span className="h-2 w-2 rounded-full" style={{ background: '#ff5f57' }} />
             <span className="h-2 w-2 rounded-full" style={{ background: '#febc2e' }} />
             <span className="h-2 w-2 rounded-full" style={{ background: '#28c840' }} />
