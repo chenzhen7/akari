@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { GitBranch, RefreshCw, Copy, Check } from 'lucide-react'
+import { GitBranch, RefreshCw, Copy, Check, GitMerge, Tag, Globe, User, Clock, CircleDot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
 import type { GitCommit, GitLogResponse } from '@akari/shared-types'
 import { useSessionStore } from '@/stores/session-store'
@@ -258,23 +260,36 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
                   className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden px-2"
                   style={{ paddingLeft: gColW }}
                 >
-                  {branchRefs.slice(0, 3).map((ref, ri) => (
-                    <span
-                      key={ri}
-                      className="shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold leading-none"
-                      style={{
-                        background: info ? (ri === 0 ? info.color : 'hsl(var(--muted))') : 'hsl(var(--muted))',
-                        color: ri === 0 ? '#000' : 'hsl(var(--foreground))',
-                      }}
-                    >
-                      {truncate(ref, 18)}
-                    </span>
-                  ))}
+                  {branchRefs.slice(0, 3).map((ref, ri) => {
+                    const isRemote = ref.includes('/')
+                    const isTag = ref.startsWith('tag:')
+                    const isHead = commit.hash === logData.head && ri === 0
+                    const label = isTag ? ref.replace('tag: ', '') : ref
+                    const Icon = isTag ? Tag : isRemote ? Globe : isHead ? CircleDot : GitBranch
+                    return (
+                      <Tooltip key={ri}>
+                        <TooltipTrigger asChild>
+                          <Badge
+                            variant={isHead ? 'default' : isRemote ? 'secondary' : 'outline'}
+                            className="inline-flex shrink-0 items-center gap-1 px-1.5 py-0 text-[11px] h-5"
+                            style={!isHead && !isRemote && !isTag && info ? { borderColor: info.color, color: info.color } : undefined}
+                          >
+                            <Icon className="h-3 w-3 shrink-0" />
+                            {truncate(label, 16)}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-[11px]">{label}</TooltipContent>
+                      </Tooltip>
+                    )
+                  })}
                   <span className="min-w-0 truncate text-foreground">
                     {commit.message}
                   </span>
                   {commit.parents.length > 1 && (
-                    <span className="shrink-0 text-[9px] text-amber-500">⎇ merge</span>
+                    <Badge variant="outline" className="inline-flex shrink-0 items-center gap-1 px-1.5 py-0 text-[11px] h-5 border-amber-500/50 text-amber-500">
+                      <GitMerge className="h-3 w-3" />
+                      merge
+                    </Badge>
                   )}
                 </div>
 
@@ -326,11 +341,20 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
               </button>
             </div>
             <div className="font-medium text-foreground leading-snug">{selectedCommit.message}</div>
-            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-muted-foreground">
-              <span><span className="text-foreground/60">作者</span> {selectedCommit.author} &lt;{selectedCommit.email}&gt;</span>
-              <span><span className="text-foreground/60">时间</span> {new Date(selectedCommit.date).toLocaleString('zh-CN')}</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <User className="h-3 w-3 shrink-0 text-foreground/40" />
+                {selectedCommit.author} &lt;{selectedCommit.email}&gt;
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3 shrink-0 text-foreground/40" />
+                {new Date(selectedCommit.date).toLocaleString('zh-CN')}
+              </span>
               {selectedCommit.parents.length > 1 && (
-                <span className="text-amber-500">⎇ merge: {selectedCommit.parents.map(p => p.slice(0, 7)).join(', ')}</span>
+                <span className="flex items-center gap-1 text-amber-500">
+                  <GitMerge className="h-3 w-3 shrink-0" />
+                  {selectedCommit.parents.map(p => p.slice(0, 7)).join(', ')}
+                </span>
               )}
             </div>
           </div>
