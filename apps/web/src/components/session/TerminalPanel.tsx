@@ -231,7 +231,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
   }, [terminalReadyTick, session.id, send])
 
   return (
-    <div className="h-full" style={{ background: '#0d1117' }}>
+    <div className="h-full p-2" style={{ background: '#0d1117' }}>
       <div ref={containerRef} className="h-full overflow-hidden" />
     </div>
   )
