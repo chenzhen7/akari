@@ -1,6 +1,7 @@
 import { useSessionStore } from '@/stores/session-store'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   LayoutGrid,
@@ -14,27 +15,27 @@ import {
 import { useWebSocket } from '@/hooks/useWebSocket'
 
 const statusColorMap: Record<string, string> = {
-  running: 'text-green-500',
-  waiting: 'text-amber-500',
-  failed: 'text-red-500',
-  completed: 'text-blue-500',
-  initializing: 'text-slate-400',
-  paused: 'text-orange-500',
-  review: 'text-purple-500',
+  running:      'fill-green-500  text-green-500',
+  waiting:      'fill-amber-500  text-amber-500',
+  failed:       'fill-red-500    text-red-500',
+  completed:    'fill-blue-500   text-blue-500',
+  initializing: 'fill-slate-400  text-slate-400',
+  paused:       'fill-orange-500 text-orange-500',
+  review:       'fill-purple-500 text-purple-500',
 }
 
 const connColors: Record<string, string> = {
-  connected: 'fill-green-500 text-green-500',
-  connecting: 'fill-amber-400 text-amber-400 animate-pulse',
+  connected:    'fill-green-500 text-green-500',
+  connecting:   'fill-amber-400 text-amber-400 animate-pulse',
   disconnected: 'fill-orange-500 text-orange-500',
-  failed: 'fill-red-500 text-red-500',
+  failed:       'fill-red-500 text-red-500',
 }
 
 const connLabels: Record<string, string> = {
-  connected: '已连接',
-  connecting: '连接中…',
+  connected:    '已连接',
+  connecting:   '连接中…',
   disconnected: '已断线，重连中',
-  failed: '连接失败',
+  failed:       '连接失败',
 }
 
 export function TopNav() {
@@ -57,94 +58,94 @@ export function TopNav() {
   const waitingCount = sessions.filter(s => s.status === 'waiting').length
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-card px-4">
-      {/* Left: Brand + View Switcher */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
-            A
-          </div>
-          <span className="text-sm">Akari</span>
+    <header className="flex h-12 shrink-0 items-center gap-0 border-b border-border bg-card px-3">
+
+      {/* Brand */}
+      <div className="flex items-center gap-2 px-1 pr-3">
+        <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground font-bold text-xs">
+          A
         </div>
-        <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
-          <Button
-            variant={viewMode === 'canvas' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 gap-1.5 text-xs"
-            onClick={() => setViewMode('canvas')}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-            画布
-          </Button>
-          <Button
-            variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 gap-1.5 text-xs"
-            onClick={() => setViewMode('kanban')}
-          >
-            <Columns3 className="h-3.5 w-3.5" />
-            看板
-          </Button>
-        </div>
+        <span className="text-sm font-medium">Akari</span>
       </div>
 
-      {/* Center: Tabs */}
-      <div className="flex flex-1 items-center gap-1 overflow-x-auto px-2">
+
+      {/* View mode switcher */}
+      <div className="px-2">
+        <Tabs
+          value={viewMode}
+          onValueChange={v => setViewMode(v as 'canvas' | 'kanban')}
+        >
+          <TabsList className="h-7">
+            <TabsTrigger value="canvas" className="gap-1.5 px-2.5 text-xs">
+              <LayoutGrid className="h-3.5 w-3.5" />
+              画布
+            </TabsTrigger>
+            <TabsTrigger value="kanban" className="gap-1.5 px-2.5 text-xs">
+              <Columns3 className="h-3.5 w-3.5" />
+              看板
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+
+      {/* Session tabs */}
+      <div className="flex flex-1 items-center gap-0.5 overflow-x-auto px-1">
         {openTabs.map(tabId => {
           const session = sessions.find(s => s.id === tabId)
           if (!session) return null
           const isActive = activeTabId === tabId
+          const dotCls = statusColorMap[session.status] ?? 'fill-slate-400 text-slate-400'
           return (
-            <button
+            <Button
               key={tabId}
+              variant={isActive ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 max-w-[160px] gap-1.5 px-2.5 text-xs"
               onClick={() => setActiveTab(tabId)}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors ${
-                isActive
-                  ? 'bg-secondary text-secondary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              }`}
             >
-              <Circle
-                className={`h-2 w-2 fill-current ${statusColorMap[session.status] || 'text-slate-400'}`}
-              />
-              <span className="max-w-[120px] truncate">{session.name}</span>
+              <Circle className={`h-2 w-2 shrink-0 ${dotCls}`} />
+              <span className="truncate">{session.name}</span>
               <X
-                className="h-3 w-3 opacity-60 hover:opacity-100"
+                className="h-3 w-3 shrink-0 opacity-50 hover:opacity-100"
                 onClick={e => {
                   e.stopPropagation()
                   closeTab(tabId)
                 }}
               />
-            </button>
+            </Button>
           )
         })}
       </div>
 
-      {/* Right: Actions */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Badge variant="outline" className="h-6 gap-1 text-xs font-normal">
-            <Circle className="h-2 w-2 fill-green-500 text-green-500" />
-            {runningCount}
-          </Badge>
-          <Badge variant="outline" className="h-6 gap-1 text-xs font-normal">
-            <Circle className="h-2 w-2 fill-amber-500 text-amber-500" />
-            {waitingCount}
-          </Badge>
-        </div>
+      {/* Right: stats + connection + actions */}
+      <div className="flex items-center gap-1.5 pl-1">
+        {/* Session status counters */}
+        <Badge variant="outline" className="h-6 gap-1 px-2 text-xs font-normal">
+          <Circle className="h-2 w-2 fill-green-500 text-green-500" />
+          {runningCount}
+        </Badge>
+        <Badge variant="outline" className="h-6 gap-1 px-2 text-xs font-normal">
+          <Circle className="h-2 w-2 fill-amber-500 text-amber-500" />
+          {waitingCount}
+        </Badge>
+
+
         {/* WebSocket 连接状态 */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
               onClick={connectionStatus === 'failed' ? reconnect : undefined}
             >
               {connectionStatus === 'failed' ? (
-                <RefreshCw className="h-3 w-3 text-red-500" />
+                <RefreshCw className="h-3.5 w-3.5 text-red-500" />
               ) : (
-                <Circle className={`h-2 w-2 ${connColors[connectionStatus] ?? ''}`} />
+                <Circle className={`h-2.5 w-2.5 ${connColors[connectionStatus] ?? ''}`} />
               )}
-            </button>
+            </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
             <p>{connLabels[connectionStatus] ?? connectionStatus}</p>
@@ -158,9 +159,11 @@ export function TopNav() {
             )}
           </TooltipContent>
         </Tooltip>
+
+
         <Button
           size="sm"
-          variant="outline"
+          variant="ghost"
           className="h-7 gap-1.5 text-xs"
           onClick={toggleCommandCenter}
         >
