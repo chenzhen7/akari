@@ -210,7 +210,7 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
             })()}
             {/* Title + branch column */}
             <div className="flex min-w-0 flex-col justify-center">
-              <span className="min-w-0 truncate text-[13px] font-bold tracking-tight text-foreground">
+              <span className="min-w-0 truncate text-[13px] font-bold tracking-tight" style={{ color: 'rgba(255,255,255,0.92)' }}>
                 {session.name}
               </span>
               <div className="mt-1 flex items-center gap-1.5">
@@ -239,7 +239,10 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
             const ac = agentConfig[session.agentType] ?? agentConfig.shell
             const Icon = ac.Icon
             return (
-              <Badge variant="outline">
+              <Badge
+                variant="outline"
+                style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.65)', borderColor: 'rgba(255,255,255,0.14)' }}
+              >
                 <Icon style={{ color: ac.bg }} />
                 {session.agentType}
               </Badge>
