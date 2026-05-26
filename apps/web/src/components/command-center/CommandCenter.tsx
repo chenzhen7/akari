@@ -6,6 +6,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
@@ -71,13 +72,16 @@ export function CommandCenter() {
         <div className="mt-4 space-y-6">
           {/* Broadcast */}
           <div className="space-y-2">
-            <h4 className="text-sm font-medium">广播消息</h4>
-            <Textarea
-              placeholder="输入要广播给所有 Agent 的消息..."
-              value={broadcastMsg}
-              onChange={e => setBroadcastMsg(e.target.value)}
-              className="min-h-[80px] text-sm"
-            />
+            <Field>
+              <FieldLabel htmlFor="broadcast-msg">广播消息</FieldLabel>
+              <Textarea
+                id="broadcast-msg"
+                placeholder="输入要广播给所有 Agent 的消息..."
+                value={broadcastMsg}
+                onChange={e => setBroadcastMsg(e.target.value)}
+                className="min-h-[80px] text-sm"
+              />
+            </Field>
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <input

@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -54,38 +55,39 @@ export function CreateSessionDialog() {
 
         {/* Body */}
         <form id="create-session-form" onSubmit={handleSubmit}>
-          <div className="flex flex-col gap-4 px-5 py-4">
+          <FieldGroup className="px-5 py-4">
 
             {/* Name */}
-            <div className="flex flex-col gap-1.5">
-              <label className="font-medium text-foreground">会话名称</label>
+            <Field>
+              <FieldLabel htmlFor="session-name">会话名称</FieldLabel>
               <Input
+                id="session-name"
                 placeholder="feat/user-auth"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 required
-             
               />
-            </div>
+            </Field>
 
             {/* Task */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-foreground">任务描述</label>
+            <Field>
+              <FieldLabel htmlFor="session-task">任务描述</FieldLabel>
               <Textarea
+                id="session-task"
                 placeholder="描述 Agent 需要完成的任务…"
                 value={task}
                 onChange={e => setTask(e.target.value)}
                 required
                 className="min-h-[80px] resize-none text-xs"
               />
-            </div>
+            </Field>
 
             {/* Branch + Agent type */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-foreground">基础分支</label>
+              <Field>
+                <FieldLabel htmlFor="session-branch">基础分支</FieldLabel>
                 <Select value={baseBranch} onValueChange={setBaseBranch}>
-                  <SelectTrigger className="h-8 text-xs">
+                  <SelectTrigger id="session-branch" className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -93,12 +95,12 @@ export function CreateSessionDialog() {
                     <SelectItem value="develop">develop</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </Field>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-foreground">Agent 类型</label>
+              <Field>
+                <FieldLabel htmlFor="session-agent">Agent 类型</FieldLabel>
                 <Select value={agentType} onValueChange={v => setAgentType(v as AgentType)}>
-                  <SelectTrigger className="h-8 text-xs">
+                  <SelectTrigger id="session-agent" className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -107,9 +109,9 @@ export function CreateSessionDialog() {
                     <SelectItem value="shell">Shell（自定义）</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </Field>
             </div>
-          </div>
+          </FieldGroup>
 
           <div className="h-px bg-border" />
 
