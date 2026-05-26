@@ -64,7 +64,7 @@ export function TopNav() {
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
             A
           </div>
-          <span className="font-semibold text-sm">Akari</span>
+          <span className="text-sm">Akari</span>
         </div>
         <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
           <Button

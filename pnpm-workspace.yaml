@@ -6,3 +6,4 @@ allowBuilds:
   esbuild: false
   msw: false
   node-pty: true
+  sharp: set this to true or false
