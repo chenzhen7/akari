@@ -105,6 +105,7 @@ export function CreateSessionDialog() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="claude">Claude Code</SelectItem>
+                    <SelectItem value="claude-orchestrator">Claude Orchestrator</SelectItem>
                     <SelectItem value="aider">Aider</SelectItem>
                     <SelectItem value="shell">Shell（自定义）</SelectItem>
                   </SelectContent>

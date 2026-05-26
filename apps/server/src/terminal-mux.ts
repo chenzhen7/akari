@@ -128,5 +128,64 @@ export class TerminalMultiplexer extends EventEmitter {
     if (checkpointMatch) {
       this.emit('checkpoint:reached', { sessionId, description: checkpointMatch[1].trim() })
     }
+
+    const spawnMatch = data.match(/\[SPAWN_AGENT\] (.+)/)
+    if (spawnMatch) {
+      const raw = spawnMatch[1]
+      const task =
+        raw.match(/task="([^"]+)"/)?.[1] ??
+        raw.match(/task='([^']+)'/)?.[1] ??
+        raw.match(/task=([^\s]+)/)?.[1] ??
+        ''
+      const agentType =
+        raw.match(/agentType="([^"]+)"/)?.[1] ??
+        raw.match(/agentType=([^\s]+)/)?.[1] ??
+        'claude'
+      const branch =
+        raw.match(/branch="([^"]+)"/)?.[1] ??
+        raw.match(/branch=([^\s]+)/)?.[1]
+      if (task) {
+        this.emit('spawn_agent', { sessionId, task, agentType, branch })
+      }
+    }
+
+    const delegateMatch = data.match(/\[DELEGATE\] (.+)/)
+    if (delegateMatch) {
+      const raw = delegateMatch[1]
+      const toSessionId =
+        raw.match(/sessionId="([^"]+)"/)?.[1] ??
+        raw.match(/sessionId=([^\s]+)/)?.[1] ??
+        ''
+      const message =
+        raw.match(/message="([^"]+)"/)?.[1] ??
+        raw.match(/message='([^']+)'/)?.[1] ??
+        raw.replace(/sessionId=\S+\s*/, '').trim()
+      if (toSessionId && message) {
+        this.emit('delegate', { sessionId, toSessionId, message })
+      }
+    }
+
+    const taskDoneMatch = data.match(/\[TASK_DONE\] (.+)/)
+    if (taskDoneMatch) {
+      const raw = taskDoneMatch[1]
+      const summary =
+        raw.match(/summary="([^"]+)"/)?.[1] ??
+        raw.match(/summary='([^']+)'/)?.[1] ??
+        raw.replace(/summary=/, '').trim()
+      this.emit('task_done', { sessionId, summary })
+    }
+
+    const awaitMatch = data.match(/\[AWAIT_SESSION\] (.+)/)
+    if (awaitMatch) {
+      const raw = awaitMatch[1]
+      const targetSessionId =
+        raw.match(/sessionId="([^"]+)"/)?.[1] ??
+        raw.match(/sessionId=([^\s]+)/)?.[1] ??
+        ''
+      const timeoutSeconds = parseInt(raw.match(/timeoutSeconds=(\d+)/)?.[1] ?? '300', 10)
+      if (targetSessionId) {
+        this.emit('await_session', { sessionId, targetSessionId, timeoutSeconds })
+      }
+    }
   }
 }

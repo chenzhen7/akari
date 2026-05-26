@@ -4,17 +4,25 @@ import {
   Controls,
   Background,
   useNodesState,
+  useEdgesState,
+  addEdge,
   type Node,
+  type Edge,
+  type Connection,
   type Viewport,
+  MarkerType,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useSessionStore } from '@/stores/session-store'
 import { SessionNode } from './SessionNode'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import { Loader2, ServerOff, LayoutGrid } from 'lucide-react'
+import { toast } from 'sonner'
 
 /** 模块级：跨组件挂载/卸载周期持久化 viewport，不写入 store */
 let _savedViewport: Viewport | null = null
+
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 const nodeTypes = {
   sessionNode: SessionNode as any,
@@ -22,15 +30,101 @@ const nodeTypes = {
 
 export function CanvasView() {
   const sessions = useSessionStore(s => s.sessions)
+  const groups = useSessionStore(s => s.groups)
   const connectionStatus = useSessionStore(s => s.connectionStatus)
   const openTab = useSessionStore(s => s.openTab)
   const updateCanvasPosition = useSessionStore(s => s.updateCanvasPosition)
+  const fetchGroups = useSessionStore(s => s.fetchGroups)
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[])
+  const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[])
   // 本次挂载是否应 fitView：仅当还没有保存的 viewport 时才自动适配
   const [fitOnMount] = useState(() => _savedViewport === null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
+
+  // 同步 Pipeline 边：从 groups 中提取所有 pipelineEdges
+  useEffect(() => {
+    const allEdges: Edge[] = []
+    for (const group of groups) {
+      for (const pe of group.pipelineEdges) {
+        allEdges.push({
+          id: pe.id,
+          source: pe.fromSessionId,
+          target: pe.toSessionId,
+          label: pe.trigger === 'on-checkpoint' && pe.checkpointPattern
+            ? `${pe.trigger}: ${pe.checkpointPattern}`
+            : pe.trigger,
+          animated: true,
+          style: { stroke: '#6366f1', strokeWidth: 2 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1' },
+          data: { groupId: group.id, injectContext: pe.injectContext },
+        })
+      }
+    }
+    // Parent → child dashed edges (from spawn)
+    for (const s of sessions) {
+      if (s.parentSessionId) {
+        const edgeId = `spawn-${s.parentSessionId}-${s.id}`
+        if (!allEdges.find(e => e.id === edgeId)) {
+          allEdges.push({
+            id: edgeId,
+            source: s.parentSessionId,
+            target: s.id,
+            style: { stroke: '#94a3b8', strokeWidth: 1.5, strokeDasharray: '5,3' },
+            markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' },
+            label: 'spawned',
+          })
+        }
+      }
+    }
+    setEdges(allEdges)
+  }, [groups, sessions, setEdges])
+
+  // 用户拖线连接两个节点 → 创建 pipeline edge
+  const onConnect = useCallback(
+    async (connection: Connection) => {
+      const { source, target } = connection
+      if (!source || !target) return
+
+      const sourceSession = sessions.find(s => s.id === source)
+      const targetSession = sessions.find(s => s.id === target)
+      if (!sourceSession || !targetSession) return
+
+      // 找到或创建包含这两个 session 的 group
+      let groupId = groups.find(g => g.sessionIds.includes(source) && g.sessionIds.includes(target))?.id
+      if (!groupId) {
+        try {
+          const res = await fetch(`${API_BASE}/collaboration/groups`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: `${sourceSession.name} → ${targetSession.name}`, sessionIds: [source, target] }),
+          })
+          const group = await res.json()
+          groupId = group.id
+          fetchGroups()
+        } catch {
+          toast.error('创建协作组失败')
+          return
+        }
+      }
+
+      // 添加流水线边
+      try {
+        await fetch(`${API_BASE}/collaboration/groups/${groupId}/edges`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromSessionId: source, toSessionId: target, trigger: 'on-complete', injectContext: true }),
+        })
+        fetchGroups()
+        toast.success('Pipeline 连接已创建')
+      } catch {
+        toast.error('创建 Pipeline 边失败')
+      }
+      setEdges(eds => addEdge(connection, eds))
+    },
+    [sessions, groups, fetchGroups, setEdges],
+  )
 
   // 同步节点：精细化比较，只在新增/删除/位置/status/progress 变化时更新
   useEffect(() => {
@@ -117,8 +211,11 @@ export function CanvasView() {
     <div ref={containerRef} className="relative h-full w-full">
       <ReactFlow
         nodes={nodes}
+        edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
         onNodeClick={onNodeClick}
         onNodeDragStop={onNodeDragStop}
         onPaneContextMenu={onPaneContextMenu}
@@ -128,6 +225,7 @@ export function CanvasView() {
         fitView={fitOnMount}
         fitViewOptions={{ padding: 0.2 }}
         onMoveEnd={onMoveEnd}
+        connectOnClick={false}
       >
         <Background gap={16} size={1} />
         <Controls />

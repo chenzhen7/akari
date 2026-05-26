@@ -3,7 +3,7 @@ import fastifyCors from '@fastify/cors'
 import fastifyWebsocket from '@fastify/websocket'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
-import type { ClientMessage, ServerMessage, SessionStatus } from '@akari/shared-types'
+import type { AgentType, ClientMessage, PipelineEdge, ServerMessage, SessionStatus } from '@akari/shared-types'
 import { createSessionManager, validateTransition } from './session-manager.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -39,16 +39,18 @@ interface CreateSessionBody {
   name: string
   task: string
   baseBranch?: string
-  agentType?: 'claude' | 'aider' | 'shell'
+  agentType?: AgentType
   tags?: string[]
+  parentSessionId?: string
+  groupId?: string
 }
 
 fastify.post<{ Body: CreateSessionBody }>('/sessions', async (request, reply) => {
-  const { name, task, baseBranch = 'main', agentType = 'claude', tags = [] } = request.body
+  const { name, task, baseBranch = 'main', agentType = 'claude', tags = [], parentSessionId, groupId } = request.body
   if (!name?.trim() || !task?.trim()) {
     return reply.status(400).send({ error: 'name and task are required' })
   }
-  const session = await sessionManager.createSession({ name, task, baseBranch, agentType, tags })
+  const session = await sessionManager.createSession({ name, task, baseBranch, agentType, tags, parentSessionId, groupId })
   return reply.status(201).send(session)
 })
 
@@ -229,6 +231,121 @@ fastify.post<{ Params: { id: string } }>(
   },
 )
 
+// ─── Collaboration endpoints ──────────────────────────────────────────────────
+
+fastify.get('/collaboration/groups', async () =>
+  sessionManager.collaborationManager.listGroups(),
+)
+
+fastify.post<{ Body: { name: string; description?: string; sessionIds?: string[] } }>(
+  '/collaboration/groups',
+  async (request, reply) => {
+    const { name, description, sessionIds = [] } = request.body
+    if (!name?.trim()) return reply.status(400).send({ error: 'name is required' })
+    const group = sessionManager.collaborationManager.createGroup(name.trim(), description)
+    for (const sid of sessionIds) {
+      sessionManager.collaborationManager.addSessionToGroup(group.id, sid)
+    }
+    return reply.status(201).send(sessionManager.collaborationManager.getGroup(group.id))
+  },
+)
+
+fastify.get<{ Params: { id: string } }>(
+  '/collaboration/groups/:id',
+  async (request, reply) => {
+    const group = sessionManager.collaborationManager.getGroup(request.params.id)
+    if (!group) return reply.status(404).send({ error: 'group not found' })
+    return group
+  },
+)
+
+fastify.patch<{ Params: { id: string }; Body: { name?: string; description?: string; sharedContext?: string } }>(
+  '/collaboration/groups/:id',
+  async (request, reply) => {
+    const { id } = request.params
+    const { name, description, sharedContext } = request.body
+    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
+    if (name !== undefined || description !== undefined) {
+      sessionManager.collaborationManager.updateGroup(id, { name, description })
+    }
+    if (sharedContext !== undefined) {
+      sessionManager.collaborationManager.updateSharedContext(id, sharedContext)
+    }
+    return sessionManager.collaborationManager.getGroup(id)
+  },
+)
+
+fastify.delete<{ Params: { id: string } }>(
+  '/collaboration/groups/:id',
+  async (request, reply) => {
+    if (!sessionManager.collaborationManager.getGroup(request.params.id)) {
+      return reply.status(404).send({ error: 'group not found' })
+    }
+    sessionManager.collaborationManager.deleteGroup(request.params.id)
+    return { ok: true }
+  },
+)
+
+fastify.post<{ Params: { id: string }; Body: { sessionId: string } }>(
+  '/collaboration/groups/:id/sessions',
+  async (request, reply) => {
+    const { id } = request.params
+    const { sessionId } = request.body
+    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
+    if (!sessionManager.getSession(sessionId)) return reply.status(404).send({ error: 'session not found' })
+    sessionManager.collaborationManager.addSessionToGroup(id, sessionId)
+    return { ok: true }
+  },
+)
+
+fastify.delete<{ Params: { id: string; sessionId: string } }>(
+  '/collaboration/groups/:id/sessions/:sessionId',
+  async (request, reply) => {
+    const { id, sessionId } = request.params
+    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
+    sessionManager.collaborationManager.removeSessionFromGroup(id, sessionId)
+    return { ok: true }
+  },
+)
+
+fastify.post<{
+  Params: { id: string }
+  Body: Omit<PipelineEdge, 'id'>
+}>(
+  '/collaboration/groups/:id/edges',
+  async (request, reply) => {
+    const { id } = request.params
+    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
+    try {
+      const edge = sessionManager.collaborationManager.addEdge(id, request.body)
+      return reply.status(201).send(edge)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(400).send({ error: msg })
+    }
+  },
+)
+
+fastify.delete<{ Params: { id: string; edgeId: string } }>(
+  '/collaboration/groups/:id/edges/:edgeId',
+  async (request, reply) => {
+    const { id, edgeId } = request.params
+    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
+    sessionManager.collaborationManager.removeEdge(id, edgeId)
+    return { ok: true }
+  },
+)
+
+fastify.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
+  '/collaboration/groups/:id/messages',
+  async (request, reply) => {
+    const { id } = request.params
+    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
+    const limit = parseInt(request.query.limit ?? '100') || 100
+    return sessionManager.collaborationManager.getMessages(id, limit)
+  },
+)
+
 fastify.get('/ws', { websocket: true }, socket => {
   clients.add(socket)
   fastify.log.info(`WebSocket client connected (total: ${clients.size})`)
@@ -291,6 +408,11 @@ function handleClientMessage(msg: ClientMessage): void {
     case 'broadcast:send': {
       const { message, targets } = msg.payload
       sessionManager.broadcastMessage(message, targets)
+      break
+    }
+    case 'collaboration:update-context': {
+      const { groupId, context } = msg.payload
+      sessionManager.collaborationManager.updateSharedContext(groupId, context)
       break
     }
   }

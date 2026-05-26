@@ -11,9 +11,9 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ---
 
-## 当前状态（2026-05-24）
+## 当前状态（2026-05-26）
 
-**整体进度**：**阶段五（Agent 适配器 — Claude 适配）进行中**。Claude Code 适配器已实现：`AgentAdapter` 接口、`ClaudeAdapter`（`--append-system-prompt` 注入 Akari 协议、交互模式启动、任务自动注入）、`createAgentAdapter()` 工厂函数，SessionManager 已集成适配器自动启动逻辑。
+**整体进度**：**阶段七（多 Agent 协作）基础实现完成**。后端 CollaborationManager、REST API、TerminalMux 协议标记（SPAWN_AGENT/DELEGATE/TASK_DONE/AWAIT_SESSION）全部就绪；前端画布 Pipeline 边渲染、拖线创建、CollaborationPanel、TopNav 协作按钮均已完成。
 
 ### ✅ 已完成
 
@@ -37,7 +37,15 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 创建会话弹窗 | `apps/web/src/components/create-session/` | 含 agentType 选择，initializing spinner，session:created 自动打开 Tab |
 | AgentAdapter 接口 | `apps/server/src/agent-adapters/base.ts` | `AgentAdapter` 接口 + `PtyCommand` 类型 |
 | ClaudeAdapter | `apps/server/src/agent-adapters/claude.ts` | 交互模式启动 `claude`，`--append-system-prompt` 注入 Akari 协议，2.5s 延迟后自动注入任务 |
+| ClaudeOrchestratorAdapter | `apps/server/src/agent-adapters/claude.ts` | 注入完整 Orchestrator system prompt，协作协议标记说明 |
 | 适配器工厂 | `apps/server/src/agent-adapters/index.ts` | `createAgentAdapter(agentType)` 工厂，SessionManager 集成 |
+| CollaborationManager | `apps/server/src/collaboration-manager.ts` | 群组 CRUD、流水线边、DAG 环检测、AWAIT/DELEGATE/SPAWN 处理、SQLite 持久化 |
+| 协作 REST API | `apps/server/src/index.ts` | `/collaboration/groups` 全套 CRUD + edges + messages |
+| 协作协议标记 | `apps/server/src/terminal-mux.ts` | SPAWN_AGENT / DELEGATE / TASK_DONE / AWAIT_SESSION 解析并 emit 事件 |
+| 画布 Pipeline 边 | `apps/web/src/components/canvas/CanvasView.tsx` | 从 groups 同步边（实线箭头）+ 派生关系（虚线）；拖线自动创建群组+边 |
+| SessionNode Handle | `apps/web/src/components/canvas/SessionNode.tsx` | source/target Handle（hover 显现）；orchestrator/worker role badge；claude-orchestrator 棕色皇冠图标 |
+| CollaborationPanel | `apps/web/src/components/collaboration/CollaborationPanel.tsx` | 右侧 Sheet；群组列表、成员、Pipeline 边、共享上下文编辑 |
+| TopNav 协作按钮 | `apps/web/src/components/layout/TopNav.tsx` | Network 图标按钮，有群组时显示数量角标 |
 
 ### 🔲 待开发（按功能模块）
 
@@ -67,8 +75,9 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 阶段二 | WorktreeManager + TerminalMux + SessionManager | ✅ 完成 | [phase-2](./开发计划/phase-2-核心后端.md) |
 | 阶段三 | xterm.js 终端 + Monaco Diff + 创建流程 | ✅ 完成 | [phase-3](./开发计划/phase-3-前端真实化.md) |
 | 阶段四 | 审批后端 + 审批 UI | 🔲 待开始 | [phase-4](./开发计划/phase-4-审批工作流.md) |
-| 阶段五 | Claude / Aider / Shell 适配器 | � 进行中（Claude ✅，Aider/Shell 待完成） | [phase-5](./开发计划/phase-5-Agent适配器.md) |
-| 阶段六 | 错误处理 + 性能 + 测试 | 🔲 待开始 | [phase-6](./开发计划/phase-6-收尾打磨.md) |
+| 阶段五 | Claude / Aider / Shell 适配器 | ✅ Claude + Orchestrator 完成 | [phase-5](./开发计划/phase-5-Agent适配器.md) |
+| 阶段六 | Git 可视化 | 🔲 待开始 | [phase-6](./开发计划/phase-6-git可视化.md) |
+| 阶段七 | 多 Agent 协作 | ✅ 基础实现完成（M7-α + M7-β + M7-γ 核心） | [phase-7](./开发计划/phase-7-多agent协作.md) |
 
 ## 里程碑
 

@@ -6,6 +6,7 @@ import type {
   AgentSession,
   AgentType,
   ApprovalRequest,
+  CollaborationRole,
   GitBranch,
   GitDiff,
   GitLogResponse,
@@ -16,6 +17,7 @@ import type {
 import { WorktreeManager } from './worktree-manager.js'
 import { TerminalMultiplexer } from './terminal-mux.js'
 import { createAgentAdapter, SHELL_STARTUP_DELAY_MS } from './agent-adapters/index.js'
+import { CollaborationManager } from './collaboration-manager.js'
 
 export interface CreateSessionParams {
   name: string
@@ -24,6 +26,8 @@ export interface CreateSessionParams {
   agentType?: AgentType
   tags?: string[]
   canvasPosition?: { x: number; y: number }
+  parentSessionId?: string
+  groupId?: string
 }
 
 interface DbRow {
@@ -46,6 +50,10 @@ interface DbRow {
   created_at: string
   tags: string
   pending_approval: string | null
+  collaboration_role: string | null
+  group_id: string | null
+  parent_session_id: string | null
+  child_session_ids: string | null
 }
 
 const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
@@ -83,6 +91,7 @@ export class SessionManager {
   private readonly worktreeManager: WorktreeManager
   private readonly terminalMux: TerminalMultiplexer
   private readonly broadcast: (msg: ServerMessage) => void
+  readonly collaborationManager: CollaborationManager
 
   constructor(opts: { repoPath: string; dbPath: string; broadcast: (msg: ServerMessage) => void }) {
     this.db = new Database(opts.dbPath)
@@ -90,6 +99,17 @@ export class SessionManager {
     this.terminalMux = new TerminalMultiplexer()
     this.broadcast = opts.broadcast
     this.initDb()
+    this.collaborationManager = new CollaborationManager({
+      db: this.db,
+      broadcast: this.broadcast,
+      createSession: (params) => this.createSession(params),
+      sendToTerminal: (sessionId, data) => this.terminalMux.sendToTerminal(sessionId, data),
+      resumeSession: (sessionId) => {
+        const s = this.getSession(sessionId)
+        if (s && s.status === 'waiting') this.updateStatus(sessionId, 'running')
+      },
+    })
+    this.collaborationManager.initDb()
     this.wireEvents()
   }
 
@@ -102,12 +122,18 @@ export class SessionManager {
       .toLowerCase()
       .slice(0, 40)
 
+    const agentType = params.agentType ?? 'claude'
+    const collaborationRole: CollaborationRole =
+      agentType === 'claude-orchestrator' ? 'orchestrator'
+      : params.parentSessionId ? 'worker'
+      : 'standalone'
+
     const session: AgentSession = {
       id,
       name: params.name.trim(),
       task: params.task.trim(),
       status: 'initializing',
-      agentType: params.agentType ?? 'claude',
+      agentType,
       worktreePath: `.agent-worktrees/${id}`,
       branchName: `agent/${safeName}-${id.slice(0, 8)}`,
       baseBranch,
@@ -123,6 +149,10 @@ export class SessionManager {
       diffSummary: '',
       createdAt: new Date(),
       tags: params.tags ?? [],
+      collaborationRole,
+      groupId: params.groupId,
+      parentSessionId: params.parentSessionId,
+      childSessionIds: [],
     }
 
     this.insertRow(session)
@@ -149,6 +179,13 @@ export class SessionManager {
       event: 'session:status',
       payload: { id: sessionId, status, progress: session.progress },
     })
+
+    if (status === 'completed') {
+      const summary = session.diffSummary || session.task
+      this.collaborationManager.onSessionCompleted(sessionId, summary).catch(err => {
+        console.error(`[CollaborationManager] onSessionCompleted error for ${sessionId}:`, err)
+      })
+    }
   }
 
   getSession(sessionId: string): AgentSession | null {
@@ -453,6 +490,57 @@ export class SessionManager {
         }
       },
     )
+
+    this.terminalMux.on(
+      'spawn_agent',
+      ({ sessionId, task, agentType, branch }: { sessionId: string; task: string; agentType: string; branch?: string }) => {
+        this.collaborationManager.handleSpawnAgent(sessionId, {
+          task,
+          agentType: agentType as AgentType,
+          branch,
+        }).catch(err => {
+          console.error(`[CollaborationManager] handleSpawnAgent error:`, err)
+        })
+      },
+    )
+
+    this.terminalMux.on(
+      'delegate',
+      ({ sessionId, toSessionId, message }: { sessionId: string; toSessionId: string; message: string }) => {
+        this.collaborationManager.handleDelegate(sessionId, toSessionId, message)
+      },
+    )
+
+    this.terminalMux.on(
+      'task_done',
+      ({ sessionId, summary }: { sessionId: string; summary: string }) => {
+        this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(summary, sessionId)
+        try {
+          this.updateStatus(sessionId, 'completed')
+        } catch {
+          // ignore if already completed
+        }
+      },
+    )
+
+    this.terminalMux.on(
+      'await_session',
+      ({ sessionId, targetSessionId, timeoutSeconds }: { sessionId: string; targetSessionId: string; timeoutSeconds: number }) => {
+        try {
+          this.updateStatus(sessionId, 'waiting')
+        } catch {
+          // session may not be in a transitionable state
+        }
+        this.collaborationManager.registerAwait(sessionId, targetSessionId, timeoutSeconds)
+      },
+    )
+
+    this.terminalMux.on(
+      'checkpoint:reached',
+      ({ sessionId, description }: { sessionId: string; description: string }) => {
+        this.collaborationManager.onSessionCheckpoint(sessionId, description).catch(() => {})
+      },
+    )
   }
 
   private pushTerminalDisplay(sessionId: string, data: string): void {
@@ -462,25 +550,29 @@ export class SessionManager {
   private initDb(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
-        id            TEXT PRIMARY KEY,
-        name          TEXT NOT NULL,
-        task          TEXT NOT NULL,
-        status        TEXT NOT NULL DEFAULT 'initializing',
-        agent_type    TEXT NOT NULL DEFAULT 'claude',
-        worktree_path TEXT NOT NULL DEFAULT '',
-        branch_name   TEXT NOT NULL DEFAULT '',
-        base_branch   TEXT NOT NULL DEFAULT 'main',
-        canvas_x      REAL NOT NULL DEFAULT 100,
-        canvas_y      REAL NOT NULL DEFAULT 100,
-        canvas_width  REAL NOT NULL DEFAULT 280,
-        canvas_height REAL NOT NULL DEFAULT 220,
-        kanban_column TEXT NOT NULL DEFAULT 'backlog',
-        terminal_id   TEXT NOT NULL,
-        progress      INTEGER NOT NULL DEFAULT 0,
-        diff_summary  TEXT NOT NULL DEFAULT '',
-        created_at    TEXT NOT NULL,
-        tags          TEXT NOT NULL DEFAULT '[]',
-        pending_approval TEXT
+        id                  TEXT PRIMARY KEY,
+        name                TEXT NOT NULL,
+        task                TEXT NOT NULL,
+        status              TEXT NOT NULL DEFAULT 'initializing',
+        agent_type          TEXT NOT NULL DEFAULT 'claude',
+        worktree_path       TEXT NOT NULL DEFAULT '',
+        branch_name         TEXT NOT NULL DEFAULT '',
+        base_branch         TEXT NOT NULL DEFAULT 'main',
+        canvas_x            REAL NOT NULL DEFAULT 100,
+        canvas_y            REAL NOT NULL DEFAULT 100,
+        canvas_width        REAL NOT NULL DEFAULT 280,
+        canvas_height       REAL NOT NULL DEFAULT 220,
+        kanban_column       TEXT NOT NULL DEFAULT 'backlog',
+        terminal_id         TEXT NOT NULL,
+        progress            INTEGER NOT NULL DEFAULT 0,
+        diff_summary        TEXT NOT NULL DEFAULT '',
+        created_at          TEXT NOT NULL,
+        tags                TEXT NOT NULL DEFAULT '[]',
+        pending_approval    TEXT,
+        collaboration_role  TEXT NOT NULL DEFAULT 'standalone',
+        group_id            TEXT,
+        parent_session_id   TEXT,
+        child_session_ids   TEXT NOT NULL DEFAULT '[]'
       )
     `)
   }
@@ -491,8 +583,9 @@ export class SessionManager {
         `INSERT INTO sessions (
           id, name, task, status, agent_type, worktree_path, branch_name, base_branch,
           canvas_x, canvas_y, canvas_width, canvas_height,
-          kanban_column, terminal_id, progress, diff_summary, created_at, tags, pending_approval
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          kanban_column, terminal_id, progress, diff_summary, created_at, tags, pending_approval,
+          collaboration_role, group_id, parent_session_id, child_session_ids
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         s.id,
@@ -514,6 +607,10 @@ export class SessionManager {
         s.createdAt instanceof Date ? s.createdAt.toISOString() : String(s.createdAt),
         JSON.stringify(s.tags),
         s.pendingApproval ? JSON.stringify(s.pendingApproval) : null,
+        s.collaborationRole,
+        s.groupId ?? null,
+        s.parentSessionId ?? null,
+        JSON.stringify(s.childSessionIds),
       )
   }
 }
@@ -540,6 +637,10 @@ function rowToSession(r: DbRow): AgentSession {
     pendingApproval: r.pending_approval
       ? (JSON.parse(r.pending_approval) as ApprovalRequest)
       : undefined,
+    collaborationRole: (r.collaboration_role ?? 'standalone') as CollaborationRole,
+    groupId: r.group_id ?? undefined,
+    parentSessionId: r.parent_session_id ?? undefined,
+    childSessionIds: JSON.parse(r.child_session_ids ?? '[]') as string[],
   }
 }
 

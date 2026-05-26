@@ -1,23 +1,26 @@
 import { create } from 'zustand'
 import { toast } from 'sonner'
-import type { AgentSession, GitLogResponse, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
+import type { AgentSession, AgentType, CollaborationGroup, GitLogResponse, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
 import type { ConnectionStatus } from '@/hooks/useWebSocket'
 import { terminalBus } from '@/lib/terminalBus'
 
 
 interface SessionStore {
   sessions: AgentSession[]
+  groups: CollaborationGroup[]
   gitLogs: Record<string, GitLogResponse>
   viewMode: 'canvas' | 'kanban'
   openTabs: string[]
   activeTabId: string | null
   commandCenterOpen: boolean
   createDialogOpen: boolean
+  collaborationPanelOpen: boolean
   connectionStatus: ConnectionStatus
   disconnectedAt: number | null
   terminalReadyTick: Record<string, number>
 
-  addSession: (name: string, task: string, baseBranch?: string, agentType?: 'claude' | 'aider' | 'shell') => void
+  addSession: (name: string, task: string, baseBranch?: string, agentType?: AgentType, parentSessionId?: string, groupId?: string) => void
+  fetchGroups: () => void
   updateStatus: (id: string, status: SessionStatus) => void
   moveToColumn: (id: string, column: KanbanColumn) => void
   updateCanvasPosition: (id: string, pos: { x: number; y: number }) => void
@@ -27,6 +30,7 @@ interface SessionStore {
   setViewMode: (mode: 'canvas' | 'kanban') => void
   toggleCommandCenter: () => void
   toggleCreateDialog: () => void
+  toggleCollaborationPanel: () => void
   approveSession: (id: string) => void
   rejectSession: (id: string) => void
   archiveSession: (id: string) => void
@@ -43,18 +47,27 @@ const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
+  groups: [],
   gitLogs: {},
   viewMode: 'canvas',
   openTabs: [],
   activeTabId: null,
   commandCenterOpen: false,
   createDialogOpen: false,
+  collaborationPanelOpen: false,
   connectionStatus: 'connecting',
   disconnectedAt: null,
   terminalReadyTick: {},
 
-  addSession: (name, task, baseBranch = 'main', agentType = 'claude') => {
-    const body = JSON.stringify({ name: name.trim(), task: task.trim(), baseBranch, agentType })
+  fetchGroups: () => {
+    fetch(`${API_BASE}/collaboration/groups`)
+      .then(r => r.json())
+      .then((groups: CollaborationGroup[]) => set({ groups }))
+      .catch(err => console.warn('[fetchGroups] failed:', err))
+  },
+
+  addSession: (name, task, baseBranch = 'main', agentType = 'claude', parentSessionId, groupId) => {
+    const body = JSON.stringify({ name: name.trim(), task: task.trim(), baseBranch, agentType, parentSessionId, groupId })
     fetch(`${API_BASE}/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -67,7 +80,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }))
         get().openTab(session.id)
       })
-      .catch(err => console.error('[addSession] failed:', err))
+      .catch(err => { toast.error(`创建会话失败: ${err}`); console.error('[addSession] failed:', err) })
     get().toggleCreateDialog()
   },
 
@@ -152,6 +165,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   toggleCreateDialog: () =>
     set(state => ({ createDialogOpen: !state.createDialogOpen })),
 
+  toggleCollaborationPanel: () =>
+    set(state => ({ collaborationPanelOpen: !state.collaborationPanelOpen })),
+
   approveSession: (id) => {
     fetch(`${API_BASE}/sessions/${id}/approval`, {
       method: 'POST',
@@ -219,7 +235,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   setGitLog: (sessionId, log) =>
     set(state => ({ gitLogs: { ...state.gitLogs, [sessionId]: log } })),
 
-  setConnectionStatus: (status) =>
+  setConnectionStatus: (status) => {
     set(state => ({
       connectionStatus: status,
       disconnectedAt:
@@ -228,7 +244,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           : status === 'connected'
             ? null
             : state.disconnectedAt,
-    })),
+    }))
+    if (status === 'connected') {
+      get().fetchGroups()
+    }
+  },
 
   handleServerMessage: (msg) => {
     switch (msg.event) {
@@ -299,6 +319,38 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }))
         break
       }
+      case 'collaboration:group-created':
+        set(state => ({ groups: [...state.groups.filter(g => g.id !== msg.payload.id), msg.payload] }))
+        break
+      case 'collaboration:group-updated':
+        set(state => ({ groups: state.groups.map(g => g.id === msg.payload.id ? msg.payload : g) }))
+        break
+      case 'collaboration:group-deleted':
+        set(state => ({ groups: state.groups.filter(g => g.id !== msg.payload.groupId) }))
+        break
+      case 'collaboration:agent-spawned':
+        set(state => ({
+          sessions: [...state.sessions.filter(s => s.id !== msg.payload.newSession.id), msg.payload.newSession],
+        }))
+        get().openTab(msg.payload.newSession.id)
+        toast.info(`Agent 派生: ${msg.payload.newSession.name}`)
+        break
+      case 'collaboration:pipeline-triggered':
+        toast.info(`流水线触发: ${msg.payload.fromId.slice(0, 6)} → ${msg.payload.toId.slice(0, 6)}`)
+        break
+      case 'collaboration:context-updated':
+        set(state => ({
+          groups: state.groups.map(g =>
+            g.id === msg.payload.groupId ? { ...g, sharedContext: msg.payload.context } : g
+          ),
+        }))
+        break
+      case 'agent:message':
+        terminalBus.emit(
+          msg.payload.toSessionId,
+          `\r\n\x1b[36m[Message from ${msg.payload.fromSessionId}]\x1b[0m ${msg.payload.content}\r\n`,
+        )
+        break
     }
   },
 }))

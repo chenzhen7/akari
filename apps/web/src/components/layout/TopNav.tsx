@@ -11,6 +11,7 @@ import {
   X,
   Circle,
   RefreshCw,
+  Network,
 } from 'lucide-react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 
@@ -48,7 +49,9 @@ export function TopNav() {
     closeTab,
     toggleCreateDialog,
     toggleCommandCenter,
+    toggleCollaborationPanel,
     sessions,
+    groups,
     connectionStatus,
     disconnectedAt,
   } = useSessionStore()
@@ -164,6 +167,20 @@ export function TopNav() {
         </Tooltip>
 
 
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1.5 text-xs relative"
+          onClick={toggleCollaborationPanel}
+        >
+          <Network className="h-3.5 w-3.5" />
+          协作
+          {groups.length > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">
+              {groups.length}
+            </span>
+          )}
+        </Button>
         <Button
           size="sm"
           variant="ghost"

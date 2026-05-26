@@ -1,5 +1,5 @@
 import { memo, useState, useEffect, useRef } from 'react'
-import type { Node, NodeProps } from '@xyflow/react'
+import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Bell } from 'lucide-react'
+import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Bell, Crown } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
@@ -26,9 +26,10 @@ type SessionNodeData = {
 type SessionNodeType = Node<SessionNodeData>
 
 const agentConfig: Record<string, { bg: string; Icon: LucideIcon }> = {
-  claude: { bg: '#7c3aed', Icon: Bot },
-  aider:  { bg: '#2563eb', Icon: Code2 },
-  shell:  { bg: '#374151', Icon: Terminal },
+  claude:               { bg: '#7c3aed', Icon: Bot },
+  'claude-orchestrator': { bg: '#b45309', Icon: Crown },
+  aider:                { bg: '#2563eb', Icon: Code2 },
+  shell:                { bg: '#374151', Icon: Terminal },
 }
 
 const statusConfig: Record<string, { color: string; label: string }> = {
@@ -94,8 +95,37 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
     e.nativeEvent.stopImmediatePropagation()
   }
 
+  const roleLabel: Record<string, string> = {
+    orchestrator: 'Orchestrator',
+    worker:       'Worker',
+    reviewer:     'Reviewer',
+  }
+
   return (
     <>
+      {/* ReactFlow connection handles — appear on hover */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-3 !w-3 !rounded-full !border-2"
+        style={{
+          background: color,
+          borderColor: '#111',
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity 0.2s',
+        }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-3 !w-3 !rounded-full !border-2"
+        style={{
+          background: color,
+          borderColor: '#111',
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity 0.2s',
+        }}
+      />
       <div
         className="relative w-[268px] cursor-pointer select-none overflow-hidden rounded-[22px]"
         style={{
@@ -235,6 +265,14 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
             {session.status === 'waiting' && <Bell />}
             {cfg.label}
           </Badge>
+          {session.collaborationRole && session.collaborationRole !== 'standalone' && (
+            <Badge
+              variant="outline"
+              style={{ background: 'rgba(180,83,9,0.12)', color: '#d97706', borderColor: 'rgba(180,83,9,0.3)', fontSize: '9px' }}
+            >
+              {roleLabel[session.collaborationRole] ?? session.collaborationRole}
+            </Badge>
+          )}
           {session.agentType && (() => {
             const ac = agentConfig[session.agentType] ?? agentConfig.shell
             const Icon = ac.Icon
@@ -338,6 +376,7 @@ function areEqual(
     p.status === n.status &&
     p.progress === n.progress &&
     p.branchName === n.branchName &&
+    p.collaborationRole === n.collaborationRole &&
     p.canvasPosition.x === n.canvasPosition.x &&
     p.canvasPosition.y === n.canvasPosition.y
   )
