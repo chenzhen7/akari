@@ -277,6 +277,7 @@ export function CanvasView() {
         fitViewOptions={{ padding: 0.2 }}
         onMoveEnd={onMoveEnd}
         connectOnClick={false}
+        connectionRadius={80}
         deleteKeyCode={['Delete', 'Backspace']}
       >
         <Background gap={16} size={1} />
