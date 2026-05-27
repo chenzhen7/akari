@@ -23,7 +23,6 @@ const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 const TRIGGER_LABEL: Record<string, string> = {
   'on-complete': '完成时触发',
-  'on-checkpoint': '检查点触发',
   'on-approval': '审批触发',
 }
 

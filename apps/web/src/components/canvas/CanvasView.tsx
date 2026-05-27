@@ -57,9 +57,7 @@ export function CanvasView() {
           id: pe.id,
           source: pe.fromSessionId,
           target: pe.toSessionId,
-          label: pe.trigger === 'on-checkpoint' && pe.checkpointPattern
-            ? `${pe.trigger}: ${pe.checkpointPattern}`
-            : pe.trigger,
+          label: pe.trigger,
           type: 'flowEdge',
           data: { groupId: group.id, injectContext: pe.injectContext },
         })

@@ -22,7 +22,7 @@ const ORCHESTRATOR_SYSTEM_PROMPT = [
   '[TASK_DONE] summary="<summary>"',
   '  -> Marks your task complete and passes a summary to downstream agents.',
   '',
-  'Rules: dangerous operations still require [APPROVAL_REQUIRED]. Use [CHECKPOINT] to report progress.',
+  'Rules: dangerous operations still require [APPROVAL_REQUIRED].',
 ].join(' ')
 
 export class ClaudeAdapter implements AgentAdapter {

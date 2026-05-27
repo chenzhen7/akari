@@ -295,9 +295,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ),
         }))
         break
-      case 'checkpoint:reached':
-        terminalBus.emit(msg.payload.sessionId, `\r\n\x1b[33m[CHECKPOINT] ${msg.payload.description}\x1b[0m\r\n`)
-        break
       case 'diff:update':
         set(state => ({
           sessions: state.sessions.map(s =>

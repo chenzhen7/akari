@@ -124,10 +124,6 @@ export class TerminalMultiplexer extends EventEmitter {
       this.emit('approval:required', { sessionId, request })
     }
 
-    const checkpointMatch = data.match(/\[CHECKPOINT\] (.+)/)
-    if (checkpointMatch) {
-      this.emit('checkpoint:reached', { sessionId, description: checkpointMatch[1].trim() })
-    }
 
     const spawnMatch = data.match(/\[SPAWN_AGENT\] (.+)/)
     if (spawnMatch) {

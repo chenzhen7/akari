@@ -460,24 +460,6 @@ export class SessionManager {
     )
 
     this.terminalMux.on(
-      'checkpoint:reached',
-      ({ sessionId, description }: { sessionId: string; description: string }) => {
-        const session = this.getSession(sessionId)
-        if (!session) return
-        const progress = Math.min(session.progress + 10, 95)
-        this.db.prepare('UPDATE sessions SET progress = ? WHERE id = ?').run(progress, sessionId)
-        this.broadcast({
-          event: 'checkpoint:reached',
-          payload: { sessionId, description, timestamp: new Date().toISOString() },
-        })
-        this.broadcast({
-          event: 'session:status',
-          payload: { id: sessionId, status: session.status, progress },
-        })
-      },
-    )
-
-    this.terminalMux.on(
       'terminal:exit',
       ({ sessionId, exitCode }: { sessionId: string; exitCode: number }) => {
         const session = this.getSession(sessionId)
@@ -535,12 +517,6 @@ export class SessionManager {
       },
     )
 
-    this.terminalMux.on(
-      'checkpoint:reached',
-      ({ sessionId, description }: { sessionId: string; description: string }) => {
-        this.collaborationManager.onSessionCheckpoint(sessionId, description).catch(() => {})
-      },
-    )
   }
 
   private pushTerminalDisplay(sessionId: string, data: string): void {

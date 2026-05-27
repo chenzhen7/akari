@@ -25,9 +25,8 @@ export interface PipelineEdge {
   id: string
   fromSessionId: string
   toSessionId: string
-  trigger: 'on-complete' | 'on-checkpoint' | 'on-approval'
+  trigger: 'on-complete' | 'on-approval'
   injectContext: boolean
-  checkpointPattern?: string
 }
 
 export interface CollaborationGroup {
@@ -137,7 +136,6 @@ export type ServerMessage =
   | { event: 'terminal:ready'; payload: { sessionId: string } }
   | { event: 'diff:update'; payload: { sessionId: string; diff: GitDiff } }
   | { event: 'approval:required'; payload: { sessionId: string; request: ApprovalRequest } }
-  | { event: 'checkpoint:reached'; payload: { sessionId: string; description: string; timestamp: string } }
   | { event: 'sessions:list'; payload: AgentSession[] }
   | { event: 'git:log-updated'; payload: { sessionId: string } & GitLogResponse }
   | { event: 'collaboration:group-created'; payload: CollaborationGroup }

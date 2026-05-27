@@ -46,7 +46,6 @@ interface EdgeRow {
   to_session_id: string
   trigger_type: string
   inject_context: number
-  checkpoint_pattern: string | null
 }
 
 interface MessageRow {
@@ -93,8 +92,7 @@ export class CollaborationManager {
         from_session_id    TEXT NOT NULL,
         to_session_id      TEXT NOT NULL,
         trigger_type       TEXT NOT NULL DEFAULT 'on-complete',
-        inject_context     INTEGER NOT NULL DEFAULT 1,
-        checkpoint_pattern TEXT
+        inject_context     INTEGER NOT NULL DEFAULT 1
       );
 
       CREATE TABLE IF NOT EXISTS agent_messages (
@@ -125,7 +123,6 @@ export class CollaborationManager {
     const migrateEdgeColumns: Array<[string, string]> = [
       ['trigger_type', "TEXT NOT NULL DEFAULT 'on-complete'"],
       ['inject_context', "INTEGER NOT NULL DEFAULT 1"],
-      ['checkpoint_pattern', "TEXT"],
     ]
     for (const [col, def] of migrateEdgeColumns) {
       try {
@@ -220,7 +217,7 @@ export class CollaborationManager {
     const id = nanoid(8)
     this.db
       .prepare(
-        'INSERT INTO pipeline_edges (id, group_id, from_session_id, to_session_id, trigger_type, inject_context, checkpoint_pattern) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO pipeline_edges (id, group_id, from_session_id, to_session_id, trigger_type, inject_context) VALUES (?, ?, ?, ?, ?, ?)',
       )
       .run(
         id,
@@ -229,7 +226,6 @@ export class CollaborationManager {
         edge.toSessionId,
         edge.trigger,
         edge.injectContext ? 1 : 0,
-        edge.checkpointPattern ?? null,
       )
     const group = this.getGroup(groupId)
     if (group) this.broadcast({ event: 'collaboration:group-updated', payload: group })
@@ -307,27 +303,6 @@ export class CollaborationManager {
         event: 'collaboration:pipeline-triggered',
         payload: { edgeId: edge.id, fromId: sessionId, toId: edge.toSessionId },
       })
-    }
-  }
-
-  async onSessionCheckpoint(sessionId: string, description: string): Promise<void> {
-    const edgeRows = this.db
-      .prepare(
-        "SELECT * FROM pipeline_edges WHERE from_session_id = ? AND trigger_type = 'on-checkpoint'",
-      )
-      .all(sessionId) as EdgeRow[]
-
-    for (const edgeRow of edgeRows) {
-      const { checkpoint_pattern, to_session_id, id: edgeId } = edgeRow
-      if (!checkpoint_pattern || description.toLowerCase().includes(checkpoint_pattern.toLowerCase())) {
-        const msg = `\r\n\x1b[36m[Pipeline Checkpoint from ${sessionId}: ${description}]\x1b[0m\r\n`
-        this.opts.sendToTerminal(to_session_id, msg)
-        this.broadcast({ event: 'terminal:data', payload: { sessionId: to_session_id, data: msg } })
-        this.broadcast({
-          event: 'collaboration:pipeline-triggered',
-          payload: { edgeId, fromId: sessionId, toId: to_session_id },
-        })
-      }
     }
   }
 
@@ -534,6 +509,5 @@ function rowToEdge(r: EdgeRow): PipelineEdge {
     toSessionId: r.to_session_id,
     trigger: r.trigger_type as PipelineEdge['trigger'],
     injectContext: r.inject_context === 1,
-    checkpointPattern: r.checkpoint_pattern ?? undefined,
   }
 }
