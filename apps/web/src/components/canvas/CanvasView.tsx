@@ -15,6 +15,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useSessionStore } from '@/stores/session-store'
 import { SessionNode } from './SessionNode'
+import FlowEdge from './FlowEdge'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import { Loader2, ServerOff, LayoutGrid } from 'lucide-react'
 import { toast } from 'sonner'
@@ -26,6 +27,10 @@ const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 const nodeTypes = {
   sessionNode: SessionNode as any,
+}
+
+const edgeTypes = {
+  flowEdge: FlowEdge as any,
 }
 
 export function CanvasView() {
@@ -55,9 +60,7 @@ export function CanvasView() {
           label: pe.trigger === 'on-checkpoint' && pe.checkpointPattern
             ? `${pe.trigger}: ${pe.checkpointPattern}`
             : pe.trigger,
-          animated: true,
-          style: { stroke: '#6366f1', strokeWidth: 3.5 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1' },
+          type: 'flowEdge',
           data: { groupId: group.id, injectContext: pe.injectContext },
         })
       }
@@ -246,6 +249,7 @@ export function CanvasView() {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onEdgesDelete={onEdgesDelete}
