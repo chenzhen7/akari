@@ -152,3 +152,73 @@ export type ClientMessage =
   | { event: 'approval:decision'; payload: { sessionId: string; decision: 'approved' | 'rejected'; comment?: string } }
   | { event: 'broadcast:send'; payload: { message: string; targets?: string[] } }
   | { event: 'collaboration:update-context'; payload: { groupId: string; context: string } }
+
+// ─── Phase 8: HTTP Hook Event Types ──────────────────────────────────────────
+
+export type HookEventName =
+  | 'SessionStart'
+  | 'PreToolUse'
+  | 'PostToolUse'
+  | 'PermissionRequest'
+  | 'TaskCreated'
+  | 'TaskCompleted'
+  | 'Stop'
+  | 'StopFailure'
+
+interface HookEventBase {
+  hook_event_name: HookEventName
+  session_id: string
+}
+
+export interface SessionStartPayload extends HookEventBase {
+  hook_event_name: 'SessionStart'
+}
+
+export interface PermissionRequestPayload extends HookEventBase {
+  hook_event_name: 'PermissionRequest'
+  tool_name: string
+  tool_input: Record<string, unknown>
+}
+
+export interface PostToolUsePayload extends HookEventBase {
+  hook_event_name: 'PostToolUse'
+  tool_name: string
+  tool_input: Record<string, unknown>
+  tool_response?: unknown
+}
+
+export interface TaskCreatedPayload extends HookEventBase {
+  hook_event_name: 'TaskCreated'
+  description?: string
+}
+
+export interface TaskCompletedPayload extends HookEventBase {
+  hook_event_name: 'TaskCompleted'
+  description?: string
+}
+
+export interface StopPayload extends HookEventBase {
+  hook_event_name: 'Stop'
+}
+
+export interface StopFailurePayload extends HookEventBase {
+  hook_event_name: 'StopFailure'
+  error?: string
+}
+
+export type HookEvent =
+  | SessionStartPayload
+  | PermissionRequestPayload
+  | PostToolUsePayload
+  | TaskCreatedPayload
+  | TaskCompletedPayload
+  | StopPayload
+  | StopFailurePayload
+
+export interface HookResponse {
+  hookSpecificOutput?: {
+    hookEventName: HookEventName
+    permissionDecision?: 'approve' | 'deny'
+    permissionDecisionReason?: string
+  }
+}

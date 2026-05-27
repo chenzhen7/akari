@@ -18,6 +18,7 @@ import { WorktreeManager } from './worktree-manager.js'
 import { TerminalMultiplexer } from './terminal-mux.js'
 import { createAgentAdapter, SHELL_STARTUP_DELAY_MS } from './agent-adapters/index.js'
 import { CollaborationManager } from './collaboration-manager.js'
+import { approvalRegistry } from './hook-dispatcher.js'
 
 export interface CreateSessionParams {
   name: string
@@ -59,7 +60,7 @@ interface DbRow {
 const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
   initializing: ['running', 'failed'],
   running: ['waiting', 'paused', 'completed', 'failed', 'archived'],
-  waiting: ['running', 'paused', 'archived'],
+  waiting: ['running', 'paused', 'failed', 'archived'],
   approved: ['running', 'archived'],
   paused: ['running', 'failed', 'archived'],
   review: ['completed', 'running', 'archived'],
@@ -245,18 +246,40 @@ export class SessionManager {
     const msg =
       decision === 'approved'
         ? `> ✅ Approved${comment ? ': ' + comment : ''}, resuming...\r\n`
-        : `> ❌ Rejected${comment ? ': ' + comment : ''}, paused\r\n`
+        : `> ❌ Rejected${comment ? ': ' + comment : ''}\r\n`
 
     this.db.prepare('UPDATE sessions SET pending_approval = NULL WHERE id = ?').run(sessionId)
     this.pushTerminalDisplay(sessionId, msg)
 
+    const resolvedByHook = approvalRegistry.resolveApproval(sessionId, decision)
+
     if (decision === 'approved') {
       this.updateStatus(sessionId, 'running')
-      this.terminalMux.sendToTerminal(sessionId, 'y\n')
+      if (!resolvedByHook) {
+        this.terminalMux.sendToTerminal(sessionId, 'y\n')
+      }
     } else {
       this.updateStatus(sessionId, 'paused')
-      this.terminalMux.sendToTerminal(sessionId, 'n\n')
+      if (!resolvedByHook) {
+        this.terminalMux.sendToTerminal(sessionId, 'n\n')
+      }
     }
+  }
+
+  setWaitingForApproval(sessionId: string, request: ApprovalRequest): void {
+    const timestamp = new Date().toISOString()
+    this.db
+      .prepare('UPDATE sessions SET pending_approval = ? WHERE id = ?')
+      .run(JSON.stringify({ ...request, timestamp }), sessionId)
+    this.updateStatus(sessionId, 'waiting')
+    this.broadcast({
+      event: 'approval:required',
+      payload: { sessionId, request: { ...request, timestamp: new Date(timestamp) } },
+    })
+  }
+
+  pushTerminalMessage(sessionId: string, data: string): void {
+    this.pushTerminalDisplay(sessionId, data)
   }
 
   archiveSession(sessionId: string): void {
@@ -439,27 +462,6 @@ export class SessionManager {
     )
 
     this.terminalMux.on(
-      'approval:required',
-      ({ sessionId, request }: { sessionId: string; request: ApprovalRequest }) => {
-        const timestamp = new Date().toISOString()
-        this.db
-          .prepare('UPDATE sessions SET status = ?, pending_approval = ? WHERE id = ?')
-          .run('waiting', JSON.stringify({ ...request, timestamp }), sessionId)
-        const session = this.getSession(sessionId)
-        if (session) {
-          this.broadcast({
-            event: 'session:status',
-            payload: { id: sessionId, status: 'waiting', progress: session.progress },
-          })
-        }
-        this.broadcast({
-          event: 'approval:required',
-          payload: { sessionId, request: { ...request, timestamp: new Date(timestamp) } },
-        })
-      },
-    )
-
-    this.terminalMux.on(
       'terminal:exit',
       ({ sessionId, exitCode }: { sessionId: string; exitCode: number }) => {
         const session = this.getSession(sessionId)
@@ -470,50 +472,6 @@ export class SessionManager {
         } catch {
           // ignore
         }
-      },
-    )
-
-    this.terminalMux.on(
-      'spawn_agent',
-      ({ sessionId, task, agentType, branch }: { sessionId: string; task: string; agentType: string; branch?: string }) => {
-        this.collaborationManager.handleSpawnAgent(sessionId, {
-          task,
-          agentType: agentType as AgentType,
-          branch,
-        }).catch(err => {
-          console.error(`[CollaborationManager] handleSpawnAgent error:`, err)
-        })
-      },
-    )
-
-    this.terminalMux.on(
-      'delegate',
-      ({ sessionId, toSessionId, message }: { sessionId: string; toSessionId: string; message: string }) => {
-        this.collaborationManager.handleDelegate(sessionId, toSessionId, message)
-      },
-    )
-
-    this.terminalMux.on(
-      'task_done',
-      ({ sessionId, summary }: { sessionId: string; summary: string }) => {
-        this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(summary, sessionId)
-        try {
-          this.updateStatus(sessionId, 'completed')
-        } catch {
-          // ignore if already completed
-        }
-      },
-    )
-
-    this.terminalMux.on(
-      'await_session',
-      ({ sessionId, targetSessionId, timeoutSeconds }: { sessionId: string; targetSessionId: string; timeoutSeconds: number }) => {
-        try {
-          this.updateStatus(sessionId, 'waiting')
-        } catch {
-          // session may not be in a transitionable state
-        }
-        this.collaborationManager.registerAwait(sessionId, targetSessionId, timeoutSeconds)
       },
     )
 

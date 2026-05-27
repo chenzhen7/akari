@@ -175,6 +175,14 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
           transition: 'box-shadow 0.2s ease',
         }}
       >
+        {/* Waiting approval pulse glow */}
+        {session.status === 'waiting' && (
+          <div
+            className="pointer-events-none absolute inset-0 rounded-[22px] animate-pulse"
+            style={{ boxShadow: '0 0 0 2px #f59e0b55, 0 0 28px #f59e0b28' }}
+          />
+        )}
+
         {/* Luminous top radial glow */}
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-28"

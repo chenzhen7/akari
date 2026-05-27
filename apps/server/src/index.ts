@@ -3,8 +3,9 @@ import fastifyCors from '@fastify/cors'
 import fastifyWebsocket from '@fastify/websocket'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
-import type { AgentType, ClientMessage, PipelineEdge, ServerMessage, SessionStatus } from '@akari/shared-types'
+import type { AgentType, ClientMessage, HookEvent, PipelineEdge, ServerMessage, SessionStatus } from '@akari/shared-types'
 import { createSessionManager, validateTransition } from './session-manager.js'
+import { dispatchHookEvent } from './hook-dispatcher.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -121,6 +122,23 @@ fastify.post<{ Params: { id: string } }>(
     if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
     sessionManager.archiveSession(id)
     return { ok: true }
+  },
+)
+
+fastify.post<{ Params: { id: string }; Body: HookEvent }>(
+  '/sessions/:id/hooks',
+  async (request, reply) => {
+    const { id } = request.params
+    const event = request.body
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    try {
+      const response = await dispatchHookEvent(id, event, sessionManager)
+      return response
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fastify.log.error(`[hooks] dispatchHookEvent error for ${id}: ${msg}`)
+      return reply.status(500).send({ error: msg })
+    }
   },
 )
 

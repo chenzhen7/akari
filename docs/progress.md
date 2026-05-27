@@ -11,9 +11,9 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ---
 
-## 当前状态（2026-05-26）
+## 当前状态（2026-05-27）
 
-**整体进度**：**阶段七（多 Agent 协作）基础实现完成**。后端 CollaborationManager、REST API、TerminalMux 协议标记（SPAWN_AGENT/DELEGATE/TASK_DONE/AWAIT_SESSION）全部就绪；前端画布 Pipeline 边渲染、拖线创建、CollaborationPanel、TopNav 协作按钮均已完成。
+**整体进度**：**阶段八（HTTP Hooks 机制改造）核心实现完成**。魔法字符串机制已完全废弃，HTTP Hook 单轨驱动上线：`HookDispatcher` + `ApprovalRegistry` 就绪，`PermissionRequest` 同步阻塞审批闭环可用，ClaudeAdapter 自动写入 `.claude/settings.json`，`detectMarkers()` 已删除。PreToolUse/MCP 部分标记暂不做，留待后续阶段。
 
 ### ✅ 已完成
 
@@ -23,7 +23,9 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | pnpm Monorepo | `pnpm-workspace.yaml` | apps/* + packages/* |
 | Fastify 后端骨架 | `apps/server/src/index.ts` | port 3001，REST + WebSocket，使用 SessionManager |
 | WorktreeManager | `apps/server/src/worktree-manager.ts` | git worktree 创建/删除/diff/watch，分支自动回退 |
-| TerminalMultiplexer | `apps/server/src/terminal-mux.ts` | node-pty 真实 PTY（PowerShell 7）；环形 Buffer 5000 行；Checkpoint/Approval 检测；支持 resize 同步 |
+| TerminalMultiplexer | `apps/server/src/terminal-mux.ts` | node-pty 真实 PTY（PowerShell 7）；环形 Buffer 5000 行；支持 resize 同步；魔法字符串已删除 |
+| HookDispatcher | `apps/server/src/hook-dispatcher.ts` | ApprovalRegistry（Promise 挂起）+ dispatchHookEvent；PermissionRequest 同步阻塞审批 |
+| HTTP Hook 类型 | `packages/shared-types/src/index.ts` | HookEvent / HookResponse / HookEventName 及全量 Payload 类型 |
 | SessionManager | `apps/server/src/session-manager.ts` | SQLite 持久化，状态机，协调 WorktreeManager + TerminalMux |
 | SQLite 数据库 | `apps/server/data/akari.db` | better-sqlite3，服务重启后会话可恢复 |
 | WebSocket Hook | `apps/web/src/hooks/useWebSocket.ts` | 指数退避自动重连，最多 10 次 |
@@ -78,7 +80,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 阶段五 | Claude / Aider / Shell 适配器 | ✅ Claude + Orchestrator 完成 | [phase-5](./开发计划/phase-5-Agent适配器.md) |
 | 阶段六 | Git 可视化 | 🔲 待开始 | [phase-6](./开发计划/phase-6-git可视化.md) |
 | 阶段七 | 多 Agent 协作 | ✅ 基础实现完成（M7-α + M7-β + M7-γ 核心） | [phase-7](./开发计划/phase-7-多agent协作.md) |
-| 阶段八 | 基于 Hooks 的 Agent 状态流程机制改造 | 🔲 待开始 | [phase-8](./开发计划/phase-8-基于Hooks的Agent状态流程机制改造计划.md) |
+| 阶段八 | 基于 Hooks 的 Agent 状态流程机制改造 | ✅ 核心完成（8.1~8.4，PreToolUse/MCP 暂不做） | [phase-8](./开发计划/phase-8-基于Hooks的Agent状态流程机制改造计划.md) |
 
 ## 里程碑
 
