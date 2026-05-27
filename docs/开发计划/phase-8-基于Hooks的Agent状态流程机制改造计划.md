@@ -220,6 +220,39 @@ MCP 服务器在 Worktree 初始化时，由 `ClaudeAdapter` 在 `.claude/settin
   - 升级审批弹窗，结构化展示 `PreToolUse` 的工具名称（如"调用 `Bash`"）、具体参数、高危标签。
 - **【FE】Canvas 节点脉冲**：
   - `SessionNode` 在 `waiting` 状态（挂起等待审批）时显示橙色脉冲光晕；`running` 状态恢复正常。
+- **【FE】SessionNode Activity Ticker（静态单行）**：
+  - 位于 `SessionNode` 卡片内 miniTerminal 下方，单行静态展示最新 Hook 事件，超出宽度截断用 `…`。
+  - 与 Checkpoint 机制共存：Checkpoint 仍通过终端输出展示，Ticker 专门展示结构化 Hook 事件。
+
+  **ASCII 原型：**
+  ```
+  ┌──────────────────────────────────────────┐
+  │  [🤖]  refactor-auth-module      🟢运行中 │
+  │  🌿 agent/refactor-auth-7f3a9b2c         │
+  │  ─────────────────────────────────────── │
+  │  [运行中] [Orchestrator] [claude]         │
+  │  ═══════════════════════════════════════ │
+  │  ● ● ●  7f3a9b2c                         │
+  │  > npm run test                          │
+  │  > Test passed: 14/14                    │
+  │  > git commit -m "add auth hooks"        │
+  │  > [CHECKPOINT] 完成重构                 │
+  │  ─────────────────────────────────────── │
+  │  🟣 spawn_agent(task=编写测试) → akari-x1 │  ← Activity Ticker（单行，贴底）
+  └──────────────────────────────────────────┘
+  ```
+
+  **事件类型与图标映射：**
+
+  | 事件 | 图标 | 示例文本 |
+  |------|------|----------|
+  | `PermissionRequest` | ⏳ | `⏳ 审批 Bash: rm -rf dist` |
+  | `PostToolUse` | ✅ | `✅ Bash: git push 完成` |
+  | `PreToolUse` (MCP) | 🟣 | `🟣 spawn_agent → akari-x1` |
+  | `TaskCreated` | 📝 | `📝 任务: 实现审批Registry` |
+  | `TaskCompleted` | ✓ | `✓ 任务完成: 实现审批Registry` |
+  | `StopFailure` | 🔴 | `🔴 API rate limit` |
+  | `SessionStart` | 🟢 | `🟢 会话恢复运行` |
 
 ---
 
