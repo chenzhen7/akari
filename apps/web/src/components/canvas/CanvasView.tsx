@@ -95,6 +95,19 @@ export function CanvasView() {
       const { source, target } = connection
       if (!source || !target) return
 
+      // 防止自连
+      if (source === target) {
+        toast.error('不能将会话连接到自身')
+        return
+      }
+
+      // 防止重复连线（同 source→target 已存在）
+      const duplicate = edges.some((e: Edge) => e.source === source && e.target === target)
+      if (duplicate) {
+        toast.error('该方向的连线已存在')
+        return
+      }
+
       const sourceSession = sessions.find(s => s.id === source)
       const targetSession = sessions.find(s => s.id === target)
       if (!sourceSession || !targetSession) return
@@ -135,7 +148,7 @@ export function CanvasView() {
       }
       setEdges(eds => addEdge(connection, eds))
     },
-    [sessions, groups, fetchGroups, setEdges],
+    [edges, sessions, groups, fetchGroups, setEdges],
   )
 
   // 处理连线删除：用户按下 Delete 或 Backspace 键删除选中的连线
