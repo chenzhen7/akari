@@ -78,6 +78,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 阶段五 | Claude / Aider / Shell 适配器 | ✅ Claude + Orchestrator 完成 | [phase-5](./开发计划/phase-5-Agent适配器.md) |
 | 阶段六 | Git 可视化 | 🔲 待开始 | [phase-6](./开发计划/phase-6-git可视化.md) |
 | 阶段七 | 多 Agent 协作 | ✅ 基础实现完成（M7-α + M7-β + M7-γ 核心） | [phase-7](./开发计划/phase-7-多agent协作.md) |
+| 阶段八 | 基于 Hooks 的 Agent 状态流程机制改造 | 🔲 待开始 | [phase-8](./开发计划/phase-8-基于Hooks的Agent状态流程机制改造计划.md) |
 
 ## 里程碑
 
