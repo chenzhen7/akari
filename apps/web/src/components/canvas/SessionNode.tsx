@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Bell, Crown } from 'lucide-react'
+import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Bell, Crown, Plus } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
@@ -69,6 +69,15 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
   const [hovered, setHovered] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hoverLeaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const onEnter = () => {
+    if (hoverLeaveRef.current) { clearTimeout(hoverLeaveRef.current); hoverLeaveRef.current = null }
+    setHovered(true)
+  }
+  const onLeave = () => {
+    hoverLeaveRef.current = setTimeout(() => setHovered(false), 60)
+  }
 
   const [miniTerminal, setMiniTerminal] = useState<string[]>(() => getDisplayLines(session.id, 5))
 
@@ -103,31 +112,50 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
 
   return (
     <>
-      {/* ReactFlow connection handles — appear on hover */}
+      {/* LEFT: 物理 Handle，尺寸设为极小的 1px * 1px，确保 ReactFlow 连线端点绝对、精准对齐在卡片左边缘（x=0） */}
       <Handle
         type="target"
         position={Position.Left}
-        className="!h-3 !w-3 !rounded-full !border-2"
+        className="!h-1 !w-1 !bg-transparent !border-none !cursor-crosshair !z-20 !overflow-visible"
         style={{
-          background: color,
-          borderColor: '#111',
-          opacity: hovered ? 1 : 0,
-          transition: 'opacity 0.2s',
+          left: 0,
         }}
-      />
+        onMouseEnter={onEnter}
+        onMouseLeave={onLeave}
+      >
+        {/* 视觉圆球：通过绝对定位，在物理 Handle（x=0）的基础上往左偏移 36px (即 24px 悬空 + 12px 半径)，
+            由于事件冒泡，在此圆球上 Hover/点击/拖拉会完美传导至 Handle，触发完美的悬浮显示与连线拖拽 */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -left-[36px] flex h-6 w-6 items-center justify-center rounded-full bg-[#1c1c1c] border border-white/25 transition-opacity duration-150 shadow-xl"
+          style={{ opacity: hovered ? 1 : 0 }}
+        >
+          <Plus className="h-3 w-3 text-white/60 pointer-events-none" />
+        </div>
+      </Handle>
+
+      {/* RIGHT: 物理 Handle，尺寸极小，确保连线端点绝对、精准对齐在卡片右边缘 */}
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !rounded-full !border-2"
+        className="!h-1 !w-1 !bg-transparent !border-none !cursor-crosshair !z-20 !overflow-visible"
         style={{
-          background: color,
-          borderColor: '#111',
-          opacity: hovered ? 1 : 0,
-          transition: 'opacity 0.2s',
+          right: 0,
         }}
-      />
+        onMouseEnter={onEnter}
+        onMouseLeave={onLeave}
+      >
+        {/* 视觉圆球：在物理 Handle（x=268）的基础上往右偏移 36px */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -right-[36px] flex h-6 w-6 items-center justify-center rounded-full bg-[#1c1c1c] border border-white/25 transition-opacity duration-150 shadow-xl"
+          style={{ opacity: hovered ? 1 : 0 }}
+        >
+          <Plus className="h-3 w-3 text-white/60 pointer-events-none" />
+        </div>
+      </Handle>
       <div
         className="relative w-[268px] cursor-pointer select-none overflow-hidden rounded-[22px]"
+        onMouseEnter={onEnter}
+        onMouseLeave={onLeave}
         style={{
           background: 'radial-gradient(ellipse at 50% 0%, #242424 0%, #111111 75%)',
           boxShadow: hovered
@@ -146,8 +174,6 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
               ].join(', '),
           transition: 'box-shadow 0.2s ease',
         }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
       >
         {/* Luminous top radial glow */}
         <div

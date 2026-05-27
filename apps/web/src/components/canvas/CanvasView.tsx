@@ -78,7 +78,12 @@ export function CanvasView() {
         }
       }
     }
-    setEdges(allEdges)
+    // merge：保留服务端尚未确认的本地临时边（相同 source-target 的只保留服务端版本）
+    const serverPairs = new Set(allEdges.map(e => `${e.source}__${e.target}`))
+    setEdges((prev: Edge[]) => {
+      const pendingEdges = prev.filter((e: Edge) => !serverPairs.has(`${e.source}__${e.target}`))
+      return [...allEdges, ...pendingEdges]
+    })
   }, [groups, sessions, setEdges])
 
   // 用户拖线连接两个节点 → 创建 pipeline edge
