@@ -243,3 +243,4 @@ interface AgentAdapter {
 - [docs/设计文档.md](docs/设计文档.md) — 完整产品架构、数据模型、视图设计、代码示例
 - [docs/开发计划/phase-N-*.md](docs/开发计划/) — 各阶段详细任务拆解（已合并索引到 progress.md）
 - [.claude/rules/error-handling.md](.claude/rules/error-handling.md) — **异常处理规范**：禁止吞异常、前端用 toast 暴露错误、状态机用守卫代替 try/catch
+- [docs/claude code 的hook参考.md](docs/claude%20code%20%E7%9A%84hook%E5%8F%82%E8%80%83.md) — Claude Code 的 hook 参考  
