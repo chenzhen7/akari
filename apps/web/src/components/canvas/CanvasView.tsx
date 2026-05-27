@@ -56,7 +56,7 @@ export function CanvasView() {
             ? `${pe.trigger}: ${pe.checkpointPattern}`
             : pe.trigger,
           animated: true,
-          style: { stroke: '#6366f1', strokeWidth: 2 },
+          style: { stroke: '#6366f1', strokeWidth: 3.5 },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1' },
           data: { groupId: group.id, injectContext: pe.injectContext },
         })
@@ -71,7 +71,7 @@ export function CanvasView() {
             id: edgeId,
             source: s.parentSessionId,
             target: s.id,
-            style: { stroke: '#94a3b8', strokeWidth: 1.5, strokeDasharray: '5,3' },
+            style: { stroke: '#94a3b8', strokeWidth: 2.5, strokeDasharray: '5,3' },
             markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' },
             label: 'spawned',
           })
@@ -116,19 +116,47 @@ export function CanvasView() {
 
       // 添加流水线边
       try {
-        await fetch(`${API_BASE}/collaboration/groups/${groupId}/edges`, {
+        const res = await fetch(`${API_BASE}/collaboration/groups/${groupId}/edges`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fromSessionId: source, toSessionId: target, trigger: 'on-complete', injectContext: true }),
         })
+        if (!res.ok) {
+          const errData = await res.json()
+          throw new Error(errData.error || `HTTP 错误 ${res.status}`)
+        }
         fetchGroups()
         toast.success('Pipeline 连接已创建')
-      } catch {
-        toast.error('创建 Pipeline 边失败')
+      } catch (err: any) {
+        toast.error(`创建 Pipeline 边失败: ${err instanceof Error ? err.message : err}`)
       }
       setEdges(eds => addEdge(connection, eds))
     },
     [sessions, groups, fetchGroups, setEdges],
+  )
+
+  // 处理连线删除：用户按下 Delete 或 Backspace 键删除选中的连线
+  const onEdgesDelete = useCallback(
+    async (edgesToDelete: Edge[]) => {
+      for (const edge of edgesToDelete) {
+        if (edge.id.startsWith('spawn-')) continue
+
+        const groupId = edge.data?.groupId
+        if (!groupId) continue
+
+        try {
+          const res = await fetch(`${API_BASE}/collaboration/groups/${groupId}/edges/${edge.id}`, {
+            method: 'DELETE',
+          })
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          toast.success('Pipeline 连接已删除')
+        } catch (err: any) {
+          toast.error(`删除 Pipeline 边失败: ${err instanceof Error ? err.message : err}`)
+        }
+      }
+      fetchGroups()
+    },
+    [fetchGroups]
   )
 
   // 同步节点：精细化比较，只在新增/删除/位置/status/progress 变化时更新
@@ -220,6 +248,7 @@ export function CanvasView() {
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onEdgesDelete={onEdgesDelete}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
         onNodeDragStop={onNodeDragStop}
@@ -231,6 +260,7 @@ export function CanvasView() {
         fitViewOptions={{ padding: 0.2 }}
         onMoveEnd={onMoveEnd}
         connectOnClick={false}
+        deleteKeyCode={['Delete', 'Backspace']}
       >
         <Background gap={16} size={1} />
         <Controls />

@@ -120,6 +120,20 @@ export class CollaborationManager {
         // Column already exists
       }
     }
+
+    // 迁移 pipeline_edges 表以支持 trigger_type, inject_context, checkpoint_pattern 列
+    const migrateEdgeColumns: Array<[string, string]> = [
+      ['trigger_type', "TEXT NOT NULL DEFAULT 'on-complete'"],
+      ['inject_context', "INTEGER NOT NULL DEFAULT 1"],
+      ['checkpoint_pattern', "TEXT"],
+    ]
+    for (const [col, def] of migrateEdgeColumns) {
+      try {
+        this.db.exec(`ALTER TABLE pipeline_edges ADD COLUMN ${col} ${def}`)
+      } catch {
+        // Column already exists
+      }
+    }
   }
 
   // ─── Group CRUD ─────────────────────────────────────────────────────────────
