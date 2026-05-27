@@ -1,4 +1,4 @@
-import { type FC } from 'react'
+import { type FC, useState } from 'react'
 import { getBezierPath, type EdgeProps } from '@xyflow/react'
 
 const FlowEdge: FC<EdgeProps> = ({
@@ -11,9 +11,11 @@ const FlowEdge: FC<EdgeProps> = ({
   targetPosition,
   selected,
 }) => {
+  const [hovered, setHovered] = useState(false)
   const [edgePath] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
 
-  const color = selected ? '#a78bfa' : '#818cf8'
+  const active = selected || hovered
+  const color = selected ? '#ede9fe' : hovered ? '#c4b5fd' : '#818cf8'
   const gradId = `shimmer-${id}`
   const arrowId = `arrow-${id}`
 
@@ -48,8 +50,8 @@ const FlowEdge: FC<EdgeProps> = ({
         d={edgePath}
         fill="none"
         stroke={color}
-        strokeWidth={selected ? 2 : 1.5}
-        strokeOpacity={selected ? 0.65 : 0.3}
+        strokeWidth={active ? 2 : 1.5}
+        strokeOpacity={selected ? 0.9 : hovered ? 0.65 : 0.3}
         markerEnd={`url(#${arrowId})`}
       />
 
@@ -58,8 +60,18 @@ const FlowEdge: FC<EdgeProps> = ({
         d={edgePath}
         fill="none"
         stroke={`url(#${gradId})`}
-        strokeWidth={selected ? 5 : 3}
+        strokeWidth={active ? 6 : 3}
         strokeLinecap="round"
+      />
+
+      {/* 热区：置于顶层，覆盖所有可视路径，确保整条线都能触发 hover/点击 */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={20}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       />
     </>
   )
