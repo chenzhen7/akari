@@ -76,8 +76,8 @@
 | 事件名称 | 来源 | 发生时机 | 状态映射 & 行为 |
 | :--- | :--- | :--- | :--- |
 | `SessionStart` | Claude Code Native | 会话进程启动或恢复 | `initializing` → `running` |
-| `PreToolUse` | Akari MCP | Agent 调用 `akari_spawn_agent` MCP 工具 | 服务端创建子会话（`initializing` → `running`），HTTP 响应 `allow` |
-| `PreToolUse` | Akari MCP | Agent 调用 `akari_delegate` MCP 工具 | 服务端向目标 Session PTY 转发消息，HTTP 响应 `allow` |
+| `PreToolUse` ⏸️ | Akari MCP | Agent 调用 `akari_spawn_agent` MCP 工具 | 服务端创建子会话（`initializing` → `running`），HTTP 响应 `allow` |
+| `PreToolUse` ⏸️ | Akari MCP | Agent 调用 `akari_delegate` MCP 工具 | 服务端向目标 Session PTY 转发消息，HTTP 响应 `allow` |
 | `PermissionRequest` | Claude Code Native | Claude 显式请求权限 | `running` → `waiting`，触发审批工作流 |
 | `PostToolUse` | Claude Code Native | 工具调用成功完成后 | 仅记录 Activity 面板（可选），不改变状态 |
 | `TaskCreated` | Claude Code Native | Claude 内部 TodoWrite 子任务创建 | 仅记录日志 / Activity 面板，**不驱动状态机** |
@@ -85,7 +85,7 @@
 | `Stop` | Claude Code Native | 当前轮次回复结束（保持会话活跃） | 状态保持 `running`，等待下一轮交互 |
 | `StopFailure` | Claude Code Native | API 报错、token 超限等异常终止 | `running` → `failed`，广播 Toast 错误 |
 
-### 3.2 报文协议示例（以 `PreToolUse` 为例）
+### 3.2 报文协议示例（以 `PreToolUse` 为例）⏸️ 暂不做
 
 **Agent → Akari HTTP POST 请求体（Claude Code 原生格式）：**
 ```json
@@ -152,7 +152,7 @@ export class ApprovalRegistry {
 }
 ```
 
-### 4.2 MCP 工具替代魔法字符串
+### 4.2 MCP 工具替代魔法字符串 ⏸️ 暂不做
 
 原来的 `[SPAWN_AGENT]`、`[DELEGATE]`、`[AWAIT_SESSION]` 全部废弃。Agent 改用 Akari 提供的 **MCP 工具**完成相同操作：
 
@@ -178,7 +178,7 @@ MCP 服务器在 Worktree 初始化时，由 `ClaudeAdapter` 在 `.claude/settin
 - **新建** `apps/server/src/hook-dispatcher.ts`：
   - 实现 `dispatch(sessionId, hookEvent)` 方法，根据 `hook_event_name` 路由：
     - `SessionStart` → `updateStatus('running')`
-    - `PreToolUse`（MCP 工具 `akari_spawn_agent` / `akari_delegate` / `akari_await_session`） → 执行对应业务逻辑，立即返回 `allow`
+    - `PreToolUse`（MCP 工具 `akari_spawn_agent` / `akari_delegate` / `akari_await_session`） → 执行对应业务逻辑，立即返回 `allow` ⏸️ **暂不做**
     - `PermissionRequest` → `ApprovalRegistry.waitForApproval()`，挂起 HTTP 响应
     - `PostToolUse` / `TaskCreated` / `TaskCompleted` / `Stop` → 记录 Activity，不驱动状态机
     - `StopFailure` → `updateStatus('failed')`
@@ -191,12 +191,12 @@ MCP 服务器在 Worktree 初始化时，由 `ClaudeAdapter` 在 `.claude/settin
 - **保留** PTY 核心职责：`terminal:data`、`terminal:exit`、`terminal:ready`、`sendToTerminal`、`resizeTerminal`。
 - **更新** `session-manager.ts` 中原先监听上述 emit 事件的 `wireEvents()` 方法，移除所有魔法字符串相关的事件绑定。
 
-### 阶段 8.4：ClaudeAdapter 注入 Hook 配置与 MCP 服务器 (优先级：高)
+### 阶段 8.4：ClaudeAdapter 注入 Hook 配置与 MCP 服务器 (优先级：高) ⏸️ **暂不做**（PreToolUse/MCP 部分）
 - **【BE】Worktree 初始化时自动写入** `.claude/settings.json`：
   ```json
   {
     "hooks": {
-      "PreToolUse":       [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }],
+      "PreToolUse":       [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }],  // ⏸️ 暂不做
       "PermissionRequest":[{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }],
       "SessionStart":     [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }],
       "Stop":             [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }],
@@ -210,6 +210,8 @@ MCP 服务器在 Worktree 初始化时，由 `ClaudeAdapter` 在 `.claude/settin
     }
   }
   ```
+> ⏸️ **暂不做**：以下 MCP Server 及 PreToolUse 路由全部推迟实现。
+
 - **【BE】新建 Akari MCP Server** `apps/server/src/mcp-server.ts`，暴露工具：
   - `akari_spawn_agent(task, agentType, branch?)` → 转发至 `SessionManager.createSession()`
   - `akari_delegate(sessionId, message)` → 转发至 `TerminalMultiplexer.sendToTerminal()`
@@ -261,9 +263,9 @@ MCP 服务器在 Worktree 初始化时，由 `ClaudeAdapter` 在 `.claude/settin
 | 触发 Hook 事件 | 条件 / 工具名 | 目标状态 | 触发后续动作 |
 | :--- | :--- | :--- | :--- |
 | `SessionStart` | — | `running` | 广播连接灯变绿 |
-| `PreToolUse` | MCP `akari_spawn_agent` | 不变 | 创建子会话，立即返回 `allow` + sessionId |
-| `PreToolUse` | MCP `akari_delegate` | 不变 | PTY 转发消息，立即返回 `allow` |
-| `PreToolUse` | MCP `akari_await_session` | 不变 | 长轮询目标状态，完成后返回 `allow` |
+| `PreToolUse` ⏸️ | MCP `akari_spawn_agent` | 不变 | 创建子会话，立即返回 `allow` + sessionId |
+| `PreToolUse` ⏸️ | MCP `akari_delegate` | 不变 | PTY 转发消息，立即返回 `allow` |
+| `PreToolUse` ⏸️ | MCP `akari_await_session` | 不变 | 长轮询目标状态，完成后返回 `allow` |
 | `PermissionRequest` | 显式权限请求 | `waiting` | HTTP 挂起，前端弹审批弹窗 |
 | `PostToolUse` | — | 不变 | 记录 Activity 面板（可选） |
 | `TaskCreated` | Claude 内部 Todo 条目 | 不变 | 记录 Activity 面板，**不驱动状态机** |
