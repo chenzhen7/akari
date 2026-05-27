@@ -174,6 +174,90 @@ Hooks 在 JSON 设置文件中定义。配置有三个嵌套级别：
 | [Skill](/zh-CN/skills) 或[代理](/zh-CN/sub-agents) frontmatter | 组件活跃时  | 是，在组件文件中定义   |
 
 有关设置文件解析的详细信息，请参阅[设置](/zh-CN/settings)。企业管理员可以使用 `allowManagedHooksOnly` 来阻止用户、项目和插件 hooks。在托管设置 `enabledPlugins` 中强制启用的插件中的 Hooks 是豁免的，因此管理员可以通过组织市场分发经过审查的 hooks。请参阅[Hook 配置](/zh-CN/settings#hook-configuration)。
+### Hook 配置
+
+这些设置控制允许运行哪些 hooks 以及 HTTP hooks 可以访问什么。`allowManagedHooksOnly` 设置只能在 [managed 设置](#settings-files)中配置。URL 和环境变量允许列表可以在任何设置级别设置并跨源合并。
+
+**当 `allowManagedHooksOnly` 为 `true` 时的行为：**
+
+* 加载 Managed hooks 和 SDK hooks
+* 从在 managed 设置 `enabledPlugins` 中强制启用的插件加载 Hooks。这让管理员通过组织市场分发经过审查的 hooks，同时阻止其他所有内容。信任由完整的 `plugin@marketplace` ID 授予，因此来自不同市场的同名插件保持被阻止
+* 用户 hooks、项目 hooks 和所有其他插件 hooks 被阻止
+
+**限制 HTTP hook URL：**
+
+限制 HTTP hooks 可以针对的 URL。支持 `*` 作为匹配的通配符。定义数组后，针对不匹配 URL 的 HTTP hooks 被静默阻止。主机名匹配不区分大小写，忽略尾部 FQDN 点，匹配 DNS 语义。
+
+```json theme={null}
+{
+  "allowedHttpHookUrls": ["https://hooks.example.com/*", "http://localhost:*"]
+}
+```
+
+**限制 HTTP hook 环境变量：**
+
+限制 HTTP hooks 可以插入到标头值中的环境变量名称。每个 hook 的有效 `allowedEnvVars` 是其自己列表与此设置的交集。
+
+```json theme={null}
+{
+  "httpHookAllowedEnvVars": ["MY_TOKEN", "HOOK_SECRET"]
+}
+```
+
+### 使用策略助手计算 managed 设置
+
+`policyHelper` 设置指向一个可执行文件，在启动时动态计算 managed 设置，因此管理员可以从设备状态、身份或远程服务而不是静态文件派生策略。从 MDM 或系统 `managed-settings.json` 文件配置它。Claude Code 在 `policyHelper` 出现在任何其他作用域时忽略它，包括用户设置、项目设置、HKCU 注册表配置单元和[服务器管理的设置](/zh-CN/server-managed-settings)。
+
+该设置接受这些键：
+
+| 键                   | 类型     | 描述                                     |
+| ------------------- | ------ | -------------------------------------- |
+| `path`              | string | 助手可执行文件的绝对路径                           |
+| `timeoutMs`         | number | 在将运行视为失败之前等待助手多长时间                     |
+| `refreshIntervalMs` | number | 在后台重新运行助手的频率。设置为 `0` 以禁用刷新，或至少 `60000` |
+
+助手将 JSON 信封写入 stdout。将设置放在 `managedSettings` 键下而不是顶级，因为裸设置对象解析时 `managedSettings` 未定义并应用任何内容：
+
+```json theme={null}
+{
+  "managedSettings": {
+    "permissions": { "deny": ["Read(//etc/secrets/**)"] }
+  },
+  "claudeMd": "# Organization context\n...",
+  "appendSystemPrompt": "Always cite the internal style guide."
+}
+```
+
+当助手发出 `managedSettings` 时，该对象替换该运行的基于文件的 managed 设置。当助手在启动时以非零状态退出时，Claude Code 打印错误并拒绝启动，因此需要中断恢复的助手应从其自己的缓存提供并以 `0` 退出。
+
+### 设置优先级
+
+设置按优先级顺序应用。从最高到最低：
+
+1. **Managed 设置**（[服务器管理](/zh-CN/server-managed-settings)、[MDM/OS 级别策略](#configuration-scopes) 或 [managed 设置](/zh-CN/settings#settings-files)）
+   * 由 IT 通过服务器交付、MDM 配置文件、注册表策略或 managed 设置文件部署的策略
+   * 无法被任何其他级别覆盖，包括命令行参数
+   * 在 managed 层内，优先级为：server-managed > MDM/OS 级别策略 > 基于文件（`managed-settings.d/*.json` + `managed-settings.json`）> HKCU 注册表（仅 Windows）。仅使用一个 managed 源；源不合并跨层。在基于文件的层内，放入文件和基础文件被合并在一起。
+
+2. **命令行参数**
+   * 特定会话的临时覆盖。通过 `--settings <file-or-json>` 传递的 JSON 使用与其他层相同的规则与基于文件的设置合并：此处设置的键覆盖本地、项目或用户设置中的相同键，省略键会保留较低层的值
+
+3. **本地项目设置**（`.claude/settings.local.json`）
+   * 个人项目特定设置
+
+4. **共享项目设置**（`.claude/settings.json`）
+   * 源代码管理中的团队共享项目设置
+
+5. **用户设置**（`~/.claude/settings.json`）
+   * 个人全局设置
+
+此层次结构确保组织策略始终被强制执行，同时仍允许团队和个人自定义其体验。无论您从 CLI、[VS Code 扩展](/zh-CN/vs-code) 还是 [JetBrains IDE](/zh-CN/jetbrains) 运行 Claude Code，相同的优先级都适用。
+
+例如，如果您的用户设置允许 `Bash(npm run *)`，但项目的共享设置拒绝它，则项目设置优先，命令被阻止。
+
+<Note>
+  **数组设置跨作用域合并。** 当相同的数组值设置（例如 `sandbox.filesystem.allowWrite` 或 `permissions.allow`）出现在多个作用域中时，数组被**连接和去重**，而不是替换。这意味着较低优先级的作用域可以添加条目而不覆盖由较高优先级作用域设置的条目，反之亦然。例如，如果 managed 设置将 `allowWrite` 设置为 `["/opt/company-tools"]`，用户添加 `["~/.kube"]`，则最终配置中包含两个路径。
+</Note>
 
 ### 匹配器模式
 
