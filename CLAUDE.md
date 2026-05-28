@@ -170,6 +170,10 @@ pnpm --filter @akari/server typecheck
 **确认弹窗**
 - 所有需要二次确认的破坏性操作，统一使用 shadcn/ui `<Dialog>` 组件，**禁止使用内联 `confirmXxx` 状态 
 
+**错误处理原则**
+- 不做静默兜底（如 catch 后 fallback 到本地数据）；异常必须上报，让错误可见
+- 兜底逻辑会掩盖真实问题，禁止以「降级」为由隐藏错误
+
 **定位 Bug 的纪律**
 - 找到根本原因前，不提交补丁；找到后，**回滚所有错误方向的补丁**，再应用最小化正确修复
 ---
@@ -213,12 +217,13 @@ interface AgentAdapter {
 3. **终端即真相**：Agent 输出通过终端复用器捕获，不通过自定义协议通信
 4. **审批不可绕过**：危险操作必须经用户审批，Agent 适配器不得自动确认
 5. **禁止遗留历史债务**：完成任务后必须同步清理废弃文件、死代码、过时注释和临时脚手架。迁移后旧路径立即删除，重构后旧实现立即移除，不得以「后续清理」为由搁置。AGENT.md / progress.md 中的「待清理」标记视为未完成任务。
-6. **重大决策必须先征询用户**：凡涉及以下任一情形， **禁止**自行做出决定并直接实施，必须先向用户说明方案对比、征得明确同意后再动手：
+6. **重大决策必须先征询用户**：凡涉及以下任一情形，**禁止**自行做出决定并直接实施，必须先向用户说明方案对比、征得明确同意后再动手：
    - 技术方案降级或替代（如用 `child_process` 替代 `node-pty`、用 mock 替代真实实现）
    - 架构层面的设计取舍（如数据库选型、通信协议变更、模块拆分方式）
    - 破坏性 API/类型变更（影响已有接口的签名或行为）
    - 任何「此方案有明显缺点但省事」的捷径
    正确做法：先用 `ask_user_question` 工具列出选项和利弊，等待用户选择后再执行。不得在文档中写「降级方案」后自动采用该方案。
+7. **禁止吞异常**：空 `catch {}` / 只写注释的 catch 一律禁止；前端用户操作失败必须 `toast.error()`；后端必须 `log.warn/error()`；状态机非法转换用 `validateTransition()` 守卫而非 try/catch。详见 [.claude/rules/error-handling.md](.claude/rules/error-handling.md)。
 ---
 
 ## 已知问题 / 技术风险
@@ -226,7 +231,7 @@ interface AgentAdapter {
 | 问题 | 影响 | 处理建议 |
 |------|------|----------|
 | `node-pty` Windows 需 VC++ Build Tools | F3 开发环境 | ✅ 已解决：VC++ Build Tools 已安装，node-pty 编译成功；Shell 已切换为 PowerShell 7.6.2 |
-| xterm.js + React 18 Strict Mode 双重挂载 | F3 内存泄露 | `useRef` 保护初始化，`useEffect` 返回 `dispose()` |
+| ~~xterm.js + React 18 Strict Mode 双重挂载~~ | ~~F3 内存泄露~~ | ✅ 已解决：`TerminalPanel` 改用模块级 `terminalInstances` Map 保活 xterm 实例，切 Tab 不再 dispose/重建，terminalBus 订阅全程存活 |
 | Monaco Editor 包体积 ~2MB | F4 首屏性能 | 动态 `import()` 懒加载，仅审批弹窗打开时加载 |
 | Node.js 22.10.0 < Vite 7 要求的 22.12+ | 开发环境警告 | 升级 Node.js 到 22.12+ 可消除警告，当前仍可正常运行 |
 
@@ -237,3 +242,5 @@ interface AgentAdapter {
 - [docs/progress.md](docs/progress.md) — **开发进度快照**（接手新任务前必读）
 - [docs/设计文档.md](docs/设计文档.md) — 完整产品架构、数据模型、视图设计、代码示例
 - [docs/开发计划/phase-N-*.md](docs/开发计划/) — 各阶段详细任务拆解（已合并索引到 progress.md）
+- [.claude/rules/error-handling.md](.claude/rules/error-handling.md) — **异常处理规范**：禁止吞异常、前端用 toast 暴露错误、状态机用守卫代替 try/catch
+- [docs/claude code 的hook参考.md](docs/claude%20code%20%E7%9A%84hook%E5%8F%82%E8%80%83.md) — Claude Code 的 hook 参考  
