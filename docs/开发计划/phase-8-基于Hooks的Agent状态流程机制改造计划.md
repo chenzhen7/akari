@@ -272,3 +272,180 @@ MCP 服务器在 Worktree 初始化时，由 `ClaudeAdapter` 在 `.claude/settin
 | `TaskCompleted` | Claude 内部 Todo 条目 | 不变 | 记录 Activity 面板，**不驱动状态机** |
 | `Stop` | 正常轮次结束（会话保持活跃） | 不变 | 无，等待下一轮交互 |
 | `StopFailure` | API 报错、rate_limit 等 | `failed` | 广播 Toast 错误 |
+
+---
+
+## 7. 验收清单与端到端验证步骤
+
+> **范围说明**：仅覆盖已实现的部分（8.1–8.5）。PreToolUse / MCP 相关项标记 ⏸️，暂不验收。
+
+---
+
+### 7.1 验收清单
+
+#### 基础设施
+- [ ] **F1** 后端启动后 `POST /sessions/:id/hooks` 路由存在，对合法 sessionId 返回 200，对未知 id 返回 404
+- [ ] **F2** 创建 Claude/Claude-Orchestrator 会话后，后端向 PTY 发送的启动命令包含 `--settings '<json>'` 参数。在 Windows (PowerShell) 环境下，JSON 内的双引号被正确转义为 `\"` 以防止 pwsh 外部可执行文件命令行解析剥离双引号导致 Invalid JSON 错误；而 Mac/Linux (Bash) 环境下保持正常双引号。其中 `hooks.PermissionRequest / SessionStart / Stop / StopFailure` 均指向 `http://localhost:3001/sessions/{sessionId}/hooks`，且每个事件下使用正确的 matcher-group 嵌套格式 `[{"hooks":[{"type":"http","url":"..."}]}]`
+- [ ] **F3** `TerminalMultiplexer` 不再对 `[APPROVAL_REQUIRED]` / `[SPAWN_AGENT]` / `[TASK_DONE]` / `[DELEGATE]` / `[AWAIT_SESSION]` 做任何处理（静默忽略）
+
+#### SessionStart Hook
+- [ ] **S1** 向 `POST /sessions/:id/hooks` 发送 `hook_event_name: "SessionStart"`，处于 `initializing` 的 session 状态变为 `running`，前端实时更新
+
+#### PermissionRequest Hook（审批阻塞闭环）
+- [ ] **P1** 发送 `PermissionRequest` 事件后 HTTP 请求**持续阻塞**（不返回），session 状态变为 `waiting`
+- [ ] **P2** 前端画布节点出现**橙色脉冲光晕**，SessionInfoPanel 显示结构化审批卡片（工具名 + 命令 + 高危标签）
+- [ ] **P3** 指挥中心待审批队列展示该 session，显示 `pendingApproval.message`（含工具名）或 `command`
+- [ ] **P4** 用户点击**批准** → 阻塞的 HTTP 请求返回 `{ "hookSpecificOutput": { "hookEventName": "PermissionRequest", "permissionDecision": "approve" } }`，session 状态变为 `running`，不向终端发送 `y\n`
+- [ ] **P5** 用户点击**拒绝** → 阻塞的 HTTP 请求返回 `permissionDecision: "deny"`，session 状态变为 `paused`，不向终端发送 `n\n`
+
+#### StopFailure Hook
+- [ ] **E1** 发送 `StopFailure` 事件，session 从 `running` 变为 `failed`，终端输出红色错误行
+
+#### Stop Hook
+- [ ] **T1** 发送 `Stop` 事件，session 状态**不变**，HTTP 返回空对象 `{}`
+
+#### 向下兼容（非 Hook 会话）
+- [ ] **B1** 对 Shell/Aider 类型会话（没有 Hook 注入），`handleApproval` 仍正确向终端发送 `y\n`/`n\n`（手动在 waiting 状态下调 REST `POST /sessions/:id/approval` 验证）
+
+#### 前端 UI
+- [ ] **U1** Canvas 节点：`waiting` 状态节点有橙色脉冲光晕；`running` 状态光晕消失
+- [ ] **U2** SessionInfoPanel：`waiting` 状态显示结构化审批卡片，显示高危标签、message、command；`running` 状态无审批卡片
+- [ ] **U3** CommandCenter 待审批队列：有 command 时显示 monospace 命令块；无 command 时显示 message 文本
+
+---
+
+### 7.2 端到端验证步骤
+
+**前置条件**
+
+```powershell
+# 终端 A：启动全栈
+pnpm dev:all
+# 前端 http://localhost:5173  后端 http://localhost:3001
+```
+
+---
+
+#### 步骤 1：创建会话并验证 --settings 注入（验 F2）
+
+1. 在前端点击「新建会话」，类型选 **claude**，随意填任务名，提交
+2. 打开该会话的终端面板，观察第一条命令行内容
+
+**期望结果**：终端中的 claude 启动命令包含 `--settings '{\"hooks\":{...}}'`（Windows/PowerShell 环境下双引号自动转义为 `\"`），JSON 内每个事件的格式为 `[{"hooks":[{"type":"http","url":"http://localhost:3001/sessions/ID/hooks"}]}]` 且不报错。
+
+3. 确认 Worktree 目录下**不存在** `.claude/settings.json`（钩子完全由 CLI 参数携带，无磁盘写入）：
+
+```powershell
+$id = "<SESSION_ID>"
+Test-Path "G:\Study_Data\VSCode\akari\.agent-worktrees\$id\.claude\settings.json"
+# 期望输出 False
+```
+
+---
+
+#### 步骤 2：模拟 SessionStart（验 S1）
+
+```powershell
+# 先把 session 手动设为 initializing（或在 session 刚创建时执行）
+$id = "<SESSION_ID>"
+Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/hooks" `
+  -Method POST -ContentType "application/json" `
+  -Body '{"hook_event_name":"SessionStart","session_id":"'"$id"'"}'
+```
+
+**期望结果**：
+- 命令立即返回 `{}`
+- 前端画布节点状态变为 **运行中**（绿色）
+
+---
+
+#### 步骤 3：模拟 PermissionRequest 并验证阻塞（验 P1–P5）
+
+> 需要**两个终端**：终端 B 发送阻塞请求，终端 C 执行审批。
+
+**终端 B**（发送 PermissionRequest，预期会阻塞）：
+
+```powershell
+$id = "<SESSION_ID>"
+# 注意：此命令会挂起，不会立即返回
+Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/hooks" `
+  -Method POST -ContentType "application/json" `
+  -Body '{
+    "hook_event_name": "PermissionRequest",
+    "session_id": "'"$id"'",
+    "tool_name": "Bash",
+    "tool_input": { "command": "rm -rf dist/" }
+  }'
+```
+
+**观察前端**：
+- 画布节点变为橙色脉冲光晕，Badge 显示「待审批 🔔」
+- SessionInfoPanel 显示审批卡片：高危操作 / `PermissionRequest: Bash — rm -rf dist/` / `rm -rf dist/` 命令块
+- 指挥中心待审批队列中出现该会话
+
+**终端 C**（批准操作）：
+
+```powershell
+$id = "<SESSION_ID>"
+Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/approval" `
+  -Method POST -ContentType "application/json" `
+  -Body '{"decision":"approved"}'
+```
+
+**期望结果**：
+- 终端 B 的挂起请求立即返回，响应体包含 `permissionDecision: "approve"`
+- 前端节点恢复绿色，状态变为「运行中」
+- 终端**未收到** `y` 字符输入
+
+**拒绝路径验证**：重复步骤 3，终端 C 改发 `"decision":"rejected"` → 终端 B 返回 `permissionDecision: "deny"`，节点变为「已暂停」（橙色）。
+
+---
+
+#### 步骤 4：模拟 StopFailure（验 E1）
+
+```powershell
+$id = "<SESSION_ID>"
+# 先确保 session 处于 running（可用步骤 2 的 SessionStart 先推到 running）
+Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/hooks" `
+  -Method POST -ContentType "application/json" `
+  -Body '{
+    "hook_event_name": "StopFailure",
+    "session_id": "'"$id"'",
+    "error": "API rate limit exceeded"
+  }'
+```
+
+**期望结果**：
+- 命令立即返回 `{}`
+- 前端节点状态变为「失败」（红色）
+- 终端面板出现红色错误行 `[StopFailure] API rate limit exceeded`
+
+---
+
+#### 步骤 5：验证魔法字符串不再触发（验 F3）
+
+在终端面板手动向运行中的 PTY 输入（或通过 WebSocket `terminal:input` 事件注入）：
+
+```
+echo "[APPROVAL_REQUIRED] type=destructive-op command=\"rm -rf /\""
+echo "[SPAWN_AGENT] task=\"test\" agentType=\"claude\""
+```
+
+**期望结果**：session 状态**不变**，无审批弹窗，无 `spawn_agent` 事件，字符串仅作为普通终端输出显示。
+
+---
+
+#### 步骤 6：向下兼容验证（验 B1）
+
+1. 新建一个 **shell** 类型会话，等待其进入 `running`
+2. 手动将其推入 `waiting`：
+
+```powershell
+$id = "<SHELL_SESSION_ID>"
+Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/status" `
+  -Method PATCH -ContentType "application/json" `
+  -Body '{"status":"waiting"}'
+```
+
+3. 在前端点击「批准」
+4. **期望结果**：终端收到 `y` 字符，session 变为 `running`（走 legacy 路径，因为 `approvalRegistry` 中无此 sessionId）
