@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { AgentAdapter, PtyCommand } from './base.js'
 
 /**
@@ -6,29 +8,40 @@ import type { AgentAdapter, PtyCommand } from './base.js'
  */
 const SHELL_STARTUP_DELAY_MS = 800
 
-/**
- * Build the Claude Code `--settings` JSON for in-memory hook injection.
- *
- * Format: each hook event maps to an array of "matcher groups".
- * Each matcher group has an optional `matcher` field and a required `hooks`
- * sub-array of handler objects. Omitting `matcher` means "match all".
- *
- * Reference: docs/claude code 的hook参考.md — Hook 处理程序字段
- */
-function buildHooksSettings(sessionId: string): string {
+const HOOK_URL = (sessionId: string): string => {
   const port = process.env['PORT'] ?? '3001'
-  const url = `http://localhost:${port}/sessions/${sessionId}/hooks`
-  const handler = { type: 'http', url }
-  const group = { hooks: [handler] }
+  return `http://localhost:${port}/sessions/${sessionId}/hooks`
+}
+
+async function writeClaudeSettings(worktreePath: string, sessionId: string): Promise<void> {
+  const hookUrl = HOOK_URL(sessionId)
   const settings = {
     hooks: {
-      PermissionRequest: [group],
-      SessionStart:      [group],
-      Stop:              [group],
-      StopFailure:       [group],
+      PermissionRequest: [
+        {
+          hooks: [{ type: 'http', url: hookUrl }],
+        },
+      ],
+      SessionStart: [
+        {
+          hooks: [{ type: 'http', url: hookUrl }],
+        },
+      ],
+      Stop: [
+        {
+          hooks: [{ type: 'http', url: hookUrl }],
+        },
+      ],
+      StopFailure: [
+        {
+          hooks: [{ type: 'http', url: hookUrl }],
+        },
+      ],
     },
   }
-  return JSON.stringify(settings)
+  const claudeDir = join(worktreePath, '.claude')
+  await mkdir(claudeDir, { recursive: true })
+  await writeFile(join(claudeDir, 'settings.local.json'), JSON.stringify(settings, null, 2))
 }
 
 const ORCHESTRATOR_SYSTEM_PROMPT = [
@@ -41,27 +54,21 @@ const ORCHESTRATOR_SYSTEM_PROMPT = [
 export class ClaudeAdapter implements AgentAdapter {
   readonly agentType = 'claude'
 
-  async prepare(_worktreePath: string, _task: string, sessionId: string): Promise<PtyCommand[]> {
-    let settings = buildHooksSettings(sessionId)
-    if (process.platform === 'win32') {
-      settings = settings.replace(/"/g, '\\"')
-    }
+  async prepare(worktreePath: string, _task: string, sessionId: string): Promise<PtyCommand[]> {
+    await writeClaudeSettings(worktreePath, sessionId)
     const nl = process.platform === 'win32' ? '\r\n' : '\n'
-    return [{ cmd: `claude --settings '${settings}'${nl}` }]
+    return [{ cmd: `claude${nl}` }]
   }
 }
 
 export class ClaudeOrchestratorAdapter implements AgentAdapter {
   readonly agentType = 'claude-orchestrator'
 
-  async prepare(_worktreePath: string, _task: string, sessionId: string): Promise<PtyCommand[]> {
-    let settings = buildHooksSettings(sessionId)
-    if (process.platform === 'win32') {
-      settings = settings.replace(/"/g, '\\"')
-    }
+  async prepare(worktreePath: string, _task: string, sessionId: string): Promise<PtyCommand[]> {
+    await writeClaudeSettings(worktreePath, sessionId)
     const nl = process.platform === 'win32' ? '\r\n' : '\n'
     const prompt = ORCHESTRATOR_SYSTEM_PROMPT.replace(/"/g, '\\"')
-    return [{ cmd: `claude --settings '${settings}' --append-system-prompt "${prompt}"${nl}` }]
+    return [{ cmd: `claude --append-system-prompt "${prompt}"${nl}` }]
   }
 }
 

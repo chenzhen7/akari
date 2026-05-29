@@ -26,7 +26,7 @@
 │                                                          │
 │  Claude Code 实例（在 Worktree 中运行）                    │
 │  ┌────────────────────────────────────────────────────┐  │
-│  │  .claude/settings.json (由 Akari 自动写入)          │  │
+│  │  .claude/settings.local.json (由 Akari 自动写入)    │  │
 │  │  → hooks.PreToolUse   → HTTP POST /api/sessions/:id/hooks │
 │  │  → hooks.PermissionRequest → 同上                   │  │
 │  │  → hooks.SessionStart / Stop / SessionEnd → 同上    │  │
@@ -163,7 +163,7 @@ export class ApprovalRegistry {
 | `[AWAIT_SESSION]` | `akari_await_session(sessionId, timeoutSec?)` | `PreToolUse` | 轮询目标 Session 状态直到 completed，长轮询实现 |
 | `[APPROVAL_REQUIRED]` | 由 `PreToolUse` / `PermissionRequest` Hook 自动触发 | — | 不再需要 Agent 主动打印 |
 
-MCP 服务器在 Worktree 初始化时，由 `ClaudeAdapter` 在 `.claude/settings.json` 的 `mcpServers` 字段中**自动注册 Akari MCP Server**（本地进程或 HTTP）。
+MCP 服务器在 Worktree 初始化时，由 `ClaudeAdapter` 在 `.claude/settings.local.json` 的 `mcpServers` 字段中**自动注册 Akari MCP Server**（本地进程或 HTTP）。
 
 ---
 
@@ -192,15 +192,35 @@ MCP 服务器在 Worktree 初始化时，由 `ClaudeAdapter` 在 `.claude/settin
 - **更新** `session-manager.ts` 中原先监听上述 emit 事件的 `wireEvents()` 方法，移除所有魔法字符串相关的事件绑定。
 
 ### 阶段 8.4：ClaudeAdapter 注入 Hook 配置与 MCP 服务器 (优先级：高) ⏸️ **暂不做**（PreToolUse/MCP 部分）
-- **【BE】Worktree 初始化时自动写入** `.claude/settings.json`：
+- **【BE】Worktree 初始化时自动写入** `.claude/settings.local.json`：
   ```json
   {
     "hooks": {
-      "PreToolUse":       [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }],  // ⏸️ 暂不做
-      "PermissionRequest":[{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }],
-      "SessionStart":     [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }],
-      "Stop":             [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }],
-      "StopFailure":      [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }]
+      "PreToolUse": [
+        {
+          "hooks": [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }]  // ⏸️ 暂不做
+        }
+      ],
+      "PermissionRequest": [
+        {
+          "hooks": [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }]
+        }
+      ],
+      "SessionStart": [
+        {
+          "hooks": [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }]
+        }
+      ],
+      "Stop": [
+        {
+          "hooks": [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }]
+        }
+      ],
+      "StopFailure": [
+        {
+          "hooks": [{ "type": "http", "url": "http://localhost:3001/api/sessions/SESSION_ID/hooks" }]
+        }
+      ]
     },
     "mcpServers": {
       "akari": {
@@ -285,7 +305,7 @@ MCP 服务器在 Worktree 初始化时，由 `ClaudeAdapter` 在 `.claude/settin
 
 #### 基础设施
 - [ ] **F1** 后端启动后 `POST /sessions/:id/hooks` 路由存在，对合法 sessionId 返回 200，对未知 id 返回 404
-- [ ] **F2** 创建 Claude/Claude-Orchestrator 会话后，后端向 PTY 发送的启动命令包含 `--settings '<json>'` 参数。在 Windows (PowerShell) 环境下，JSON 内的双引号被正确转义为 `\"` 以防止 pwsh 外部可执行文件命令行解析剥离双引号导致 Invalid JSON 错误；而 Mac/Linux (Bash) 环境下保持正常双引号。其中 `hooks.PermissionRequest / SessionStart / Stop / StopFailure` 均指向 `http://localhost:3001/sessions/{sessionId}/hooks`，且每个事件下使用正确的 matcher-group 嵌套格式 `[{"hooks":[{"type":"http","url":"..."}]}]`
+- [ ] **F2** 创建 Claude/Claude-Orchestrator 会话后，对应 Worktree 目录下生成 `.claude/settings.local.json`，其中 `hooks.PermissionRequest / SessionStart / Stop / StopFailure` 均包含 `{ hooks: [{ type: "http", url: "..." }] }`，指向 `http://localhost:3001/sessions/{sessionId}/hooks`
 - [ ] **F3** `TerminalMultiplexer` 不再对 `[APPROVAL_REQUIRED]` / `[SPAWN_AGENT]` / `[TASK_DONE]` / `[DELEGATE]` / `[AWAIT_SESSION]` 做任何处理（静默忽略）
 
 #### SessionStart Hook
@@ -326,20 +346,18 @@ pnpm dev:all
 
 ---
 
-#### 步骤 1：创建会话并验证 --settings 注入（验 F2）
+#### 步骤 1：创建会话并检查 settings.local.json（验 F2）
 
 1. 在前端点击「新建会话」，类型选 **claude**，随意填任务名，提交
-2. 打开该会话的终端面板，观察第一条命令行内容
-
-**期望结果**：终端中的 claude 启动命令包含 `--settings '{\"hooks\":{...}}'`（Windows/PowerShell 环境下双引号自动转义为 `\"`），JSON 内每个事件的格式为 `[{"hooks":[{"type":"http","url":"http://localhost:3001/sessions/ID/hooks"}]}]` 且不报错。
-
-3. 确认 Worktree 目录下**不存在** `.claude/settings.json`（钩子完全由 CLI 参数携带，无磁盘写入）：
+2. 等待 Worktree 创建完成后，在 PowerShell 中查找生成的文件：
 
 ```powershell
+# SESSION_ID 替换为刚创建的会话 id（画布节点 id 前 8 位即可定位，完整 id 在 GET /sessions 中）
 $id = "<SESSION_ID>"
-Test-Path "G:\Study_Data\VSCode\akari\.agent-worktrees\$id\.claude\settings.json"
-# 期望输出 False
+cat "G:\Study_Data\VSCode\akari\.agent-worktrees\$id\.claude\settings.local.json"
 ```
+
+**期望结果**：输出的 JSON 包含 `hooks.PermissionRequest`、`SessionStart`、`Stop`、`StopFailure`，URL 中含正确的 `$id`。
 
 ---
 
