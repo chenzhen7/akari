@@ -1,10 +1,12 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import {
   ReactFlow,
+  ReactFlowProvider,
   Controls,
   Background,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   addEdge,
   type Node,
   type Edge,
@@ -33,20 +35,21 @@ const edgeTypes = {
   flowEdge: FlowEdge as any,
 }
 
-export function CanvasView() {
+/** 内部组件：包含 ReactFlow，需要在 ReactFlowProvider 内部使用 */
+function CanvasViewContent() {
   const sessions = useSessionStore(s => s.sessions)
   const groups = useSessionStore(s => s.groups)
   const connectionStatus = useSessionStore(s => s.connectionStatus)
   const openTab = useSessionStore(s => s.openTab)
   const updateCanvasPosition = useSessionStore(s => s.updateCanvasPosition)
   const fetchGroups = useSessionStore(s => s.fetchGroups)
+  const { screenToFlowPosition } = useReactFlow()
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[])
   const [edges, setEdges, onEdgesChange] = useEdgesState([] as Edge[])
-  // 本次挂载是否应 fitView：仅当还没有保存的 viewport 时才自动适配
-  const [fitOnMount] = useState(() => _savedViewport === null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
+  const [fitOnMount] = useState(() => _savedViewport === null)
 
   // 同步 Pipeline 边：从 groups 中提取所有 pipelineEdges
   useEffect(() => {
@@ -247,8 +250,11 @@ export function CanvasView() {
     event.preventDefault()
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) return
-    setMenuPos({ x: event.clientX - rect.left, y: event.clientY - rect.top })
-  }, [])
+    setMenuPos({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    })
+  }, [screenToFlowPosition])
 
   const closeMenu = useCallback(() => setMenuPos(null), [])
 
@@ -284,6 +290,7 @@ export function CanvasView() {
           <CanvasContextMenu
             x={menuPos.x}
             y={menuPos.y}
+            flowPosition={screenToFlowPosition({ x: menuPos.x, y: menuPos.y })}
             onClose={closeMenu}
           />
         )}
@@ -314,5 +321,16 @@ export function CanvasView() {
         </div>
       )}
     </div>
+  )
+}
+
+/** 导出的 CanvasView：提供 ReactFlowProvider */
+export function CanvasView() {
+  const [fitOnMount] = useState(() => _savedViewport === null)
+
+  return (
+    <ReactFlowProvider>
+      <CanvasViewContent />
+    </ReactFlowProvider>
   )
 }

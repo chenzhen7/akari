@@ -20,8 +20,11 @@ interface SessionStore {
   terminalReadyTick: Record<string, number>
   /** Tracks ops that are in-flight (archive / delete / restore) for debounce animation */
   pendingOps: Set<string>
+  /** 存储右键新建会话时的画布位置 */
+  pendingCreatePosition: { x: number; y: number } | null
 
   addSession: (name: string, task: string, baseBranch?: string, agentType?: AgentType, parentSessionId?: string, groupId?: string) => void
+  openCreateDialog: (position?: { x: number; y: number }) => void
   fetchGroups: () => void
   updateStatus: (id: string, status: SessionStatus) => void
   moveToColumn: (id: string, column: KanbanColumn) => void
@@ -62,6 +65,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   disconnectedAt: null,
   terminalReadyTick: {},
   pendingOps: new Set(),
+  pendingCreatePosition: null,
+
+  openCreateDialog: (position) => {
+    set({ createDialogOpen: true, pendingCreatePosition: position ?? null })
+  },
 
   fetchGroups: () => {
     fetch(`${API_BASE}/collaboration/groups`)
@@ -71,7 +79,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   addSession: (name, task, baseBranch = 'main', agentType = 'claude', parentSessionId, groupId) => {
-    const body = JSON.stringify({ name: name.trim(), task: task.trim(), baseBranch, agentType, parentSessionId, groupId })
+    const pendingPos = get().pendingCreatePosition
+    const body = JSON.stringify({ name: name.trim(), task: task.trim(), baseBranch, agentType, parentSessionId, groupId, canvasPosition: pendingPos })
     fetch(`${API_BASE}/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -81,8 +90,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       .then((session: AgentSession) => {
         set(state => ({
           sessions: [...state.sessions.filter(s => s.id !== session.id), session],
+          pendingCreatePosition: null,
         }))
-        get().openTab(session.id)
       })
       .catch(err => { toast.error(`创建会话失败: ${err}`); console.error('[addSession] failed:', err) })
     get().toggleCreateDialog()
@@ -306,7 +315,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         set(state => ({
           sessions: [...state.sessions.filter(s => s.id !== msg.payload.id), msg.payload],
         }))
-        get().openTab(msg.payload.id)
         break
       case 'session:updated':
         set(state => ({

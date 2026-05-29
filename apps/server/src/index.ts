@@ -44,14 +44,15 @@ interface CreateSessionBody {
   tags?: string[]
   parentSessionId?: string
   groupId?: string
+  canvasPosition?: { x: number; y: number }
 }
 
 fastify.post<{ Body: CreateSessionBody }>('/sessions', async (request, reply) => {
-  const { name, task, baseBranch = 'main', agentType = 'claude', tags = [], parentSessionId, groupId } = request.body
+  const { name, task, baseBranch = 'main', agentType = 'claude', tags = [], parentSessionId, groupId, canvasPosition } = request.body
   if (!name?.trim() || !task?.trim()) {
     return reply.status(400).send({ error: 'name and task are required' })
   }
-  const session = await sessionManager.createSession({ name, task, baseBranch, agentType, tags, parentSessionId, groupId })
+  const session = await sessionManager.createSession({ name, task, baseBranch, agentType, tags, parentSessionId, groupId, canvasPosition })
   return reply.status(201).send(session)
 })
 

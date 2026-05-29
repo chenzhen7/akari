@@ -6,11 +6,12 @@ import { useSessionStore } from '@/stores/session-store'
 interface CanvasContextMenuProps {
   x: number
   y: number
+  flowPosition: { x: number; y: number }
   onClose: () => void
 }
 
-export function CanvasContextMenu({ x, y, onClose }: CanvasContextMenuProps) {
-  const toggleCreateDialog = useSessionStore(s => s.toggleCreateDialog)
+export function CanvasContextMenu({ x, y, flowPosition, onClose }: CanvasContextMenuProps) {
+  const openCreateDialog = useSessionStore(s => s.openCreateDialog)
   const { fitView } = useReactFlow()
   const ref = useRef<HTMLDivElement>(null)
 
@@ -39,7 +40,7 @@ export function CanvasContextMenu({ x, y, onClose }: CanvasContextMenuProps) {
       <div className="p-1">
         <button
           className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          onClick={() => handleItem(() => toggleCreateDialog())}
+          onClick={() => handleItem(() => openCreateDialog(flowPosition))}
         >
           <PlusCircle className="h-4 w-4" />
           新建会话
