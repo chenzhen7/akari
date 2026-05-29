@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentAdapter, PtyCommand } from './base.js'
 
@@ -15,33 +15,55 @@ const HOOK_URL = (sessionId: string): string => {
 
 async function writeClaudeSettings(worktreePath: string, sessionId: string): Promise<void> {
   const hookUrl = HOOK_URL(sessionId)
-  const settings = {
-    hooks: {
-      PermissionRequest: [
-        {
-          hooks: [{ type: 'http', url: hookUrl }],
-        },
-      ],
-      SessionStart: [
-        {
-          hooks: [{ type: 'http', url: hookUrl }],
-        },
-      ],
-      Stop: [
-        {
-          hooks: [{ type: 'http', url: hookUrl }],
-        },
-      ],
-      StopFailure: [
-        {
-          hooks: [{ type: 'http', url: hookUrl }],
-        },
-      ],
-    },
-  }
   const claudeDir = join(worktreePath, '.claude')
+  const settingsPath = join(claudeDir, 'settings.local.json')
+
+  let existingSettings: any = {}
+  try {
+    const content = await readFile(settingsPath, 'utf8')
+    existingSettings = JSON.parse(content)
+  } catch {
+    // 若文件不存在或内容非法，默认为空对象
+    existingSettings = {}
+  }
+
+  // 确保 hooks 对象存在
+  if (!existingSettings.hooks || typeof existingSettings.hooks !== 'object') {
+    existingSettings.hooks = {}
+  }
+
+  const hookEvents = ['PermissionRequest', 'SessionStart', 'Stop', 'StopFailure'] as const
+
+  for (const event of hookEvents) {
+    if (!Array.isArray(existingSettings.hooks[event])) {
+      existingSettings.hooks[event] = []
+    }
+
+    const eventHooksArray = existingSettings.hooks[event] as any[]
+
+    // 检查我们的 hookUrl 是否已存在，避免重复添加
+    let alreadyExists = false
+    for (const item of eventHooksArray) {
+      if (item && Array.isArray(item.hooks)) {
+        for (const h of item.hooks) {
+          if (h && h.type === 'http' && h.url === hookUrl) {
+            alreadyExists = true
+            break
+          }
+        }
+      }
+      if (alreadyExists) break
+    }
+
+    if (!alreadyExists) {
+      eventHooksArray.push({
+        hooks: [{ type: 'http', url: hookUrl }],
+      })
+    }
+  }
+
   await mkdir(claudeDir, { recursive: true })
-  await writeFile(join(claudeDir, 'settings.local.json'), JSON.stringify(settings, null, 2))
+  await writeFile(settingsPath, JSON.stringify(existingSettings, null, 2))
 }
 
 const ORCHESTRATOR_SYSTEM_PROMPT = [
