@@ -67,7 +67,7 @@ const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
   completed: ['merged', 'archived', 'running'],
   failed: ['archived', 'running'],
   merged: ['archived'],
-  archived: [],
+  archived: ['paused'],
 }
 
 const STATUS_TO_KANBAN: Partial<Record<SessionStatus, KanbanColumn>> = {
@@ -289,6 +289,12 @@ export class SessionManager {
     } catch {
       // already in terminal state
     }
+  }
+
+  restoreSession(sessionId: string): void {
+    const session = this.getSession(sessionId)
+    if (!session || session.status !== 'archived') return
+    this.updateStatus(sessionId, 'paused')
   }
 
   async getGitLog(sessionId: string, limit = 100): Promise<GitLogResponse> {

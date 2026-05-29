@@ -125,6 +125,21 @@ fastify.post<{ Params: { id: string } }>(
   },
 )
 
+fastify.post<{ Params: { id: string } }>(
+  '/sessions/:id/restore',
+  async (request, reply) => {
+    const { id } = request.params
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    try {
+      sessionManager.restoreSession(id)
+      return { ok: true }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(422).send({ error: msg })
+    }
+  },
+)
+
 fastify.post<{ Params: { id: string }; Body: HookEvent }>(
   '/sessions/:id/hooks',
   async (request, reply) => {

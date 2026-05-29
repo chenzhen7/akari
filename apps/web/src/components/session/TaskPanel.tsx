@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
@@ -44,9 +45,12 @@ export function TaskPanel({ session }: TaskPanelProps) {
   const approveSession = useSessionStore(s => s.approveSession)
   const rejectSession = useSessionStore(s => s.rejectSession)
   const archiveSession = useSessionStore(s => s.archiveSession)
+  const restoreSession = useSessionStore(s => s.restoreSession)
   const deleteSession = useSessionStore(s => s.deleteSession)
+  const pendingOps = useSessionStore(s => s.pendingOps)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  const isPending = pendingOps.has(session.id)
   const isTerminal = ['archived', 'merged'].includes(session.status)
 
   return (
@@ -132,27 +136,42 @@ export function TaskPanel({ session }: TaskPanelProps) {
         <Button size="sm">重试</Button>
       )}
 
-      {/* 归档 / 删除 */}
+      {/* 归档 / 恢复 / 删除 */}
       <div className="border-t border-border pt-3 space-y-2">
         {!isTerminal && (
           <Button
             size="sm"
             variant="outline"
             className="w-full"
+            disabled={isPending}
             onClick={() => archiveSession(session.id)}
           >
+            {isPending ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : null}
             归档（终止进程，保留 Worktree）
           </Button>
         )}
         {session.status === 'archived' && (
-          <Button
-            size="sm"
-            variant="destructive"
-            className="w-full"
-            onClick={() => setConfirmDelete(true)}
-          >
-            彻底删除（清理 Worktree + 分支）
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full"
+              disabled={isPending}
+              onClick={() => restoreSession(session.id)}
+            >
+              {isPending ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : null}
+              恢复正常
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="w-full"
+              disabled={isPending}
+              onClick={() => setConfirmDelete(true)}
+            >
+              彻底删除（清理 Worktree + 分支）
+            </Button>
+          </>
         )}
       </div>
 

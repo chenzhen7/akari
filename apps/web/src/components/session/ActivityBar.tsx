@@ -1,6 +1,6 @@
 import type React from 'react'
 import { cn } from '@/lib/utils'
-import { Terminal, GitBranch, FileCode, Info, Archive } from 'lucide-react'
+import { Terminal, GitBranch, FileCode, Info, Archive, RotateCcw, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 export type ActivePanel = 'terminal' | 'git-graph' | 'diff' | 'info'
@@ -11,6 +11,9 @@ interface ActivityBarProps {
   diffCount: number
   onArchive: () => void
   showArchive: boolean
+  onRestore?: () => void
+  showRestore?: boolean
+  restorePending?: boolean
 }
 
 const NAV_ITEMS: { id: ActivePanel; icon: React.ElementType; label: string }[] = [
@@ -20,7 +23,7 @@ const NAV_ITEMS: { id: ActivePanel; icon: React.ElementType; label: string }[] =
   { id: 'info',       icon: Info,       label: '任务信息' },
 ]
 
-export function ActivityBar({ activePanel, onPanelChange, diffCount, onArchive, showArchive }: ActivityBarProps) {
+export function ActivityBar({ activePanel, onPanelChange, diffCount, onArchive, showArchive, onRestore, showRestore, restorePending }: ActivityBarProps) {
   return (
     <div className="flex w-12 shrink-0 flex-col items-center border-r border-border bg-muted/20 py-1">
       <div className="flex flex-1 flex-col">
@@ -63,6 +66,21 @@ export function ActivityBar({ activePanel, onPanelChange, diffCount, onArchive, 
             </button>
           </TooltipTrigger>
           <TooltipContent side="right">归档（终止进程，保留 Worktree）</TooltipContent>
+        </Tooltip>
+      )}
+
+      {showRestore && onRestore && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onRestore}
+              disabled={restorePending}
+              className="mb-1 flex h-11 w-12 items-center justify-center text-muted-foreground transition-colors hover:text-blue-400 disabled:opacity-50"
+            >
+              {restorePending ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <RotateCcw className="h-[18px] w-[18px]" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">恢复正常</TooltipContent>
         </Tooltip>
       )}
     </div>

@@ -18,6 +18,8 @@ interface SessionStore {
   connectionStatus: ConnectionStatus
   disconnectedAt: number | null
   terminalReadyTick: Record<string, number>
+  /** Tracks ops that are in-flight (archive / delete / restore) for debounce animation */
+  pendingOps: Set<string>
 
   addSession: (name: string, task: string, baseBranch?: string, agentType?: AgentType, parentSessionId?: string, groupId?: string) => void
   fetchGroups: () => void
@@ -35,6 +37,7 @@ interface SessionStore {
   rejectSession: (id: string) => void
   archiveSession: (id: string) => void
   deleteSession: (id: string) => void
+  restoreSession: (id: string) => void
   addTerminalLine: (id: string, line: string) => void
   clearTerminal: (id: string) => void
   setGitLog: (sessionId: string, log: GitLogResponse) => void
@@ -58,6 +61,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   connectionStatus: 'connecting',
   disconnectedAt: null,
   terminalReadyTick: {},
+  pendingOps: new Set(),
 
   fetchGroups: () => {
     fetch(`${API_BASE}/collaboration/groups`)
@@ -197,6 +201,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   archiveSession: (id) => {
+    if (get().pendingOps.has(id)) return
+    set(state => ({ pendingOps: new Set(state.pendingOps).add(id) }))
     fetch(`${API_BASE}/sessions/${id}/archive`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -210,9 +216,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }))
       })
       .catch(err => console.error('[archiveSession] failed:', err))
+      .finally(() => {
+        set(state => {
+          const next = new Set(state.pendingOps)
+          next.delete(id)
+          return { pendingOps: next }
+        })
+      })
   },
 
   deleteSession: (id) => {
+    if (get().pendingOps.has(id)) return
+    set(state => ({ pendingOps: new Set(state.pendingOps).add(id) }))
     fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE' })
       .then(() => {
         set(state => ({
@@ -222,6 +237,38 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }))
       })
       .catch(err => console.error('[deleteSession] failed:', err))
+      .finally(() => {
+        set(state => {
+          const next = new Set(state.pendingOps)
+          next.delete(id)
+          return { pendingOps: next }
+        })
+      })
+  },
+
+  restoreSession: (id) => {
+    if (get().pendingOps.has(id)) return
+    set(state => ({ pendingOps: new Set(state.pendingOps).add(id) }))
+    fetch(`${API_BASE}/sessions/${id}/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+      .then(() => {
+        set(state => ({
+          sessions: state.sessions.map(s =>
+            s.id === id ? { ...s, status: 'paused' as SessionStatus, kanbanColumn: 'in-progress' } : s
+          ),
+        }))
+      })
+      .catch(err => console.error('[restoreSession] failed:', err))
+      .finally(() => {
+        set(state => {
+          const next = new Set(state.pendingOps)
+          next.delete(id)
+          return { pendingOps: next }
+        })
+      })
   },
 
   addTerminalLine: (id, line) => {

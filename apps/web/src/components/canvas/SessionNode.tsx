@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Bell, Crown, Plus } from 'lucide-react'
+import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Bell, Crown, Plus, RotateCcw, Loader2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
@@ -65,7 +65,9 @@ function getDisplayLines(sessionId: string, maxLines: number): string[] {
 function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
   const session = data.session
   const archiveSession = useSessionStore(s => s.archiveSession)
+  const restoreSession = useSessionStore(s => s.restoreSession)
   const deleteSession = useSessionStore(s => s.deleteSession)
+  const pendingOps = useSessionStore(s => s.pendingOps)
   const [hovered, setHovered] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -97,6 +99,7 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
 
   const cfg = statusConfig[session.status] ?? statusConfig.initializing
   const isArchived = session.status === 'archived'
+  const isPending = pendingOps.has(session.id)
   const color = cfg.color
 
   function stopBubble(e: React.MouseEvent | React.PointerEvent) {
@@ -213,22 +216,38 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none"
                   style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
+                  disabled={isPending}
                   onClick={() => archiveSession(session.id)}
                 >
-                  <Archive className="h-3 w-3" />
+                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Archive className="h-3 w-3" />}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">归档（终止进程，保留 Worktree）</TooltipContent>
+            </Tooltip>
+          )}
+          {isArchived && !isPending && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="rounded-lg p-1.5 text-blue-400 transition-colors hover:text-blue-300"
+                  style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
+                  onClick={() => restoreSession(session.id)}
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">恢复正常</TooltipContent>
             </Tooltip>
           )}
           {isArchived && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  className="rounded-lg p-1.5 text-red-400 transition-colors hover:bg-red-500 hover:text-white"
+                  className="rounded-lg p-1.5 text-red-400 transition-colors hover:bg-red-500 hover:text-white disabled:pointer-events-none"
                   style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
+                  disabled={isPending}
                   onClick={() => setDeleteOpen(true)}
                 >
                   <Trash2 className="h-3 w-3" />

@@ -15,13 +15,16 @@ export function SessionDetail() {
   const sessions = useSessionStore(s => s.sessions)
   const setActiveTab = useSessionStore(s => s.setActiveTab)
   const archiveSession = useSessionStore(s => s.archiveSession)
+  const restoreSession = useSessionStore(s => s.restoreSession)
+  const pendingOps = useSessionStore(s => s.pendingOps)
   const { send } = useWebSocket()
   const [activePanel, setActivePanel] = useState<ActivePanel>('terminal')
 
   const session = sessions.find(s => s.id === activeTabId)
   if (!session) return null
 
-  const isTerminalStatus = ['archived', 'merged'].includes(session.status)
+  const isArchived = session.status === 'archived'
+  const isPending = pendingOps.has(session.id)
 
   return (
     <div className="flex h-full flex-col">
@@ -50,7 +53,10 @@ export function SessionDetail() {
           onPanelChange={setActivePanel}
           diffCount={session.diffFiles?.length ?? 0}
           onArchive={() => archiveSession(session.id)}
-          showArchive={!isTerminalStatus}
+          showArchive={!isArchived}
+          onRestore={() => restoreSession(session.id)}
+          showRestore={isArchived}
+          restorePending={isPending}
         />
 
         {/* Content panels — Terminal always mounted to preserve xterm instance */}
