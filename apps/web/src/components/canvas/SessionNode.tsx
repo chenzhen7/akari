@@ -313,13 +313,14 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
             className={cn(
               session.status === 'waiting' && 'animate-pulse',
             )}
-            style={{ background: `${color}18`, color, borderColor: `${color}35` }}
+            style={{ background: `${color}18`, color, borderColor: `${color}35` , fontSize: '9px' }}
           >
             {session.status === 'waiting' && <Bell />}
             {cfg.label}
           </Badge>
           {session.collaborationRole && session.collaborationRole !== 'standalone' && (
             <Badge
+              
               variant="outline"
               style={{ background: 'rgba(180,83,9,0.12)', color: '#d97706', borderColor: 'rgba(180,83,9,0.3)', fontSize: '9px' }}
             >
@@ -332,7 +333,7 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
             return (
               <Badge
                 variant="outline"
-                style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.65)', borderColor: 'rgba(255,255,255,0.14)' }}
+                style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.65)', borderColor: 'rgba(255,255,255,0.14)', fontSize: '9px' }}
               >
                 <Icon style={{ color: ac.bg }} />
                 {session.agentType}

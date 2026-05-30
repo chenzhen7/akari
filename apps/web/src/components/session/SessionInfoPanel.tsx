@@ -90,7 +90,7 @@ export function SessionInfoPanel({ session }: SessionInfoPanelProps) {
             {session.pendingApproval?.type && (
               <Badge
                 variant="outline"
-                className="ml-auto text-[10px] border-amber-500/40 text-amber-400"
+                className="ml-auto text-[8px] border-amber-500/40 text-amber-400"
               >
                 {session.pendingApproval.type === 'destructive-op' ? '高危操作'
                   : session.pendingApproval.type === 'merge-ready' ? '合并就绪'
