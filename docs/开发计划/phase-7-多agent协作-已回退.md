@@ -477,80 +477,91 @@ ls apps/server/data/akari.db   # 应存在
 
 ### Phase 1：数据模型（AC-1，对应里程碑 M7-α 前置）
 
-```bash
-# 步骤 1：类型检查
+```
+步骤 1：类型检查（终端）
 pnpm --filter @akari/shared-types typecheck
 pnpm --filter @akari/web typecheck
 pnpm --filter @akari/server typecheck
+预期：0 错误
 
-# 步骤 2：创建非协作会话，验证默认值
-# 操作：前端新建会话（任意名称），不加入任何群组
-# 验证：打开 devtools → Application → IndexedDB 或 WebSocket 消息，检查字段
+步骤 2：创建非协作会话，验证默认值
+  - 前端：新建会话（任意名称），不加入任何群组
+  - 打开 devtools → Network → WS → 查看 sessions:list 事件 payload
+  预期：collaborationRole === 'standalone'，childSessionIds === []，groupId / parentSessionId 为 undefined
 ```
 
 ### Phase 2：基础流水线（M7-α 核心）
 
-```bash
-# 步骤 1：创建两个独立会话（Session-A、Session-B，均不启动）
+> 涉及 UI：Canvas 拖线建边、看板状态操作；涉及 curl：创建群组（群组创建 UI 待实现）
 
-# 步骤 2：创建群组并加入
-# 方式 A（REST）：
-curl -X POST http://localhost:3001/api/collaboration/groups \
-  -H "Content-Type: application/json" \
-  -d '{"name":"test-pipeline","sessionIds":["<A-id>","<B-id>"]}'
+```
+步骤 1：创建两个独立会话
+  - 新建会话 → 创建 Session-A 和 Session-B（均不启动）
 
-# 方式 B（UI）：新建会话时选择「加入已有群组」
+步骤 2：创建群组（curl）
+  curl -X POST http://localhost:3001/api/collaboration/groups \
+    -H "Content-Type: application/json" \
+    -d '{"name":"test-pipeline","sessionIds":["<A-id>","<B-id>"]}'
+  （群组创建 UI 完成后可替代此步）
 
-# 步骤 3：添加 on-complete 边
-curl -X POST http://localhost:3001/api/collaboration/groups/<groupId>/edges \
-  -H "Content-Type: application/json" \
-  -d '{
-    "fromSessionId": "<A-id>",
-    "toSessionId": "<B-id>",
-    "trigger": "on-complete",
-    "injectContext": true
-  }'
+步骤 3：拖线建边（Canvas UI）
+  - Session-A 节点 → 鼠标从右侧 handle 拖到 Session-B 左侧 handle
+  - 弹出"创建流水线边"对话框
+  - 选择触发条件：on-complete；勾选"注入上下文"
+  - 确认后边在画布上渲染（灰色虚线表示待触发）
 
-# 步骤 4：将 Session-A 状态置为 completed（前端手动改为 completed，或 curl）
-curl -X PATCH http://localhost:3001/api/sessions/<A-id>/status \
-  -H "Content-Type: application/json" \
-  -d '{"status":"completed"}'
+步骤 4：触发流水线
+  - 在看板上将 Session-A 拖到"已完成"列
+  - 预期：Session-B 在 5s 内变为 initializing（灰色脉冲）
+  - 预期：Session-B 终端出现 [Context from A] 上下文注入行
 
-# 预期：Session-B 在 5s 内变为 initializing，终端出现上下文注入
+步骤 5：刷新页面
+  - F5 刷新 → 边仍在（DB 持久化验证）
 
-# 步骤 5：验证环路检测（预期失败）
-curl -X POST http://localhost:3001/api/collaboration/groups/<groupId>/edges \
-  ... -d '{"fromSessionId":"<B-id>","toSessionId":"<A-id>",...}'
-# 预期：HTTP 400
+步骤 6：验证环路检测（预期拒绝）
+  curl -X POST http://localhost:3001/api/collaboration/groups/<groupId>/edges \
+    -H "Content-Type: application/json" \
+    -d '{"fromSessionId":"<B-id>","toSessionId":"<A-id>","trigger":"on-complete","injectContext":false}'
+  预期：HTTP 400，body 含 "cycle"
 ```
 
 ### Phase 3：协作操作（AC-3，对应里程碑 M7-β）
 
-> 前置：至少有一个 session 处于 `running` 状态，终端可交互
+> 涉及 UI：派生子 Agent 按钮、看板操作
 
-```bash
-# 步骤 1：派生子 Agent — 点击节点的「派生子 Agent」按钮
-# 填写 task="写单元测试"，agentType="claude"，提交
+```
+前置：至少有一个 session 处于 running 状态
 
-# 验证：前端出现新 session，parentSessionId 正确，WS 事件含 agent-spawned
+步骤 1：派生子 Agent
+  - 找到任意 running 节点，hover 鼠标
+  - 右上角出现 users 图标按钮 → 点击
+  - 弹出 Dialog：填写 task="写单元测试"，agentType 选 Claude Code，branch 保持默认
+  - 点击"派发"
+  预期：画布上出现新节点（子 Agent），Tab 自动打开，节点显示 worker badge
 
-# 步骤 2：DELEGATE 消息传递 — 确认两个 session 均 running
-curl -X POST http://localhost:3001/api/collaboration/delegate \
-  -H "Content-Type: application/json" \
-  -d '{"fromSessionId":"<A-id>","toSessionId":"<B-id>","message":"请检查 lint"}'
+步骤 2：验证子 Agent 自动加入父群组
+  - 若父节点在某个 group 中，子节点自动出现在同一 group（画布边框验证）
 
-# 验证：Session-B 终端出现 delegation 消息
+步骤 3：DELEGATE 消息传递
+  curl -X POST http://localhost:3001/api/collaboration/delegate \
+    -H "Content-Type: application/json" \
+    -d '{"fromSessionId":"<A-id>","toSessionId":"<B-id>","message":"请检查 lint"}'
+  预期：Session-B 终端在 1s 内收到青色 delegation 消息
 
-# 步骤 3：AWAIT_SESSION
-curl -X POST http://localhost:3001/api/collaboration/await \
-  -H "Content-Type: application/json" \
-  -d '{"waitingSessionId":"<A-id>","targetSessionId":"<B-id>","timeoutSeconds":60}'
+步骤 4：AWAIT_SESSION
+  curl -X POST http://localhost:3001/api/collaboration/await \
+    -H "Content-Type: application/json" \
+    -d '{"waitingSessionId":"<A-id>","targetSessionId":"<B-id>","timeoutSeconds":30}'
+  预期：看板上 Session-A 状态变为 waiting（橙色脉冲）
 
-# 验证：Session-A 状态变为 waiting（前端看板可见）
+步骤 5：验证等待恢复
+  - 将 Session-B 拖到"已完成"列
+  预期：Session-A 在 3s 内恢复 running，终端出现 B 的摘要
 
-# 步骤 4：完成 B，验证 A 恢复
-# 将 Session-B 状态置为 completed
-# 验证：Session-A 恢复 running，终端出现 B 的摘要
+步骤 6：验证超时
+  - 重复步骤 4（等待一个不会完成的 session）
+  - 等待 30s
+  预期：终端出现 [TIMEOUT] 提示，状态恢复 running
 ```
 
 ### Phase 4：画布视图（AC-4，对应里程碑 M7-γ）
@@ -558,65 +569,83 @@ curl -X POST http://localhost:3001/api/collaboration/await \
 > 所有操作在前端 Canvas 画布进行
 
 ```
-步骤 1：拖拽连线
-  - 两个 session 节点 → 从 source handle 拖到 target handle
-  - 弹出对话框 → 选择触发条件 → 确认
+步骤 1：拖线创建边
+  - 两个 session 节点 → 从 source handle（右侧圆球）拖到 target handle（左侧圆球）
+  - 弹出"创建流水线边"对话框
+  - 选择触发条件、勾选是否注入上下文 → 确认
 
 步骤 2：刷新页面
-  - F5 刷新 → 边是否仍在？
+  - F5 刷新 → 边仍在画布上（DB 持久化验证）
 
-步骤 3：观察边状态
-  - 触发前边为灰色
-  - 触发时边 + 目标节点高亮蓝色
-  - 传递完边变绿色
+步骤 3：观察边状态变化
+  - 触发前：灰色
+  - 触发时：边 + 目标节点高亮蓝色
+  - 传递完：绿色
 
 步骤 4：创建群组框
   - 框选多个节点 → 右键 → 「创建群组」
-  - 验证框出现，组内状态影响框颜色
+  - 验证框出现；组内状态影响框颜色
 
 步骤 5：派生子节点
-  - Orchestrator 输出 [SPAWN_AGENT]（复用 Phase 3 步骤 1）
-  - 观察新节点动画和虚线边
+  - 点击 Orchestrator 节点的 users 按钮（复用 Phase 3 步骤 1）
+  - 观察新节点以展开动画出现，父→子虚线边自动渲染
 ```
 
 ### Phase 5：协作面板（AC-5）
+
+> 所有操作在协作面板 Sheet（右侧抽屉）进行
 
 ```
 步骤 1：打开协作面板
   - TopNav「协作」按钮 → 右侧 Sheet 打开
 
-步骤 2：发送 DELEGATE 消息（复用 Phase 3）
-  - 验证消息流记录出现
+步骤 2：查看成员状态实时更新
+  - 面板打开时，在看板上修改某 session 状态
+  - 面板内状态条在 1s 内更新
 
-步骤 3：编辑共享上下文
-  - 在面板中编辑 → 保存
-  - 验证其他客户端收到 WS 事件同步
+步骤 3：发送 DELEGATE 消息
+  - 面板消息流区 → 找到发送 DELEGATE 入口（或直接用 curl，参考 Phase 3 步骤 3）
+  预期：面板消息流区出现记录，含时间戳、发送方、接收方、内容
 
-步骤 4：流水线向导
-  - 点击「新建流水线」→ 按向导操作 → 验证画布
+步骤 4：编辑共享上下文
+  - 面板中找到「共享上下文」区域
+  - 编辑 Markdown 内容 → 点击保存
+  预期：WS 收到 collaboration:context-updated；其他客户端同步
+
+步骤 5：流水线向导
+  - 点击「新建流水线」→「按向导操作」
+  - 步骤 1 选 session → 步骤 2 拖拽连线 → 步骤 3 配置触发条件 → 步骤 4 保存
+  预期：画布自动出现对应群组和边
 ```
 
 ### Phase 6：Orchestrator 端到端（M7-β → M7）
 
 ```
-步骤 1：创建 claude-orchestrator 会话
+步骤 1：创建 Orchestrator 会话
   - 新建会话 → agentType 选择「Claude Orchestrator」
+  - 验证看板/画布上节点显示 Orchestrator badge
 
-步骤 2：验证 system prompt
-  - 打开终端 → 滚到顶部 → 找到协作协议说明
+步骤 2：验证 System Prompt 注入
+  - 打开该会话终端 → 滚到顶部
+  预期：包含协作说明（派生子 Agent → POST /collaboration/spawn，DELEGATE → POST /collaboration/delegate，AWAIT → POST /collaboration/await）
+  预期：不包含 [SPAWN_AGENT] / [DELEGATE] 等终端协议标记
 
-步骤 3：Orchestrator 派生子 Agent
-  - 终端输入自然语言："请分析代码并派生子任务"
-  - 验证 Claude 输出 [SPAWN_AGENT] → 前端出现 worker
+步骤 3：派生子 Agent（UI 触发）
+  - Orchestrator 节点 hover → users 按钮 → 弹出 Dialog
+  预期：前端出现新 session，collaborationRole === 'worker'，parentSessionId 指向 orchestrator
 ```
 
 ### 清理验收数据
 
-```bash
-# 测试完成后删除测试群组
+```
+步骤 1：删除测试群组
+  - 协作面板 → 找到测试群组 → 点击删除按钮
+  或 curl：
 curl -X DELETE http://localhost:3001/api/collaboration/groups/<test-group-id>
 
-# 删除测试 session（前端勾选后右键删除，或）
+步骤 2：删除测试 session
+  - 画布上选中测试节点 → hover 右上角删除按钮 → 确认 Dialog
+  或 curl：
 curl -X DELETE http://localhost:3001/api/sessions/<test-session-id>
 ```
 
@@ -640,8 +669,7 @@ curl -X DELETE http://localhost:3001/api/sessions/<test-session-id>
 
 | 风险 | 影响 | 预案 |
 |------|------|------|
-| `[SPAWN_AGENT]` 协议依赖 Claude 输出格式，实际 LLM 可能格式不稳定 | Orchestrator 模式可靠性 | 前端保留手动"添加子 Agent"操作；协议仅作加速手段 |
-| 扇入等待逻辑中若某个 session 永久 `running`（Agent 卡死）| Fan-in 群组无法触发 | `AWAIT_SESSION` 默认 5 分钟超时；群组面板显示"等待中"状态 + 手动强制触发按钮 |
+| 扇入等待逻辑中若某个 session 永久 `running`（Agent 卡死）| Fan-in 群组无法触发 | `AWAIT_SESSION` 默认 5 分钟超时；协作面板显示"等待中"状态 + 手动强制触发按钮 |
 | Canvas 边数量过多导致 @xyflow/react 渲染性能下降 | >20 个 session 的大型协作图 | 超过阈值时隐藏边 Label，提供 Minimap；M7-γ 后评估 |
 | SQLite 并发写入（多 session 同时触发流水线）| 数据竞争 | better-sqlite3 已是单线程同步；CollaborationManager 方法加排队锁（`async-mutex`）|
 

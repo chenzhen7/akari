@@ -38,11 +38,10 @@ const edgeTypes = {
 /** 内部组件：包含 ReactFlow，需要在 ReactFlowProvider 内部使用 */
 function CanvasViewContent() {
   const sessions = useSessionStore(s => s.sessions)
-  const groups = useSessionStore(s => s.groups)
+  const canvasEdges = useSessionStore(s => s.canvasEdges)
   const connectionStatus = useSessionStore(s => s.connectionStatus)
   const openTab = useSessionStore(s => s.openTab)
   const updateCanvasPosition = useSessionStore(s => s.updateCanvasPosition)
-  const fetchGroups = useSessionStore(s => s.fetchGroups)
   const { screenToFlowPosition } = useReactFlow()
 
   const [nodes, setNodes, onNodesChange] = useNodesState([] as Node[])
@@ -51,129 +50,79 @@ function CanvasViewContent() {
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
   const [fitOnMount] = useState(() => _savedViewport === null)
 
-  // 同步 Pipeline 边：从 groups 中提取所有 pipelineEdges
+  // 同步 Canvas 边（持久化）
   useEffect(() => {
-    const allEdges: Edge[] = []
-    for (const group of groups) {
-      for (const pe of group.pipelineEdges) {
-        allEdges.push({
-          id: pe.id,
-          source: pe.fromSessionId,
-          target: pe.toSessionId,
-          label: pe.trigger,
-          type: 'flowEdge',
-          data: { groupId: group.id, injectContext: pe.injectContext },
-        })
-      }
-    }
-    // Parent → child dashed edges (from spawn)
-    for (const s of sessions) {
-      if (s.parentSessionId) {
-        const edgeId = `spawn-${s.parentSessionId}-${s.id}`
-        if (!allEdges.find(e => e.id === edgeId)) {
-          allEdges.push({
-            id: edgeId,
-            source: s.parentSessionId,
-            target: s.id,
-            style: { stroke: '#94a3b8', strokeWidth: 2.5, strokeDasharray: '5,3' },
-            markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' },
-            label: 'spawned',
-          })
-        }
-      }
-    }
-    // merge：保留服务端尚未确认的本地临时边（相同 source-target 的只保留服务端版本）
-    const serverPairs = new Set(allEdges.map(e => `${e.source}__${e.target}`))
-    setEdges((prev: Edge[]) => {
+    const allEdges: Edge[] = canvasEdges.map(pe => ({
+      id: pe.id,
+      source: pe.sourceSessionId,
+      target: pe.targetSessionId,
+      label: pe.trigger,
+      type: 'flowEdge',
+    }))
+    setEdges(prev => {
+      const serverPairs = new Set(allEdges.map(e => `${e.source}__${e.target}`))
       const pendingEdges = prev.filter((e: Edge) => !serverPairs.has(`${e.source}__${e.target}`))
       return [...allEdges, ...pendingEdges]
     })
-  }, [groups, sessions, setEdges])
+  }, [canvasEdges, setEdges])
 
-  // 用户拖线连接两个节点 → 创建 pipeline edge
+  // 用户拖线连接两个节点 → 创建 canvas edge（持久化）
   const onConnect = useCallback(
     async (connection: Connection) => {
       const { source, target } = connection
       if (!source || !target) return
 
-      // 防止自连
       if (source === target) {
         toast.error('不能将会话连接到自身')
         return
       }
 
-      // 防止重复连线（同 source→target 已存在）
       const duplicate = edges.some((e: Edge) => e.source === source && e.target === target)
       if (duplicate) {
         toast.error('该方向的连线已存在')
         return
       }
 
-      const sourceSession = sessions.find(s => s.id === source)
-      const targetSession = sessions.find(s => s.id === target)
-      if (!sourceSession || !targetSession) return
-
-      // 找到或创建包含这两个 session 的 group
-      let groupId = groups.find(g => g.sessionIds.includes(source) && g.sessionIds.includes(target))?.id
-      if (!groupId) {
-        try {
-          const res = await fetch(`${API_BASE}/collaboration/groups`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: `${sourceSession.name} → ${targetSession.name}`, sessionIds: [source, target] }),
-          })
-          const group = await res.json()
-          groupId = group.id
-          fetchGroups()
-        } catch {
-          toast.error('创建协作组失败')
-          return
-        }
-      }
-
-      // 添加流水线边
       try {
-        const res = await fetch(`${API_BASE}/collaboration/groups/${groupId}/edges`, {
+        const res = await fetch(`${API_BASE}/canvas/edges`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fromSessionId: source, toSessionId: target, trigger: 'on-complete', injectContext: true }),
+          body: JSON.stringify({
+            sourceSessionId: source,
+            targetSessionId: target,
+            trigger: 'on-complete',
+            injectContext: true,
+          }),
         })
         if (!res.ok) {
           const errData = await res.json()
           throw new Error(errData.error || `HTTP 错误 ${res.status}`)
         }
-        fetchGroups()
-        toast.success('Pipeline 连接已创建')
+        // canvas:edges WS 事件会自动更新 canvasEdges，触发上面的 useEffect 同步
       } catch (err: any) {
-        toast.error(`创建 Pipeline 边失败: ${err instanceof Error ? err.message : err}`)
+        toast.error(`创建连线失败: ${err instanceof Error ? err.message : err}`)
+        return
       }
       setEdges(eds => addEdge(connection, eds))
     },
-    [edges, sessions, groups, fetchGroups, setEdges],
+    [edges, setEdges],
   )
 
-  // 处理连线删除：用户按下 Delete 或 Backspace 键删除选中的连线
+  // 处理连线删除（持久化）
   const onEdgesDelete = useCallback(
     async (edgesToDelete: Edge[]) => {
       for (const edge of edgesToDelete) {
-        if (edge.id.startsWith('spawn-')) continue
-
-        const groupId = edge.data?.groupId
-        if (!groupId) continue
-
         try {
-          const res = await fetch(`${API_BASE}/collaboration/groups/${groupId}/edges/${edge.id}`, {
+          const res = await fetch(`${API_BASE}/canvas/edges/${edge.id}`, {
             method: 'DELETE',
           })
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          toast.success('Pipeline 连接已删除')
+          if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`)
         } catch (err: any) {
-          toast.error(`删除 Pipeline 边失败: ${err instanceof Error ? err.message : err}`)
+          toast.error(`删除连线失败: ${err instanceof Error ? err.message : err}`)
         }
       }
-      fetchGroups()
     },
-    [fetchGroups]
+    [],
   )
 
   // 同步节点：精细化比较，只在新增/删除/位置/status/progress 变化时更新
@@ -276,7 +225,7 @@ function CanvasViewContent() {
         onNodeDragStop={onNodeDragStop}
         onPaneContextMenu={onPaneContextMenu}
         onPaneClick={closeMenu}
-        onMoveStart={closeMenu}
+        onPaneMouseDown={closeMenu}
         defaultViewport={_savedViewport ?? undefined}
         fitView={fitOnMount}
         fitViewOptions={{ padding: 0.2 }}

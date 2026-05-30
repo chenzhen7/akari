@@ -21,32 +21,12 @@ export type AgentType = 'claude' | 'aider' | 'shell' | 'claude-orchestrator'
 
 export type CollaborationRole = 'standalone' | 'orchestrator' | 'worker' | 'reviewer'
 
-export interface PipelineEdge {
+export interface CanvasEdge {
   id: string
-  fromSessionId: string
-  toSessionId: string
+  sourceSessionId: string
+  targetSessionId: string
   trigger: 'on-complete' | 'on-approval'
   injectContext: boolean
-}
-
-export interface CollaborationGroup {
-  id: string
-  name: string
-  description?: string
-  sessionIds: string[]
-  pipelineEdges: PipelineEdge[]
-  sharedContext: string
-  status: 'active' | 'completed' | 'failed'
-  createdAt: Date
-}
-
-export interface AgentMessage {
-  id: string
-  groupId: string
-  fromSessionId: string
-  toSessionId: string
-  content: string
-  timestamp: Date
 }
 
 export interface DiffFile {
@@ -109,7 +89,6 @@ export interface AgentSession {
   tags: string[]
 
   collaborationRole: CollaborationRole
-  groupId?: string
   parentSessionId?: string
   childSessionIds: string[]
 }
@@ -149,20 +128,13 @@ export type ServerMessage =
   | { event: 'sessions:list'; payload: AgentSession[] }
   | { event: 'git:log-updated'; payload: { sessionId: string } & GitLogResponse }
   | { event: 'session:lastMessage'; payload: { id: string; lastAiMessage: string } }
-  | { event: 'collaboration:group-created'; payload: CollaborationGroup }
-  | { event: 'collaboration:group-updated'; payload: CollaborationGroup }
-  | { event: 'collaboration:group-deleted'; payload: { groupId: string } }
-  | { event: 'collaboration:agent-spawned'; payload: { parentSessionId: string; newSession: AgentSession } }
-  | { event: 'collaboration:pipeline-triggered'; payload: { edgeId: string; fromId: string; toId: string } }
-  | { event: 'collaboration:context-updated'; payload: { groupId: string; context: string } }
-  | { event: 'agent:message'; payload: AgentMessage }
+  | { event: 'canvas:edges'; payload: CanvasEdge[] }
 
 export type ClientMessage =
   | { event: 'terminal:input'; payload: { sessionId: string; data: string } }
   | { event: 'terminal:resize'; payload: { sessionId: string; cols: number; rows: number } }
   | { event: 'approval:decision'; payload: { sessionId: string; decision: 'approved' | 'rejected'; comment?: string } }
   | { event: 'broadcast:send'; payload: { message: string; targets?: string[] } }
-  | { event: 'collaboration:update-context'; payload: { groupId: string; context: string } }
 
 // ─── Phase 8: HTTP Hook Event Types ──────────────────────────────────────────
 

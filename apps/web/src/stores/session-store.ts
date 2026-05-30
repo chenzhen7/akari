@@ -1,20 +1,19 @@
 import { create } from 'zustand'
 import { toast } from 'sonner'
-import type { AgentSession, AgentType, CollaborationGroup, GitLogResponse, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
+import type { AgentSession, AgentType, CanvasEdge, GitLogResponse, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
 import type { ConnectionStatus } from '@/hooks/useWebSocket'
 import { terminalBus } from '@/lib/terminalBus'
 
 
 interface SessionStore {
   sessions: AgentSession[]
-  groups: CollaborationGroup[]
+  canvasEdges: CanvasEdge[]
   gitLogs: Record<string, GitLogResponse>
   viewMode: 'canvas' | 'kanban'
   openTabs: string[]
   activeTabId: string | null
   commandCenterOpen: boolean
   createDialogOpen: boolean
-  collaborationPanelOpen: boolean
   connectionStatus: ConnectionStatus
   disconnectedAt: number | null
   terminalReadyTick: Record<string, number>
@@ -23,9 +22,9 @@ interface SessionStore {
   /** 存储右键新建会话时的画布位置 */
   pendingCreatePosition: { x: number; y: number } | null
 
-  addSession: (name: string, task: string, baseBranch?: string, agentType?: AgentType, parentSessionId?: string, groupId?: string) => void
+  addSession: (name: string, task: string, baseBranch?: string, agentType?: AgentType, canvasPosition?: { x: number; y: number }) => void
   openCreateDialog: (position?: { x: number; y: number }) => void
-  fetchGroups: () => void
+  fetchCanvasEdges: () => void
   updateStatus: (id: string, status: SessionStatus) => void
   moveToColumn: (id: string, column: KanbanColumn) => void
   updateCanvasPosition: (id: string, pos: { x: number; y: number }) => void
@@ -35,7 +34,6 @@ interface SessionStore {
   setViewMode: (mode: 'canvas' | 'kanban') => void
   toggleCommandCenter: () => void
   toggleCreateDialog: () => void
-  toggleCollaborationPanel: () => void
   approveSession: (id: string, approvalOption?: string) => void
   rejectSession: (id: string) => void
   ignoreApproval: (id: string) => void
@@ -54,14 +52,13 @@ const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
-  groups: [],
+  canvasEdges: [],
   gitLogs: {},
   viewMode: 'canvas',
   openTabs: [],
   activeTabId: null,
   commandCenterOpen: false,
   createDialogOpen: false,
-  collaborationPanelOpen: false,
   connectionStatus: 'connecting',
   disconnectedAt: null,
   terminalReadyTick: {},
@@ -72,16 +69,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set({ createDialogOpen: true, pendingCreatePosition: position ?? null })
   },
 
-  fetchGroups: () => {
-    fetch(`${API_BASE}/collaboration/groups`)
+  fetchCanvasEdges: () => {
+    fetch(`${API_BASE}/canvas/edges`)
       .then(r => r.json())
-      .then((groups: CollaborationGroup[]) => set({ groups }))
-      .catch(err => console.warn('[fetchGroups] failed:', err))
+      .then((edges: CanvasEdge[]) => set({ canvasEdges: edges }))
+      .catch(err => console.warn('[fetchCanvasEdges] failed:', err))
   },
 
-  addSession: (name, task, baseBranch = 'main', agentType = 'claude', parentSessionId, groupId) => {
+  addSession: (name, task, baseBranch = 'main', agentType = 'claude', canvasPosition) => {
     const pendingPos = get().pendingCreatePosition
-    const body = JSON.stringify({ name: name.trim(), task: task.trim(), baseBranch, agentType, parentSessionId, groupId, canvasPosition: pendingPos })
+    const body = JSON.stringify({ name: name.trim(), task: task.trim(), baseBranch, agentType, canvasPosition: canvasPosition ?? pendingPos })
     fetch(`${API_BASE}/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -178,9 +175,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   toggleCreateDialog: () =>
     set(state => ({ createDialogOpen: !state.createDialogOpen })),
-
-  toggleCollaborationPanel: () =>
-    set(state => ({ collaborationPanelOpen: !state.collaborationPanelOpen })),
 
   approveSession: (id: string, approvalOption?: string) => {
     fetch(`${API_BASE}/sessions/${id}/approval`, {
@@ -311,7 +305,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             : state.disconnectedAt,
     }))
     if (status === 'connected') {
-      get().fetchGroups()
+      get().fetchCanvasEdges()
     }
   },
 
@@ -380,31 +374,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }))
         break
       }
-      case 'collaboration:group-created':
-        set(state => ({ groups: [...state.groups.filter(g => g.id !== msg.payload.id), msg.payload] }))
-        break
-      case 'collaboration:group-updated':
-        set(state => ({ groups: state.groups.map(g => g.id === msg.payload.id ? msg.payload : g) }))
-        break
-      case 'collaboration:group-deleted':
-        set(state => ({ groups: state.groups.filter(g => g.id !== msg.payload.groupId) }))
-        break
-      case 'collaboration:agent-spawned':
-        set(state => ({
-          sessions: [...state.sessions.filter(s => s.id !== msg.payload.newSession.id), msg.payload.newSession],
-        }))
-        get().openTab(msg.payload.newSession.id)
-        toast.info(`Agent 派生: ${msg.payload.newSession.name}`)
-        break
-      case 'collaboration:pipeline-triggered':
-        toast.info(`流水线触发: ${msg.payload.fromId.slice(0, 6)} → ${msg.payload.toId.slice(0, 6)}`)
-        break
-      case 'collaboration:context-updated':
-        set(state => ({
-          groups: state.groups.map(g =>
-            g.id === msg.payload.groupId ? { ...g, sharedContext: msg.payload.context } : g
-          ),
-        }))
+      case 'canvas:edges':
+        set({ canvasEdges: msg.payload })
         break
       case 'session:lastMessage':
         set(state => ({

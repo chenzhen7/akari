@@ -66,12 +66,6 @@ async function writeClaudeSettings(worktreePath: string, sessionId: string): Pro
   await writeFile(settingsPath, JSON.stringify(existingSettings, null, 2))
 }
 
-const ORCHESTRATOR_SYSTEM_PROMPT = [
-  'You are an Akari Orchestrator Agent managing a multi-agent collaboration network.',
-  'You coordinate parallel work by delegating tasks to worker agents via Akari MCP tools.',
-  'Focus on breaking down complex tasks, delegating subtasks, and synthesizing results.',
-  'Dangerous operations will be intercepted automatically for user approval.',
-].join(' ')
 
 export class ClaudeAdapter implements AgentAdapter {
   readonly agentType = 'claude'
@@ -80,17 +74,6 @@ export class ClaudeAdapter implements AgentAdapter {
     await writeClaudeSettings(worktreePath, sessionId)
     const nl = process.platform === 'win32' ? '\r\n' : '\n'
     return [{ cmd: `claude${nl}` }]
-  }
-}
-
-export class ClaudeOrchestratorAdapter implements AgentAdapter {
-  readonly agentType = 'claude-orchestrator'
-
-  async prepare(worktreePath: string, _task: string, sessionId: string): Promise<PtyCommand[]> {
-    await writeClaudeSettings(worktreePath, sessionId)
-    const nl = process.platform === 'win32' ? '\r\n' : '\n'
-    const prompt = ORCHESTRATOR_SYSTEM_PROMPT.replace(/"/g, '\\"')
-    return [{ cmd: `claude --append-system-prompt "${prompt}"${nl}` }]
   }
 }
 

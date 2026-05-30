@@ -3,8 +3,9 @@ import fastifyCors from '@fastify/cors'
 import fastifyWebsocket from '@fastify/websocket'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
-import type { AgentType, ClientMessage, HookEvent, PipelineEdge, ServerMessage, SessionStatus } from '@akari/shared-types'
+import type { AgentType, ClientMessage, HookEvent, ServerMessage, SessionStatus } from '@akari/shared-types'
 import { createSessionManager, validateTransition } from './session-manager.js'
+import { CanvasEdgeStore } from './canvas-edge-store.js'
 import { dispatchHookEvent } from './hook-dispatcher.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -32,6 +33,9 @@ const sessionManager = await createSessionManager({
   broadcast,
 })
 
+const canvasEdgeStore = new CanvasEdgeStore(sessionManager.getDb())
+canvasEdgeStore.initDb()
+
 fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
 
 fastify.get('/sessions', async () => sessionManager.listSessions())
@@ -42,17 +46,15 @@ interface CreateSessionBody {
   baseBranch?: string
   agentType?: AgentType
   tags?: string[]
-  parentSessionId?: string
-  groupId?: string
   canvasPosition?: { x: number; y: number }
 }
 
 fastify.post<{ Body: CreateSessionBody }>('/sessions', async (request, reply) => {
-  const { name, task, baseBranch = 'main', agentType = 'claude', tags = [], parentSessionId, groupId, canvasPosition } = request.body
+  const { name, task, baseBranch = 'main', agentType = 'claude', tags = [], canvasPosition } = request.body
   if (!name?.trim() || !task?.trim()) {
     return reply.status(400).send({ error: 'name and task are required' })
   }
-  const session = await sessionManager.createSession({ name, task, baseBranch, agentType, tags, parentSessionId, groupId, canvasPosition })
+  const session = await sessionManager.createSession({ name, task, baseBranch, agentType, tags, canvasPosition })
   return reply.status(201).send(session)
 })
 
@@ -279,176 +281,32 @@ fastify.post<{ Params: { id: string } }>(
   },
 )
 
-// ─── Collaboration endpoints ──────────────────────────────────────────────────
+// ─── Canvas Edge endpoints ────────────────────────────────────────────────────
 
-fastify.get('/collaboration/groups', async () =>
-  sessionManager.collaborationManager.listGroups(),
-)
-
-fastify.post<{ Body: { name: string; description?: string; sessionIds?: string[] } }>(
-  '/collaboration/groups',
-  async (request, reply) => {
-    const { name, description, sessionIds = [] } = request.body
-    if (!name?.trim()) return reply.status(400).send({ error: 'name is required' })
-    const group = sessionManager.collaborationManager.createGroup(name.trim(), description)
-    for (const sid of sessionIds) {
-      sessionManager.collaborationManager.addSessionToGroup(group.id, sid)
-    }
-    return reply.status(201).send(sessionManager.collaborationManager.getGroup(group.id))
-  },
-)
-
-fastify.get<{ Params: { id: string } }>(
-  '/collaboration/groups/:id',
-  async (request, reply) => {
-    const group = sessionManager.collaborationManager.getGroup(request.params.id)
-    if (!group) return reply.status(404).send({ error: 'group not found' })
-    return group
-  },
-)
-
-fastify.patch<{ Params: { id: string }; Body: { name?: string; description?: string; sharedContext?: string } }>(
-  '/collaboration/groups/:id',
-  async (request, reply) => {
-    const { id } = request.params
-    const { name, description, sharedContext } = request.body
-    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
-    if (name !== undefined || description !== undefined) {
-      sessionManager.collaborationManager.updateGroup(id, { name, description })
-    }
-    if (sharedContext !== undefined) {
-      sessionManager.collaborationManager.updateSharedContext(id, sharedContext)
-    }
-    return sessionManager.collaborationManager.getGroup(id)
-  },
-)
-
-fastify.delete<{ Params: { id: string } }>(
-  '/collaboration/groups/:id',
-  async (request, reply) => {
-    if (!sessionManager.collaborationManager.getGroup(request.params.id)) {
-      return reply.status(404).send({ error: 'group not found' })
-    }
-    sessionManager.collaborationManager.deleteGroup(request.params.id)
-    return { ok: true }
-  },
-)
-
-fastify.post<{ Params: { id: string }; Body: { sessionId: string } }>(
-  '/collaboration/groups/:id/sessions',
-  async (request, reply) => {
-    const { id } = request.params
-    const { sessionId } = request.body
-    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
-    if (!sessionManager.getSession(sessionId)) return reply.status(404).send({ error: 'session not found' })
-    sessionManager.collaborationManager.addSessionToGroup(id, sessionId)
-    return { ok: true }
-  },
-)
-
-fastify.delete<{ Params: { id: string; sessionId: string } }>(
-  '/collaboration/groups/:id/sessions/:sessionId',
-  async (request, reply) => {
-    const { id, sessionId } = request.params
-    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
-    sessionManager.collaborationManager.removeSessionFromGroup(id, sessionId)
-    return { ok: true }
-  },
-)
+fastify.get('/canvas/edges', async () => canvasEdgeStore.getAllEdges())
 
 fastify.post<{
-  Params: { id: string }
-  Body: Omit<PipelineEdge, 'id'>
+  Body: { sourceSessionId: string; targetSessionId: string; trigger?: 'on-complete' | 'on-approval'; injectContext?: boolean }
 }>(
-  '/collaboration/groups/:id/edges',
+  '/canvas/edges',
   async (request, reply) => {
-    const { id } = request.params
-    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
-    try {
-      const edge = sessionManager.collaborationManager.addEdge(id, request.body)
-      return reply.status(201).send(edge)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return reply.status(400).send({ error: msg })
+    const { sourceSessionId, targetSessionId } = request.body
+    if (!sourceSessionId || !targetSessionId) {
+      return reply.status(400).send({ error: 'sourceSessionId and targetSessionId are required' })
     }
+    const edge = canvasEdgeStore.createEdge(request.body)
+    broadcast({ event: 'canvas:edges', payload: canvasEdgeStore.getAllEdges() })
+    return reply.status(201).send(edge)
   },
 )
 
-fastify.delete<{ Params: { id: string; edgeId: string } }>(
-  '/collaboration/groups/:id/edges/:edgeId',
+fastify.delete<{ Params: { edgeId: string } }>(
+  '/canvas/edges/:edgeId',
   async (request, reply) => {
-    const { id, edgeId } = request.params
-    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
-    sessionManager.collaborationManager.removeEdge(id, edgeId)
-    return { ok: true }
-  },
-)
-
-fastify.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
-  '/collaboration/groups/:id/messages',
-  async (request, reply) => {
-    const { id } = request.params
-    if (!sessionManager.collaborationManager.getGroup(id)) return reply.status(404).send({ error: 'group not found' })
-    const limit = parseInt(request.query.limit ?? '100') || 100
-    return sessionManager.collaborationManager.getMessages(id, limit)
-  },
-)
-
-// POST /collaboration/spawn — 手动派生子 Agent（前端 UI 触发）
-fastify.post<{
-  Body: { parentSessionId: string; task: string; agentType: AgentType; branch?: string }
-}>(
-  '/collaboration/spawn',
-  async (request, reply) => {
-    const { parentSessionId, task, agentType, branch } = request.body
-    if (!parentSessionId || !task?.trim()) {
-      return reply.status(400).send({ error: 'parentSessionId and task are required' })
-    }
-    const parent = sessionManager.getSession(parentSessionId)
-    if (!parent) return reply.status(404).send({ error: 'parent session not found' })
-    await sessionManager.collaborationManager.handleSpawnAgent(parentSessionId, {
-      task: task.trim(),
-      agentType: agentType ?? 'claude',
-      branch,
-    })
-    return { ok: true }
-  },
-)
-
-// POST /collaboration/delegate — 向另一个 session 发消息
-fastify.post<{
-  Body: { fromSessionId: string; toSessionId: string; message: string }
-}>(
-  '/collaboration/delegate',
-  async (request, reply) => {
-    const { fromSessionId, toSessionId, message } = request.body
-    if (!fromSessionId || !toSessionId || !message?.trim()) {
-      return reply.status(400).send({ error: 'fromSessionId, toSessionId, and message are required' })
-    }
-    const from = sessionManager.getSession(fromSessionId)
-    const to = sessionManager.getSession(toSessionId)
-    if (!from) return reply.status(404).send({ error: 'from session not found' })
-    if (!to) return reply.status(404).send({ error: 'to session not found' })
-    sessionManager.collaborationManager.handleDelegate(fromSessionId, toSessionId, message.trim())
-    return { ok: true }
-  },
-)
-
-// POST /collaboration/await — 让当前 session 等待另一个 session 完成
-fastify.post<{
-  Body: { waitingSessionId: string; targetSessionId: string; timeoutSeconds?: number }
-}>(
-  '/collaboration/await',
-  async (request, reply) => {
-    const { waitingSessionId, targetSessionId, timeoutSeconds = 300 } = request.body
-    if (!waitingSessionId || !targetSessionId) {
-      return reply.status(400).send({ error: 'waitingSessionId and targetSessionId are required' })
-    }
-    const waiting = sessionManager.getSession(waitingSessionId)
-    const target = sessionManager.getSession(targetSessionId)
-    if (!waiting) return reply.status(404).send({ error: 'waiting session not found' })
-    if (!target) return reply.status(404).send({ error: 'target session not found' })
-    sessionManager.collaborationManager.registerAwait(waitingSessionId, targetSessionId, timeoutSeconds)
+    const { edgeId } = request.params
+    const deleted = canvasEdgeStore.deleteEdge(edgeId)
+    if (!deleted) return reply.status(404).send({ error: 'edge not found' })
+    broadcast({ event: 'canvas:edges', payload: canvasEdgeStore.getAllEdges() })
     return { ok: true }
   },
 )
@@ -459,6 +317,7 @@ fastify.get('/ws', { websocket: true }, socket => {
 
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ event: 'sessions:list', payload: sessionManager.listSessions() }))
+    socket.send(JSON.stringify({ event: 'canvas:edges', payload: canvasEdgeStore.getAllEdges() }))
   }
 
   // Push current diffs to the newly connected client so DiffViewer restores after refresh
@@ -515,11 +374,6 @@ function handleClientMessage(msg: ClientMessage): void {
     case 'broadcast:send': {
       const { message, targets } = msg.payload
       sessionManager.broadcastMessage_legacy(message, targets)
-      break
-    }
-    case 'collaboration:update-context': {
-      const { groupId, context } = msg.payload
-      sessionManager.collaborationManager.updateSharedContext(groupId, context)
       break
     }
   }

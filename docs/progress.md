@@ -39,15 +39,23 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 创建会话弹窗 | `apps/web/src/components/create-session/` | 含 agentType 选择，initializing spinner，session:created 自动打开 Tab |
 | AgentAdapter 接口 | `apps/server/src/agent-adapters/base.ts` | `AgentAdapter` 接口 + `PtyCommand` 类型 |
 | ClaudeAdapter | `apps/server/src/agent-adapters/claude.ts` | 交互模式启动 `claude`，`--append-system-prompt` 注入 Akari 协议，2.5s 延迟后自动注入任务 |
-| ClaudeOrchestratorAdapter | `apps/server/src/agent-adapters/claude.ts` | 注入完整 Orchestrator system prompt，协作协议标记说明 |
 | 适配器工厂 | `apps/server/src/agent-adapters/index.ts` | `createAgentAdapter(agentType)` 工厂，SessionManager 集成 |
-| CollaborationManager | `apps/server/src/collaboration-manager.ts` | 群组 CRUD、流水线边、DAG 环检测、AWAIT/DELEGATE/SPAWN 处理、SQLite 持久化 |
-| 协作 REST API | `apps/server/src/index.ts` | `/collaboration/groups` 全套 CRUD + edges + messages + spawn/delegate/await 端点 |
-| 派生子 Agent UI | `apps/web/src/components/canvas/SessionNode.tsx` | hover 按钮 + Dialog 表单，调用 `POST /collaboration/spawn` |
-| 画布 Pipeline 边 | `apps/web/src/components/canvas/CanvasView.tsx` | 从 groups 同步边（实线箭头）+ 派生关系（虚线）；拖线自动创建群组+边 |
-| SessionNode Handle | `apps/web/src/components/canvas/SessionNode.tsx` | source/target Handle（hover 显现）；orchestrator/worker role badge；claude-orchestrator 棕色皇冠图标 |
-| CollaborationPanel | `apps/web/src/components/collaboration/CollaborationPanel.tsx` | 右侧 Sheet；群组列表、成员、Pipeline 边、共享上下文编辑 |
-| TopNav 协作按钮 | `apps/web/src/components/layout/TopNav.tsx` | Network 图标按钮，有群组时显示数量角标 |
+| CanvasEdgeStore | `apps/server/src/canvas-edge-store.ts` | 画布连线独立持久化（DB 表 `canvas_edges`）|
+| Canvas 连线持久化 API | `apps/server/src/index.ts` | `GET/POST/DELETE /canvas/edges` REST 端点 + `canvas:edges` WS 事件 |
+| 画布节点 Handle | `apps/web/src/components/canvas/SessionNode.tsx` | source/target Handle（hover 显现）；claude-orchestrator 图标 |
+
+### 🔄 已回退（Phase-7 多 Agent 协作）
+
+> **原因**：群组/pipeline 机制在 worktree 物理隔离前提下无法让子 Agent 访问父 Agent 代码，属于设计层面的不兼容。群组功能已全部移除，保留 Canvas 连线持久化作为独立功能。
+
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| CollaborationManager | 已删除 | `apps/server/src/collaboration-manager.ts` 已删除 |
+| `/collaboration/*` REST API | 已移除 | 全部 13 个端点已移除 |
+| CollaborationPanel | 已删除 | 右侧 Sheet 面板已移除 |
+| Spawn Dialog + role badge | 已移除 | SessionNode 中的派生 Agent 按钮和角色标签已移除 |
+| ClaudeOrchestratorAdapter | 已删除 | orchestrator 专属适配器已移除 |
+| `claude-orchestrator` agent type | 保留 | `createAgentAdapter` 仍可识别，但走 fallback（null），不自动启动 |
 
 ### 🔲 待开发（按功能模块）
 
@@ -79,7 +87,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 阶段四 | 审批后端 + 审批 UI | 🔲 待开始 | [phase-4](./开发计划/phase-4-审批工作流.md) |
 | 阶段五 | Claude / Aider / Shell 适配器 | ✅ Claude + Orchestrator 完成 | [phase-5](./开发计划/phase-5-Agent适配器.md) |
 | 阶段六 | Git 可视化 | 🔲 待开始 | [phase-6](./开发计划/phase-6-git可视化.md) |
-| 阶段七 | 多 Agent 协作 | ✅ 核心完成（SPAWN/DELAGATE/AWAIT REST 端点 + UI 按钮触发，TerminalMux 协议检测已废弃） | [phase-7](./开发计划/phase-7-多agent协作.md) |
+| 阶段七 | 多 Agent 协作 | 🔄 已回退（群组功能移除，保留 Canvas 连线持久化） | [phase-7](./开发计划/phase-7-多agent协作.md) |
 | 阶段八 | 基于 Hooks 的 Agent 状态流程机制改造 | ✅ 核心完成（8.1~8.4，PreToolUse/MCP 暂不做） | [phase-8](./开发计划/phase-8-基于Hooks的Agent状态流程机制改造计划.md) |
 
 ## 里程碑

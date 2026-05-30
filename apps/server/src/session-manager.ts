@@ -17,7 +17,6 @@ import type {
 import { WorktreeManager } from './worktree-manager.js'
 import { TerminalMultiplexer } from './terminal-mux.js'
 import { createAgentAdapter, SHELL_STARTUP_DELAY_MS } from './agent-adapters/index.js'
-import { CollaborationManager } from './collaboration-manager.js'
 import { approvalRegistry } from './hook-dispatcher.js'
 
 export interface CreateSessionParams {
@@ -28,7 +27,6 @@ export interface CreateSessionParams {
   tags?: string[]
   canvasPosition?: { x: number; y: number }
   parentSessionId?: string
-  groupId?: string
 }
 
 interface DbRow {
@@ -52,7 +50,6 @@ interface DbRow {
   tags: string
   pending_approval: string | null
   collaboration_role: string | null
-  group_id: string | null
   parent_session_id: string | null
   child_session_ids: string | null
   last_ai_message: string
@@ -93,7 +90,6 @@ export class SessionManager {
   private readonly worktreeManager: WorktreeManager
   private readonly terminalMux: TerminalMultiplexer
   private readonly broadcast: (msg: ServerMessage) => void
-  readonly collaborationManager: CollaborationManager
 
   constructor(opts: { repoPath: string; dbPath: string; broadcast: (msg: ServerMessage) => void }) {
     this.db = new Database(opts.dbPath)
@@ -101,17 +97,6 @@ export class SessionManager {
     this.terminalMux = new TerminalMultiplexer()
     this.broadcast = opts.broadcast
     this.initDb()
-    this.collaborationManager = new CollaborationManager({
-      db: this.db,
-      broadcast: this.broadcast,
-      createSession: (params) => this.createSession(params),
-      sendToTerminal: (sessionId, data) => this.terminalMux.sendToTerminal(sessionId, data),
-      resumeSession: (sessionId) => {
-        const s = this.getSession(sessionId)
-        if (s && s.status === 'waiting') this.updateStatus(sessionId, 'running')
-      },
-    })
-    this.collaborationManager.initDb()
     this.wireEvents()
   }
 
@@ -125,10 +110,6 @@ export class SessionManager {
       .slice(0, 40)
 
     const agentType = params.agentType ?? 'claude'
-    const collaborationRole: CollaborationRole =
-      agentType === 'claude-orchestrator' ? 'orchestrator'
-        : params.parentSessionId ? 'worker'
-          : 'standalone'
 
     const session: AgentSession = {
       id,
@@ -152,8 +133,7 @@ export class SessionManager {
       diffSummary: '',
       createdAt: new Date(),
       tags: params.tags ?? [],
-      collaborationRole,
-      groupId: params.groupId,
+      collaborationRole: 'standalone' as CollaborationRole,
       parentSessionId: params.parentSessionId,
       childSessionIds: [],
     }
@@ -184,10 +164,7 @@ export class SessionManager {
     })
 
     if (status === 'completed') {
-      const summary = session.diffSummary || session.task
-      this.collaborationManager.onSessionCompleted(sessionId, summary).catch(err => {
-        console.error(`[CollaborationManager] onSessionCompleted error for ${sessionId}:`, err)
-      })
+      // 后续扩展：可在此接入 pipeline trigger、通知等机制
     }
   }
 
@@ -211,6 +188,11 @@ export class SessionManager {
 
   resizeTerminal(sessionId: string, cols: number, rows: number): void {
     this.terminalMux.resizeTerminal(sessionId, cols, rows)
+  }
+
+  /** Expose db for CanvasEdgeStore — only used within the same process */
+  getDb(): Database.Database {
+    return this.db
   }
 
   updateCanvasPosition(sessionId: string, x: number, y: number): void {
@@ -530,7 +512,6 @@ export class SessionManager {
         tags                TEXT NOT NULL DEFAULT '[]',
         pending_approval    TEXT,
         collaboration_role  TEXT NOT NULL DEFAULT 'standalone',
-        group_id            TEXT,
         parent_session_id   TEXT,
         child_session_ids   TEXT NOT NULL DEFAULT '[]',
         last_ai_message    TEXT NOT NULL DEFAULT ''
@@ -557,8 +538,8 @@ export class SessionManager {
           id, name, task, status, agent_type, worktree_path, branch_name, base_branch,
           canvas_x, canvas_y, canvas_width, canvas_height,
           kanban_column, terminal_id, progress, diff_summary, last_ai_message, created_at, tags, pending_approval,
-          collaboration_role, group_id, parent_session_id, child_session_ids
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          collaboration_role, parent_session_id, child_session_ids
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         s.id,
@@ -582,7 +563,6 @@ export class SessionManager {
         JSON.stringify(s.tags),
         s.pendingApproval ? JSON.stringify(s.pendingApproval) : null,
         s.collaborationRole,
-        s.groupId ?? null,
         s.parentSessionId ?? null,
         JSON.stringify(s.childSessionIds),
       )
@@ -613,7 +593,6 @@ function rowToSession(r: DbRow): AgentSession {
       ? (JSON.parse(r.pending_approval) as ApprovalRequest)
       : undefined,
     collaborationRole: (r.collaboration_role ?? 'standalone') as CollaborationRole,
-    groupId: r.group_id ?? undefined,
     parentSessionId: r.parent_session_id ?? undefined,
     childSessionIds: JSON.parse(r.child_session_ids ?? '[]') as string[],
   }
