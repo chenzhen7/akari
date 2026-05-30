@@ -139,8 +139,8 @@ function ApprovalCard({
     : DEFAULT_APPROVAL_OPTIONS
 
   return (
-    <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2">
+    <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 space-y-2 overflow-hidden">
+      <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <Circle className={`h-2.5 w-2.5 shrink-0 ${meta.dot}`} />
           <span className="truncate text-xs font-medium">{name}</span>
@@ -156,7 +156,7 @@ function ApprovalCard({
       </div>
 
       {pendingApproval?.command ? (
-        <code className="block truncate rounded bg-black/40 px-2 py-1 font-mono text-[10px] text-amber-300/90 border border-amber-500/15">
+        <code className="block truncate rounded bg-black/40 px-2 py-1 font-mono text-[10px] text-amber-300/90 border border-amber-500/15 break-all">
           {pendingApproval.command}
         </code>
       ) : (
@@ -166,14 +166,14 @@ function ApprovalCard({
       )}
 
       {/* Approval options */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1 overflow-hidden">
         {options.map(opt => (
           <Button
             key={opt.key}
             variant="outline"
             size="sm"
             className={cn(
-              'h-7 justify-start text-xs font-normal gap-2 w-full',
+              'h-7 justify-start text-xs font-normal gap-2 min-w-0',
               opt.key === '1'
                 ? 'border-green-500/40 text-green-600 hover:bg-green-500/10 hover:border-green-500/60'
                 : opt.key === '2'
@@ -288,7 +288,7 @@ export function CommandCenter() {
     <Sheet open={commandCenterOpen} onOpenChange={toggleCommandCenter}>
       <SheetContent
         side="right"
-        className="w-[480px] max-w-[480px] flex flex-col p-0 gap-0"
+        className="!w-[560px] sm:!max-w-none max-w-[95vw] flex flex-col p-0 gap-0 overflow-hidden"
       >
         {/* Header */}
         <SheetHeader className="border-b border-border px-5 py-4 shrink-0">
@@ -303,8 +303,8 @@ export function CommandCenter() {
           </div>
         </SheetHeader>
 
-        <ScrollArea className="flex-1">
-          <div className="space-y-6 p-5">
+        <ScrollArea className="flex-1 min-w-0">
+          <div className="space-y-6 p-5 min-w-0">
 
             {/* ── 广播 ── */}
             <section className="space-y-3">
