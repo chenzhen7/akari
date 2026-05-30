@@ -11,9 +11,9 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ---
 
-## 当前状态（2026-05-27）
+## 当前状态（2026-05-30）
 
-**整体进度**：**阶段八（HTTP Hooks 机制改造）核心实现完成**。魔法字符串机制已完全废弃，HTTP Hook 单轨驱动上线：`HookDispatcher` + `ApprovalRegistry` 就绪，`PermissionRequest` 同步阻塞审批闭环可用，ClaudeAdapter 自动写入 `.claude/settings.json`，`detectMarkers()` 已删除。PreToolUse/MCP 部分标记暂不做，留待后续阶段。
+**整体进度**：**阶段八（HTTP Hooks 机制改造）全部完成**。魔法字符串机制已完全废弃，HTTP Hook 单轨驱动上线：`HookDispatcher` + `ApprovalRegistry` 就绪，`PermissionRequest` 同步阻塞审批闭环可用，`SessionStart`/`UserPromptSubmit`/`Stop`/`StopFailure` 全事件支持，`ClaudeAdapter` 自动写入 `.claude/settings.json`。`session:lastMessage` + Canvas 节点实时刷新链路打通，指挥中心待审批角标已上线。PreToolUse/MCP 部分标记暂不做。
 
 ### ✅ 已完成
 
@@ -65,7 +65,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ## 当前正在进行
 
-> 📌 **F6 Agent 适配器（阶段五）** — Claude 适配已完成，待测试验证；Aider / Shell 适配器为后续任务
+> 无阻塞项，阶段八全部完成。
 
 ---
 

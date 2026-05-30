@@ -54,6 +54,7 @@ export async function dispatchHookEvent(
   event: HookEvent,
   sessionManager: SessionManager,
 ): Promise<HookResponse> {
+
   switch (event.hook_event_name) {
     case 'SessionStart': {
       const session = sessionManager.getSession(sessionId)
@@ -117,6 +118,7 @@ export async function dispatchHookEvent(
     }
 
     case 'UserPromptSubmit': {
+      console.log('[UserPromptSubmit hook]', JSON.stringify(event, null, 2))
       const session = sessionManager.getSession(sessionId)
       if (session && (session.status === 'paused' || session.status === 'waiting')) {
         sessionManager.updateStatus(sessionId, 'running')
