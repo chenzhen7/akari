@@ -1,4 +1,5 @@
 import { TopNav } from './TopNav'
+import { SessionSidebar } from './SessionSidebar'
 import { useSessionStore } from '@/stores/session-store'
 import { CanvasView } from '@/components/canvas/CanvasView'
 import { KanbanView } from '@/components/kanban/KanbanView'
@@ -23,14 +24,17 @@ export function AppShell() {
       <WebSocketProvider />
       <div className="flex h-svh flex-col bg-background">
         <TopNav />
-        <div className="flex-1 overflow-hidden">
-          {activeTabId ? (
-            <SessionDetail />
-          ) : viewMode === 'canvas' ? (
-            <CanvasView />
-          ) : (
-            <KanbanView />
-          )}
+        <div className="flex flex-1 overflow-hidden">
+          <SessionSidebar />
+          <div className="flex flex-1 overflow-hidden">
+            {activeTabId ? (
+              <SessionDetail />
+            ) : viewMode === 'canvas' ? (
+              <CanvasView />
+            ) : (
+              <KanbanView />
+            )}
+          </div>
         </div>
         <CommandCenter />
         <CreateSessionDialog />

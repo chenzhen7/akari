@@ -10,6 +10,7 @@ interface SessionStore {
   canvasEdges: CanvasEdge[]
   gitLogs: Record<string, GitLogResponse>
   viewMode: 'canvas' | 'kanban'
+  sidebarOpen: boolean
   openTabs: string[]
   activeTabId: string | null
   commandCenterOpen: boolean
@@ -32,6 +33,7 @@ interface SessionStore {
   closeTab: (id: string) => void
   setActiveTab: (id: string | null) => void
   setViewMode: (mode: 'canvas' | 'kanban') => void
+  toggleSidebar: () => void
   toggleCommandCenter: () => void
   toggleCreateDialog: () => void
   approveSession: (id: string, approvalOption?: string) => void
@@ -55,6 +57,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   canvasEdges: [],
   gitLogs: {},
   viewMode: 'canvas',
+  sidebarOpen: false,
   openTabs: [],
   activeTabId: null,
   commandCenterOpen: false,
@@ -169,6 +172,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   setActiveTab: (id) => set({ activeTabId: id }),
 
   setViewMode: (mode) => set({ viewMode: mode }),
+
+  toggleSidebar: () => set(state => ({ sidebarOpen: !state.sidebarOpen })),
 
   toggleCommandCenter: () =>
     set(state => ({ commandCenterOpen: !state.commandCenterOpen })),
@@ -358,11 +363,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           sessions: state.sessions.map(s =>
             s.id === msg.payload.sessionId
               ? {
-                  ...s,
-                  diffSummary: msg.payload.diff.stat,
-                  diffFull: msg.payload.diff.fullDiff,
-                  diffFiles: msg.payload.diff.files,
-                }
+                ...s,
+                diffSummary: msg.payload.diff.stat,
+                diffFull: msg.payload.diff.fullDiff,
+                diffFiles: msg.payload.diff.files,
+              }
               : s
           ),
         }))

@@ -27,7 +27,7 @@ export function SessionDetail() {
   const isPending = pendingOps.has(session.id)
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full w-full flex-col">
       {/* Header */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
         <Button variant="ghost" size="sm" className="gap-1 h-7 px-2" onClick={() => setActiveTab(null)}>

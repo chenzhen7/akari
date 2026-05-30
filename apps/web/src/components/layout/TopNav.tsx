@@ -8,44 +8,33 @@ import {
   Columns3,
   Plus,
   Radio,
-  X,
   Circle,
   RefreshCw,
+  PanelLeft,
 } from 'lucide-react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 
-const statusColorMap: Record<string, string> = {
-  running:      'fill-green-500  text-green-500',
-  waiting:      'fill-amber-500  text-amber-500',
-  failed:       'fill-red-500    text-red-500',
-  completed:    'fill-blue-500   text-blue-500',
-  initializing: 'fill-slate-400  text-slate-400',
-  paused:       'fill-orange-500 text-orange-500',
-  review:       'fill-purple-500 text-purple-500',
-}
-
 const connColors: Record<string, string> = {
-  connected:    'fill-green-500 text-green-500',
-  connecting:   'fill-amber-400 text-amber-400 animate-pulse',
+  connected: 'fill-green-500 text-green-500',
+  connecting: 'fill-amber-400 text-amber-400 animate-pulse',
   disconnected: 'fill-orange-500 text-orange-500',
-  failed:       'fill-red-500 text-red-500',
+  failed: 'fill-red-500 text-red-500',
 }
 
 const connLabels: Record<string, string> = {
-  connected:    '已连接',
-  connecting:   '连接中…',
+  connected: '已连接',
+  connecting: '连接中…',
   disconnected: '已断线，重连中',
-  failed:       '连接失败',
+  failed: '连接失败',
 }
 
 export function TopNav() {
   const {
+    sidebarOpen,
+    toggleSidebar,
     viewMode,
     setViewMode,
-    openTabs,
-    activeTabId,
     setActiveTab,
-    closeTab,
     toggleCreateDialog,
     toggleCommandCenter,
     sessions,
@@ -67,6 +56,23 @@ export function TopNav() {
         </div>
         <span className="text-sm font-medium">Akari</span>
       </div>
+
+      {/* Session sidebar toggle */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={sidebarOpen ? 'secondary' : 'ghost'}
+            size="xs"
+            className="h-7 w-7 p-0"
+            onClick={toggleSidebar}
+          >
+            <PanelLeft className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {sidebarOpen ? '收起会话列表' : '展开会话列表'}
+        </TooltipContent>
+      </Tooltip>
 
 
       {/* View mode switcher */}
@@ -92,37 +98,8 @@ export function TopNav() {
       </div>
 
 
-      {/* Session tabs */}
-      <div className="flex flex-1 items-center gap-0.5 overflow-x-auto px-1">
-        {openTabs.map(tabId => {
-          const session = sessions.find(s => s.id === tabId)
-          if (!session) return null
-          const isActive = activeTabId === tabId
-          const dotCls = statusColorMap[session.status] ?? 'fill-slate-400 text-slate-400'
-          return (
-            <Button
-              key={tabId}
-              variant={isActive ? 'secondary' : 'ghost'}
-         
-              className="h-7 max-w-[160px] gap-1.5 px-2.5 text-xs"
-              onClick={() => setActiveTab(tabId)}
-            >
-              <Circle className={`h-2 w-2 shrink-0 ${dotCls}`} />
-              <span className="truncate">{session.name}</span>
-              <X
-                className="h-3 w-3 shrink-0 opacity-50 hover:opacity-100"
-                onClick={e => {
-                  e.stopPropagation()
-                  closeTab(tabId)
-                }}
-              />
-            </Button>
-          )
-        })}
-      </div>
-
       {/* Right: stats + connection + actions */}
-      <div className="flex items-center gap-1.5 pl-1">
+      <div className="ml-auto flex items-center gap-1.5">
         {/* Session status counters */}
         <Badge variant="outline" className="h-6 gap-1 px-2 text-xs font-normal">
           <Circle className="h-2 w-2 fill-green-500 text-green-500" />
@@ -139,7 +116,7 @@ export function TopNav() {
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
-              size='xs'
+              size="xs"
               className="h-7 w-7 p-0"
               onClick={connectionStatus === 'failed' ? reconnect : undefined}
             >
@@ -178,7 +155,6 @@ export function TopNav() {
           )}
         </Button>
         <Button
-     
           className="h-7 gap-1.5 text-xs"
           onClick={toggleCreateDialog}
         >
