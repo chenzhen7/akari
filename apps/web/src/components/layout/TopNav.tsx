@@ -182,13 +182,17 @@ export function TopNav() {
           )}
         </Button>
         <Button
-      
           variant="ghost"
-          className="h-7 gap-1.5 text-xs"
+          className="h-7 gap-1.5 text-xs relative"
           onClick={toggleCommandCenter}
         >
           <Radio className="h-3.5 w-3.5" />
           指挥中心
+          {waitingCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none">
+              {waitingCount}
+            </span>
+          )}
         </Button>
         <Button
      
