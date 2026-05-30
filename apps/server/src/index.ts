@@ -79,9 +79,26 @@ fastify.post<{ Params: { id: string }; Body: { decision: 'approved' | 'rejected'
     const session = sessionManager.getSession(id)
     if (!session) return reply.status(404).send({ error: 'session not found' })
     if (session.status !== 'waiting') {
+      fastify.log.warn({ sessionId: id, currentStatus: session.status }, '[approval] not in waiting state')
       return reply.status(422).send({ error: 'session is not waiting for approval' })
     }
+    fastify.log.info({ sessionId: id, decision, approvalOption }, '[approval] calling handleApproval')
     sessionManager.handleApproval(id, decision, comment, approvalOption)
+    return { ok: true }
+  },
+)
+
+// 调试端点：直接向 PTY 写入任意字符串，用于验证 PTY 写入本身是否工作
+fastify.post<{ Params: { id: string }; Body: { data: string } }>(
+  '/sessions/:id/pty-write',
+  async (request, reply) => {
+    const { id } = request.params
+    const { data } = request.body
+    if (!data) return reply.status(400).send({ error: 'data is required' })
+    const session = sessionManager.getSession(id)
+    if (!session) return reply.status(404).send({ error: 'session not found' })
+    fastify.log.info({ sessionId: id, data: JSON.stringify(data) }, '[pty-write] DEBUG writing to PTY')
+    sessionManager.sendToTerminal(id, data)
     return { ok: true }
   },
 )
