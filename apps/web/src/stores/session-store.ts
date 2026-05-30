@@ -406,6 +406,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ),
         }))
         break
+      case 'session:lastMessage':
+        set(state => ({
+          sessions: state.sessions.map(s =>
+            s.id === msg.payload.id ? { ...s, lastAiMessage: msg.payload.lastAiMessage } : s
+          ),
+        }))
+        break
     }
   },
 }))

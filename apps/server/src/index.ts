@@ -104,7 +104,7 @@ fastify.post<{ Body: { message: string; targets?: string[] } }>(
   '/broadcast',
   async (request) => {
     const { message, targets } = request.body
-    const targetIds = sessionManager.broadcastMessage(message, targets)
+    const targetIds = sessionManager.broadcastMessage_legacy(message, targets)
     return { ok: true, targets: targetIds }
   },
 )
@@ -455,7 +455,7 @@ function handleClientMessage(msg: ClientMessage): void {
     }
     case 'broadcast:send': {
       const { message, targets } = msg.payload
-      sessionManager.broadcastMessage(message, targets)
+      sessionManager.broadcastMessage_legacy(message, targets)
       break
     }
     case 'collaboration:update-context': {

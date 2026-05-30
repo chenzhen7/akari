@@ -100,6 +100,7 @@ export interface AgentSession {
 
   progress: number
   terminalOutput: string[]
+  lastAiMessage: string
   diffSummary: string
   diffFull?: string
   diffFiles?: DiffFile[]
@@ -147,6 +148,7 @@ export type ServerMessage =
   | { event: 'approval:required'; payload: { sessionId: string; request: ApprovalRequest } }
   | { event: 'sessions:list'; payload: AgentSession[] }
   | { event: 'git:log-updated'; payload: { sessionId: string } & GitLogResponse }
+  | { event: 'session:lastMessage'; payload: { id: string; lastAiMessage: string } }
   | { event: 'collaboration:group-created'; payload: CollaborationGroup }
   | { event: 'collaboration:group-updated'; payload: CollaborationGroup }
   | { event: 'collaboration:group-deleted'; payload: { groupId: string } }
@@ -209,6 +211,7 @@ export interface TaskCompletedPayload extends HookEventBase {
 
 export interface StopPayload extends HookEventBase {
   hook_event_name: 'Stop'
+  last_assistant_message: string
 }
 
 export interface StopFailurePayload extends HookEventBase {

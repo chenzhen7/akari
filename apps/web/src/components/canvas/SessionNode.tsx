@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useRef } from 'react'
+import { memo, useState, useRef } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import {
   Dialog,
@@ -13,8 +13,6 @@ import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Bell, Crown, Plus, Ro
 import type { LucideIcon } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
-import { terminalBus } from '@/lib/terminalBus'
-import { getTerminalViewportLines } from '@/components/session/TerminalPanel'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -43,22 +41,12 @@ const statusConfig: Record<string, { color: string; label: string }> = {
   archived:     { color: '#64748b', label: '已归档'   },
 }
 
-function getDisplayLines(sessionId: string, maxLines: number): string[] {
-  // Primary: read directly from xterm's rendered viewport (accurate, same as real terminal)
-  const vtLines = getTerminalViewportLines(sessionId, maxLines)
-  if (vtLines.length > 0) return vtLines
-  // Fallback: parse raw PTY buffer (before detail panel is ever opened)
-  const chunks = terminalBus.getBuffer(sessionId)
-  if (chunks.length === 0) return []
-  const raw = chunks.join('')
-  const lastClear = raw.lastIndexOf('\x1b[2J')
-  const text = lastClear >= 0 ? raw.slice(lastClear) : raw
-  return text
-    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
-    .replace(/[\x00-\x09\x0b-\x1f\x7f]/g, '')
-    .split(/\r?\n/)
-    .map(l => l.trimEnd())
-    .slice(-maxLines)
+function truncateMessage(msg: string, maxLen = 200): string {
+  const cleaned = msg
+    .replace(/```[\s\S]*?```/g, '[代码块]')
+    .replace(/`[^`]*`/g, (m) => m.slice(0, 20))
+    .trim()
+  return cleaned.length > maxLen ? cleaned.slice(0, maxLen) + '…' : cleaned
 }
 
 function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
@@ -69,7 +57,6 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
   const pendingOps = useSessionStore(s => s.pendingOps)
   const [hovered, setHovered] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hoverLeaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const onEnter = () => {
@@ -79,22 +66,6 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
   const onLeave = () => {
     hoverLeaveRef.current = setTimeout(() => setHovered(false), 60)
   }
-
-  const [miniTerminal, setMiniTerminal] = useState<string[]>(() => getDisplayLines(session.id, 5))
-
-  useEffect(() => {
-    const refresh = () => {
-      setMiniTerminal(getDisplayLines(session.id, 5))
-    }
-    return terminalBus.on(session.id, () => {
-      if (!pendingRef.current) {
-        pendingRef.current = setTimeout(() => {
-          pendingRef.current = null
-          refresh()
-        }, 500)
-      }
-    })
-  }, [session.id])
 
   const cfg = statusConfig[session.status] ?? statusConfig.initializing
   const isArchived = session.status === 'archived'
@@ -155,7 +126,7 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
         </div>
       </Handle>
       <div
-        className="relative w-[268px] cursor-pointer select-none overflow-hidden rounded-[22px]"
+        className="relative w-[268px] cursor-pointer select-none rounded-[22px] pb-1"
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}
         style={{
@@ -344,27 +315,16 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
         {/* Luminous separator */}
         <div className="mx-4 mb-3 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
 
-        {/* Mini terminal */}
+        {/* Latest AI message */}
         <div className="mx-3 mb-4 overflow-hidden rounded-[12px]" style={{ background: '#0a0a0a', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 1px rgba(255,255,255,0.04)' }}>
-          {/* Terminal title bar */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5" style={{ background: '#111111', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-            <span className="h-2 w-2 rounded-full" style={{ background: '#ff5f57' }} />
-            <span className="h-2 w-2 rounded-full" style={{ background: '#febc2e' }} />
-            <span className="h-2 w-2 rounded-full" style={{ background: '#28c840' }} />
-            <span className="ml-auto font-mono text-[9px]" style={{ color: '#484f58' }}>
-              {session.id.slice(0, 8)}
-            </span>
-          </div>
           <div
-            className="min-h-[72px] px-3 py-2 font-mono text-[8px] leading-relaxed"
-            style={{ color: '#8b949e' }}
+            className="px-3 py-3 text-[9px] leading-relaxed"
+            style={{ color: '#8b949e', minHeight: '72px', maxHeight: '144px', overflow: 'hidden' }}
           >
-            {miniTerminal.length > 0 ? (
-              miniTerminal.map((line, i) => (
-                <div key={i} className="truncate min-h-[1em]">{line}</div>
-              ))
+            {session.lastAiMessage ? (
+              <p className="whitespace-pre-wrap break-all">{truncateMessage(session.lastAiMessage, 320)}</p>
             ) : (
-              <span style={{ color: '#484f58' }}>等待输出…</span>
+              <span style={{ color: '#484f58' }}>等待 AI 输出…</span>
             )}
           </div>
         </div>
@@ -429,6 +389,7 @@ function areEqual(
     p.status === n.status &&
     p.progress === n.progress &&
     p.branchName === n.branchName &&
+    p.lastAiMessage === n.lastAiMessage &&
     p.collaborationRole === n.collaborationRole &&
     p.canvasPosition.x === n.canvasPosition.x &&
     p.canvasPosition.y === n.canvasPosition.y

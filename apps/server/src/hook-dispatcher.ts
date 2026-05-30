@@ -124,7 +124,17 @@ export async function dispatchHookEvent(
       return {}
     }
 
-    case 'Stop':
+    case 'Stop': {
+      const { last_assistant_message } = event as import('@akari/shared-types').StopPayload
+      if (last_assistant_message && last_assistant_message.trim().length > 0) {
+        sessionManager.setLastAiMessage(sessionId, last_assistant_message)
+        sessionManager.broadcastMessage({
+          event: 'session:lastMessage',
+          payload: { id: sessionId, lastAiMessage: last_assistant_message },
+        })
+      }
+      return {}
+    }
     case 'PostToolUse':
     case 'TaskCreated':
     case 'TaskCompleted':

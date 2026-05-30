@@ -55,6 +55,7 @@ interface DbRow {
   group_id: string | null
   parent_session_id: string | null
   child_session_ids: string | null
+  last_ai_message: string
 }
 
 const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
@@ -142,11 +143,12 @@ export class SessionManager {
         x: 100 + Math.random() * 600,
         y: 100 + Math.random() * 400,
       },
-      canvasSize: { width: 280, height: 220 },
+      canvasSize: { width: 280, height: 280 },
       kanbanColumn: 'backlog',
       terminalId: nanoid(8),
       progress: 0,
       terminalOutput: [],
+      lastAiMessage: '',
       diffSummary: '',
       createdAt: new Date(),
       tags: params.tags ?? [],
@@ -215,7 +217,11 @@ export class SessionManager {
     this.db.prepare('UPDATE sessions SET canvas_x = ?, canvas_y = ? WHERE id = ?').run(x, y, sessionId)
   }
 
-  broadcastMessage(message: string, sessionIds?: string[]): string[] {
+  broadcastMessage(msg: ServerMessage): void {
+    this.broadcast(msg)
+  }
+
+  broadcastMessage_legacy(message: string, sessionIds?: string[]): string[] {
     const sessions = this.listSessions()
     const active = sessions.filter(s => ['running', 'waiting'].includes(s.status))
     const targets = sessionIds ? active.filter(s => sessionIds.includes(s.id)) : active
@@ -237,6 +243,10 @@ export class SessionManager {
       return { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
     }
     return this.worktreeManager.getDiff(sessionId, session.baseBranch)
+  }
+
+  setLastAiMessage(sessionId: string, message: string): void {
+    this.db.prepare('UPDATE sessions SET last_ai_message = ? WHERE id = ?').run(message, sessionId)
   }
 
   handleApproval(
@@ -511,7 +521,7 @@ export class SessionManager {
         canvas_x            REAL NOT NULL DEFAULT 100,
         canvas_y            REAL NOT NULL DEFAULT 100,
         canvas_width        REAL NOT NULL DEFAULT 280,
-        canvas_height       REAL NOT NULL DEFAULT 220,
+        canvas_height       REAL NOT NULL DEFAULT 280,
         kanban_column       TEXT NOT NULL DEFAULT 'backlog',
         terminal_id         TEXT NOT NULL,
         progress            INTEGER NOT NULL DEFAULT 0,
@@ -522,20 +532,33 @@ export class SessionManager {
         collaboration_role  TEXT NOT NULL DEFAULT 'standalone',
         group_id            TEXT,
         parent_session_id   TEXT,
-        child_session_ids   TEXT NOT NULL DEFAULT '[]'
+        child_session_ids   TEXT NOT NULL DEFAULT '[]',
+        last_ai_message    TEXT NOT NULL DEFAULT ''
       )
     `)
+
+    // Migration: add last_ai_message column if it doesn't exist
+    this.db.exec(`
+      PRAGMA table_info(sessions);
+    `)
+    const cols: string[] = this.db
+      .prepare('PRAGMA table_info(sessions)')
+      .all()
+      .map((row: any) => row.name as string)
+    if (!cols.includes('last_ai_message')) {
+      this.db.exec('ALTER TABLE sessions ADD COLUMN last_ai_message TEXT NOT NULL DEFAULT ""')
+    }
   }
 
   private insertRow(s: AgentSession): void {
     this.db
       .prepare(
-        `INSERT INTO sessions (
+        `        INSERT INTO sessions (
           id, name, task, status, agent_type, worktree_path, branch_name, base_branch,
           canvas_x, canvas_y, canvas_width, canvas_height,
-          kanban_column, terminal_id, progress, diff_summary, created_at, tags, pending_approval,
+          kanban_column, terminal_id, progress, diff_summary, last_ai_message, created_at, tags, pending_approval,
           collaboration_role, group_id, parent_session_id, child_session_ids
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         s.id,
@@ -554,6 +577,7 @@ export class SessionManager {
         s.terminalId,
         s.progress,
         s.diffSummary,
+        s.lastAiMessage,
         s.createdAt instanceof Date ? s.createdAt.toISOString() : String(s.createdAt),
         JSON.stringify(s.tags),
         s.pendingApproval ? JSON.stringify(s.pendingApproval) : null,
@@ -581,6 +605,7 @@ function rowToSession(r: DbRow): AgentSession {
     terminalId: r.terminal_id,
     progress: r.progress,
     diffSummary: r.diff_summary,
+    lastAiMessage: r.last_ai_message,
     terminalOutput: [],
     createdAt: new Date(r.created_at),
     tags: JSON.parse(r.tags) as string[],
