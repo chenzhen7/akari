@@ -58,9 +58,11 @@ export async function dispatchHookEvent(
     case 'PermissionRequest': {
       const { tool_name, tool_input } = event as PermissionRequestPayload
       const command = typeof tool_input?.['command'] === 'string' ? tool_input['command'] : undefined
+      const description = typeof tool_input?.['description'] === 'string' ? tool_input['description'] : undefined
       const request: ApprovalRequest = {
         type: 'destructive-op',
         message: `PermissionRequest: ${tool_name}${command ? ` — ${command}` : ''}`,
+        description,
         command,
         timestamp: new Date(),
       }

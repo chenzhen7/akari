@@ -72,6 +72,7 @@ export interface ApprovalOption {
 export interface ApprovalRequest {
   type: 'checkpoint' | 'destructive-op' | 'merge-ready'
   message: string
+  description?: string
   diff?: GitDiff
   command?: string
   timestamp: Date

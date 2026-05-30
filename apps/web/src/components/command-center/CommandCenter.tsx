@@ -127,7 +127,7 @@ function ApprovalCard({
   sessionId: string
   name: string
   status: string
-  pendingApproval?: { command?: string; message?: string; options?: ApprovalOption[] }
+  pendingApproval?: { command?: string; message?: string; description?: string; options?: ApprovalOption[] }
   onApprove: (option: string) => void
   onReject: () => void
   onView: () => void
@@ -139,60 +139,83 @@ function ApprovalCard({
     : DEFAULT_APPROVAL_OPTIONS
 
   return (
-    <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 space-y-2 overflow-hidden">
-      <div className="flex items-center justify-between gap-2 min-w-0">
+    <div
+      className="rounded-lg overflow-hidden border border-white/8"
+      style={{ background: '#171717' }}
+    >
+      {/* Terminal header bar */}
+      <div
+        className="flex items-center justify-between px-3 py-2 border-b"
+        style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)' }}
+      >
         <div className="flex items-center gap-2 min-w-0">
-          <Circle className={`h-2.5 w-2.5 shrink-0 ${meta.dot}`} />
-          <span className="truncate text-xs font-medium">{name}</span>
+          <Circle className={`h-2 w-2 shrink-0 ${meta.dot}`} />
+          <span className="truncate text-[11px] font-medium text-white/80 font-mono">
+            {name}
+          </span>
         </div>
         <Button
           size="icon"
           variant="ghost"
-          className="h-6 w-6 text-muted-foreground hover:bg-muted shrink-0"
+          className="h-5 w-5 text-white/30 hover:text-white/70 hover:bg-white/5 shrink-0"
           onClick={() => { onView(); onClose() }}
         >
           <Eye className="h-3 w-3" />
         </Button>
       </div>
 
-      {pendingApproval?.command ? (
-        <code className="block truncate rounded bg-black/40 px-2 py-1 font-mono text-[10px] text-amber-300/90 border border-amber-500/15 break-all">
-          {pendingApproval.command}
-        </code>
-      ) : (
-        <p className="truncate text-[10px] text-muted-foreground pl-0.5">
-          {pendingApproval?.message ?? '等待审批'}
-        </p>
-      )}
-
-      {/* Approval options */}
-      <div className="flex flex-col gap-1 overflow-hidden">
-        {options.map(opt => (
-          <Button
-            key={opt.key}
-            variant="outline"
-            size="sm"
-            className={cn(
-              'h-7 justify-start text-xs font-normal gap-2 min-w-0',
-              opt.key === '1'
-                ? 'border-green-500/40 text-green-600 hover:bg-green-500/10 hover:border-green-500/60'
-                : opt.key === '2'
-                  ? 'border-blue-500/40 text-blue-600 hover:bg-blue-500/10 hover:border-blue-500/60'
-                  : 'border-red-500/40 text-red-600 hover:bg-red-500/10 hover:border-red-500/60'
-            )}
-            onClick={() => {
-              if (opt.key === '3') {
-                onReject()
-              } else {
-                onApprove(opt.key)
-              }
-              onClose()
-            }}
+      {/* Terminal body */}
+      <div className="px-3 py-3 space-y-3">
+        {pendingApproval?.description && (
+          <p className="font-mono text-[11px] text-white/60 leading-relaxed">
+            {pendingApproval.description}
+          </p>
+        )}
+        {pendingApproval?.command && (
+          <code
+            className="block rounded px-3 py-2 font-mono text-[11px] leading-relaxed break-all"
+            style={{ background: '#0d0d0d', color: '#e2e8f0' }}
           >
-            <span className="font-mono font-medium w-4 shrink-0">{opt.key}.</span>
-            <span className="truncate">{opt.label}</span>
-          </Button>
-        ))}
+            {pendingApproval.command}
+          </code>
+        )}
+        {!pendingApproval?.description && !pendingApproval?.command && pendingApproval?.message && (
+          <p className="font-mono text-[11px] text-white/60 leading-relaxed">
+            {pendingApproval.message}
+          </p>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex flex-col gap-1.5 pt-1">
+          {options.map(opt => (
+            <Button
+              key={opt.key}
+              variant="outline"
+              size="sm"
+              className={cn(
+                'h-7 gap-2 text-[11px] font-medium border justify-start',
+                opt.key === '1'
+                  ? 'border-green-800/60 text-green-400 bg-green-950/30 hover:bg-green-900/40 hover:border-green-700'
+                  : opt.key === '2'
+                    ? 'border-blue-800/60 text-blue-400 bg-blue-950/30 hover:bg-blue-900/40 hover:border-blue-700'
+                    : 'border-red-800/60 text-red-400 bg-red-950/30 hover:bg-red-900/40 hover:border-red-700'
+              )}
+              onClick={() => {
+                if (opt.key === '3') {
+                  onReject()
+                } else {
+                  onApprove(opt.key)
+                }
+                onClose()
+              }}
+            >
+              {opt.key === '1' ? <CheckCircle2 className="h-3 w-3 shrink-0" />
+                : opt.key === '2' ? <CheckCircle2 className="h-3 w-3 shrink-0" />
+                : <XCircle className="h-3 w-3 shrink-0" />}
+              <span className="truncate">{opt.label}</span>
+            </Button>
+          ))}
+        </div>
       </div>
     </div>
   )
