@@ -8,7 +8,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { useSessionStore } from '@/stores/session-store'
 import { cn } from '@/lib/utils'
@@ -143,7 +142,7 @@ function ApprovalCard({
 
   return (
     <div
-      className="rounded-lg overflow-hidden border border-white/8"
+      className="rounded-lg border border-white/8 w-full overflow-hidden"
       style={{ background: '#171717' }}
     >
       {/* Terminal header bar */}
@@ -186,7 +185,7 @@ function ApprovalCard({
         )}
         {pendingApproval?.command && (
           <code
-            className="block rounded px-3 py-2 font-mono text-[11px] leading-relaxed break-all"
+            className="block px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre overflow-x-auto rounded"
             style={{ background: '#0d0d0d', color: '#e2e8f0' }}
           >
             {pendingApproval.command}
@@ -224,7 +223,7 @@ function ApprovalCard({
             >
               {opt.key === '1' ? <CheckCircle2 className="h-3 w-3 shrink-0" />
                 : opt.key === '2' ? <CheckCircle2 className="h-3 w-3 shrink-0" />
-                : <XCircle className="h-3 w-3 shrink-0" />}
+                  : <XCircle className="h-3 w-3 shrink-0" />}
               <span className="truncate">{opt.label}</span>
             </Button>
           ))}
@@ -340,7 +339,13 @@ export function CommandCenter() {
           </div>
         </SheetHeader>
 
-        <ScrollArea className="flex-1 min-w-0">
+        <div
+          className="flex-1 min-w-0 overflow-y-auto"
+          style={{
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(255,255,255,0.15) transparent',
+          }}
+        >
           <div className="space-y-6 p-5 min-w-0">
 
             {/* ── 广播 ── */}
@@ -468,7 +473,7 @@ export function CommandCenter() {
             </section>
 
           </div>
-        </ScrollArea>
+        </div>
       </SheetContent>
     </Sheet>
   )

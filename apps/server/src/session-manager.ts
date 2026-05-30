@@ -245,30 +245,24 @@ export class SessionManager {
     comment?: string,
     approvalOption?: string,
   ): void {
-    console.log(`[handleApproval] ★ ENTRY sessionId=${sessionId} decision=${decision} approvalOption=${approvalOption}`)
     const session = this.getSession(sessionId)
-    console.log(`[handleApproval] session found=${!!session} status=${session?.status}`)
     if (!session || session.status !== 'waiting') {
-      console.log(`[handleApproval] ★ EARLY RETURN — not in waiting state`)
       return
     }
 
     this.db.prepare('UPDATE sessions SET pending_approval = NULL WHERE id = ?').run(sessionId)
 
     const resolvedByHook = approvalRegistry.resolveApproval(sessionId, decision)
-    console.log(`[handleApproval] resolvedByHook=${resolvedByHook}`)
 
     if (decision === 'approved') {
       this.updateStatus(sessionId, 'running')
       // Windows PTY 需要 CRLF 才能识别命令终止符；单独 LF 会被当作行继续符
       const eol = process.platform === 'win32' ? '\r\n' : '\n'
       const key = approvalOption ?? '1'
-      console.log(`[handleApproval] ★ sendToTerminal key="${key}" eol=${JSON.stringify(eol)} resolvedByHook=${resolvedByHook}`)
       this.terminalMux.sendToTerminal(sessionId, `${key}${eol}`)
     } else {
       this.updateStatus(sessionId, 'paused')
       const eol = process.platform === 'win32' ? '\r\n' : '\n'
-      console.log(`[handleApproval] ★ sendToTerminal reject resolvedByHook=${resolvedByHook}`)
       this.terminalMux.sendToTerminal(sessionId, `3${eol}`)
     }
   }
