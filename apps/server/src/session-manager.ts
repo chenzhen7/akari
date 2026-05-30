@@ -248,13 +248,7 @@ export class SessionManager {
     const session = this.getSession(sessionId)
     if (!session || session.status !== 'waiting') return
 
-    const msg =
-      decision === 'approved'
-        ? `> ✅ Approved${comment ? ': ' + comment : ''}, resuming...\r\n`
-        : `> ❌ Rejected${comment ? ': ' + comment : ''}\r\n`
-
     this.db.prepare('UPDATE sessions SET pending_approval = NULL WHERE id = ?').run(sessionId)
-    this.pushTerminalDisplay(sessionId, msg)
 
     const resolvedByHook = approvalRegistry.resolveApproval(sessionId, decision)
 
