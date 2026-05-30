@@ -106,7 +106,7 @@ export function TopNav() {
             <Button
               key={tabId}
               variant={isActive ? 'secondary' : 'ghost'}
-              size="sm"
+         
               className="h-7 max-w-[160px] gap-1.5 px-2.5 text-xs"
               onClick={() => setActiveTab(tabId)}
             >
@@ -142,7 +142,7 @@ export function TopNav() {
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
-              size="sm"
+          
               className="h-7 w-7 p-0"
               onClick={connectionStatus === 'failed' ? reconnect : undefined}
             >
@@ -168,7 +168,7 @@ export function TopNav() {
 
 
         <Button
-          size="sm"
+      
           variant="ghost"
           className="h-7 gap-1.5 text-xs relative"
           onClick={toggleCollaborationPanel}
@@ -182,7 +182,7 @@ export function TopNav() {
           )}
         </Button>
         <Button
-          size="sm"
+      
           variant="ghost"
           className="h-7 gap-1.5 text-xs"
           onClick={toggleCommandCenter}
@@ -191,7 +191,7 @@ export function TopNav() {
           指挥中心
         </Button>
         <Button
-          size="sm"
+     
           className="h-7 gap-1.5 text-xs"
           onClick={toggleCreateDialog}
         >

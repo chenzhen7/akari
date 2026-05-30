@@ -118,10 +118,10 @@ export function CreateSessionDialog() {
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-2 px-5 py-3">
-            <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={toggleCreateDialog}>
+            <Button type="button" variant="ghost" className="h-8 text-xs" onClick={toggleCreateDialog}>
               取消
             </Button>
-            <Button type="submit" size="sm" className="h-8 gap-1.5 text-xs">
+            <Button type="submit"  className="h-8 gap-1.5 text-xs">
               <Plus className="h-3.5 w-3.5" />
               创建会话
             </Button>
