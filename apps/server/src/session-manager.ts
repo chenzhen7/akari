@@ -126,8 +126,8 @@ export class SessionManager {
     const agentType = params.agentType ?? 'claude'
     const collaborationRole: CollaborationRole =
       agentType === 'claude-orchestrator' ? 'orchestrator'
-      : params.parentSessionId ? 'worker'
-      : 'standalone'
+        : params.parentSessionId ? 'worker'
+          : 'standalone'
 
     const session: AgentSession = {
       id,
@@ -398,7 +398,7 @@ export class SessionManager {
   async deleteSession(sessionId: string): Promise<void> {
     const session = this.getSession(sessionId)
     this.terminalMux.killTerminal(sessionId)
-    await this.worktreeManager.removeWorktree(sessionId, session?.branchName).catch(() => {})
+    await this.worktreeManager.removeWorktree(sessionId, session?.branchName).catch(() => { })
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId)
   }
 

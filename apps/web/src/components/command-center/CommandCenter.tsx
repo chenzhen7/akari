@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -83,7 +83,7 @@ const DEFAULT_APPROVAL_OPTIONS: ApprovalOption[] = [
 ]
 
 function SessionChip({
-  id,
+  id: _id,
   name,
   status,
   selected,
@@ -115,7 +115,6 @@ function SessionChip({
 }
 
 function ApprovalCard({
-  sessionId,
   name,
   status,
   pendingApproval,
@@ -124,8 +123,9 @@ function ApprovalCard({
   onIgnore,
   onView,
   onClose,
+  onCodeRef,
 }: {
-  sessionId: string
+  _sessionId: string
   name: string
   status: string
   pendingApproval?: { command?: string; message?: string; description?: string; options?: ApprovalOption[] }
@@ -134,6 +134,7 @@ function ApprovalCard({
   onIgnore: () => void
   onView: () => void
   onClose: () => void
+  onCodeRef: (el: HTMLElement | null) => void
 }) {
   const meta = STATUS_META[status] ?? STATUS_META['waiting']
   const options = pendingApproval?.options?.length
@@ -187,6 +188,8 @@ function ApprovalCard({
           <code
             className="block px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre overflow-x-auto rounded"
             style={{ background: '#0d0d0d', color: '#e2e8f0' }}
+            onMouseEnter={(e) => onCodeRef(e.currentTarget)}
+            onMouseLeave={() => onCodeRef(null)}
           >
             {pendingApproval.command}
           </code>
@@ -276,6 +279,14 @@ export function CommandCenter() {
     new Set()
   )
   const [broadcasting, setBroadcasting] = useState(false)
+  const hoveredCodeRef = useRef<HTMLElement | null>(null)
+
+  const handleContainerWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.shiftKey && hoveredCodeRef.current) {
+      e.preventDefault()
+      hoveredCodeRef.current.scrollLeft += e.deltaY
+    }
+  }, [])
 
   const waitingSessions = sessions.filter(s => s.status === 'waiting')
 
@@ -345,6 +356,7 @@ export function CommandCenter() {
             scrollbarWidth: 'thin',
             scrollbarColor: 'rgba(255,255,255,0.15) transparent',
           }}
+          onWheel={handleContainerWheel}
         >
           <div className="space-y-6 p-5 min-w-0">
 
@@ -447,6 +459,7 @@ export function CommandCenter() {
                       onIgnore={() => ignoreApproval(s.id)}
                       onView={() => openTab(s.id)}
                       onClose={toggleCommandCenter}
+                      onCodeRef={(el) => { hoveredCodeRef.current = el }}
                     />
                   ))}
                 </div>
