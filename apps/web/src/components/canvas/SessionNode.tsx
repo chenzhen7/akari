@@ -9,7 +9,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Bell, Crown, Plus, RotateCcw, Loader2 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Bell, Crown, Plus, RotateCcw, Loader2, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
@@ -57,6 +67,11 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
   const pendingOps = useSessionStore(s => s.pendingOps)
   const [hovered, setHovered] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [spawnOpen, setSpawnOpen] = useState(false)
+  const [spawnTask, setSpawnTask] = useState('')
+  const [spawnAgentType, setSpawnAgentType] = useState<'claude' | 'aider' | 'shell' | 'claude-orchestrator'>('claude')
+  const [spawnBranch, setSpawnBranch] = useState(session.baseBranch || 'main')
+  const [spawning, setSpawning] = useState(false)
   const hoverLeaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const onEnter = () => {
@@ -209,6 +224,21 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">恢复正常</TooltipContent>
+            </Tooltip>
+          )}
+          {!isArchived && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none"
+                  style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
+                  disabled={isPending}
+                  onClick={(e) => { stopBubble(e); setSpawnOpen(true) }}
+                >
+                  <Users className="h-3 w-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">派生子 Agent</TooltipContent>
             </Tooltip>
           )}
           {isArchived && (
@@ -368,6 +398,91 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
                 }}
               >
                 确认删除
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Spawn child agent dialog */}
+        <Dialog open={spawnOpen} onOpenChange={setSpawnOpen}>
+          <DialogContent showCloseButton={false} className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>派生子 Agent</DialogTitle>
+              <DialogDescription>
+                从「{session.name}」派生新 worker，会话将自动加入同一协作群组。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-2">
+                <Label htmlFor="spawn-task">任务描述</Label>
+                <Textarea
+                  id="spawn-task"
+                  rows={3}
+                  placeholder="描述子 Agent 需要完成的任务…"
+                  value={spawnTask}
+                  onChange={(e) => setSpawnTask(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="spawn-type">Agent 类型</Label>
+                  <Select value={spawnAgentType} onValueChange={(v) => setSpawnAgentType(v as typeof spawnAgentType)}>
+                    <SelectTrigger id="spawn-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="claude">Claude Code</SelectItem>
+                      <SelectItem value="aider">Aider</SelectItem>
+                      <SelectItem value="shell">Shell</SelectItem>
+                      <SelectItem value="claude-orchestrator">Orchestrator</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="spawn-branch">基础分支</Label>
+                  <Input
+                    id="spawn-branch"
+                    placeholder="main"
+                    value={spawnBranch}
+                    onChange={(e) => setSpawnBranch(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSpawnOpen(false)}>取消</Button>
+              <Button
+                disabled={!spawnTask.trim() || spawning}
+                onClick={async () => {
+                  if (!spawnTask.trim()) return
+                  setSpawning(true)
+                  try {
+                    const res = await fetch(
+                      `${import.meta.env.VITE_API_URL ?? 'http://localhost:3001'}/collaboration/spawn`,
+                      {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          parentSessionId: session.id,
+                          task: spawnTask.trim(),
+                          agentType: spawnAgentType,
+                          branch: spawnBranch.trim() || 'main',
+                        }),
+                      },
+                    )
+                    if (!res.ok) throw new Error(await res.text())
+                    setSpawnOpen(false)
+                    setSpawnTask('')
+                    setSpawnAgentType('claude')
+                  } catch (err) {
+                    console.error('[spawn] failed:', err)
+                  } finally {
+                    setSpawning(false)
+                  }
+                }}
+              >
+                {spawning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                派发
               </Button>
             </DialogFooter>
           </DialogContent>

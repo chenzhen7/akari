@@ -13,7 +13,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ## 当前状态（2026-05-30）
 
-**整体进度**：**阶段八（HTTP Hooks 机制改造）全部完成**。魔法字符串机制已完全废弃，HTTP Hook 单轨驱动上线：`HookDispatcher` + `ApprovalRegistry` 就绪，`PermissionRequest` 同步阻塞审批闭环可用，`SessionStart`/`UserPromptSubmit`/`Stop`/`StopFailure` 全事件支持，`ClaudeAdapter` 自动写入 `.claude/settings.json`。`session:lastMessage` + Canvas 节点实时刷新链路打通，指挥中心待审批角标已上线。PreToolUse/MCP 部分标记暂不做。
+**整体进度**：**阶段八（HTTP Hooks 机制改造）全部完成**。魔法字符串机制已完全废弃，HTTP Hook 单轨驱动上线。阶段七改造完成：`SPAWN_AGENT` / `DELEGATE` / `AWAIT_SESSION` 协议检测**全部移除**，改为纯 REST 端点 + UI 按钮触发。协作管理面板中 Orchestrator 的 System Prompt 也已同步更新为 REST 调用说明。
 
 ### ✅ 已完成
 
@@ -23,7 +23,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | pnpm Monorepo | `pnpm-workspace.yaml` | apps/* + packages/* |
 | Fastify 后端骨架 | `apps/server/src/index.ts` | port 3001，REST + WebSocket，使用 SessionManager |
 | WorktreeManager | `apps/server/src/worktree-manager.ts` | git worktree 创建/删除/diff/watch，分支自动回退 |
-| TerminalMultiplexer | `apps/server/src/terminal-mux.ts` | node-pty 真实 PTY（PowerShell 7）；环形 Buffer 5000 行；支持 resize 同步；魔法字符串已删除 |
+| TerminalMultiplexer | `apps/server/src/terminal-mux.ts` | node-pty 真实 PTY（PowerShell 7）；环形 Buffer 5000 行；支持 resize 同步；魔法字符串**已全部移除** |
 | HookDispatcher | `apps/server/src/hook-dispatcher.ts` | ApprovalRegistry（Promise 挂起）+ dispatchHookEvent；PermissionRequest 同步阻塞审批 |
 | HTTP Hook 类型 | `packages/shared-types/src/index.ts` | HookEvent / HookResponse / HookEventName 及全量 Payload 类型 |
 | SessionManager | `apps/server/src/session-manager.ts` | SQLite 持久化，状态机，协调 WorktreeManager + TerminalMux |
@@ -42,8 +42,8 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | ClaudeOrchestratorAdapter | `apps/server/src/agent-adapters/claude.ts` | 注入完整 Orchestrator system prompt，协作协议标记说明 |
 | 适配器工厂 | `apps/server/src/agent-adapters/index.ts` | `createAgentAdapter(agentType)` 工厂，SessionManager 集成 |
 | CollaborationManager | `apps/server/src/collaboration-manager.ts` | 群组 CRUD、流水线边、DAG 环检测、AWAIT/DELEGATE/SPAWN 处理、SQLite 持久化 |
-| 协作 REST API | `apps/server/src/index.ts` | `/collaboration/groups` 全套 CRUD + edges + messages |
-| 协作协议标记 | `apps/server/src/terminal-mux.ts` | SPAWN_AGENT / DELEGATE / TASK_DONE / AWAIT_SESSION 解析并 emit 事件 |
+| 协作 REST API | `apps/server/src/index.ts` | `/collaboration/groups` 全套 CRUD + edges + messages + spawn/delegate/await 端点 |
+| 派生子 Agent UI | `apps/web/src/components/canvas/SessionNode.tsx` | hover 按钮 + Dialog 表单，调用 `POST /collaboration/spawn` |
 | 画布 Pipeline 边 | `apps/web/src/components/canvas/CanvasView.tsx` | 从 groups 同步边（实线箭头）+ 派生关系（虚线）；拖线自动创建群组+边 |
 | SessionNode Handle | `apps/web/src/components/canvas/SessionNode.tsx` | source/target Handle（hover 显现）；orchestrator/worker role badge；claude-orchestrator 棕色皇冠图标 |
 | CollaborationPanel | `apps/web/src/components/collaboration/CollaborationPanel.tsx` | 右侧 Sheet；群组列表、成员、Pipeline 边、共享上下文编辑 |
@@ -79,7 +79,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 阶段四 | 审批后端 + 审批 UI | 🔲 待开始 | [phase-4](./开发计划/phase-4-审批工作流.md) |
 | 阶段五 | Claude / Aider / Shell 适配器 | ✅ Claude + Orchestrator 完成 | [phase-5](./开发计划/phase-5-Agent适配器.md) |
 | 阶段六 | Git 可视化 | 🔲 待开始 | [phase-6](./开发计划/phase-6-git可视化.md) |
-| 阶段七 | 多 Agent 协作 | ✅ 基础实现完成（M7-α + M7-β + M7-γ 核心） | [phase-7](./开发计划/phase-7-多agent协作.md) |
+| 阶段七 | 多 Agent 协作 | ✅ 核心完成（SPAWN/DELAGATE/AWAIT REST 端点 + UI 按钮触发，TerminalMux 协议检测已废弃） | [phase-7](./开发计划/phase-7-多agent协作.md) |
 | 阶段八 | 基于 Hooks 的 Agent 状态流程机制改造 | ✅ 核心完成（8.1~8.4，PreToolUse/MCP 暂不做） | [phase-8](./开发计划/phase-8-基于Hooks的Agent状态流程机制改造计划.md) |
 
 ## 里程碑

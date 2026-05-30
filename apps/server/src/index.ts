@@ -394,6 +394,65 @@ fastify.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
   },
 )
 
+// POST /collaboration/spawn — 手动派生子 Agent（前端 UI 触发）
+fastify.post<{
+  Body: { parentSessionId: string; task: string; agentType: AgentType; branch?: string }
+}>(
+  '/collaboration/spawn',
+  async (request, reply) => {
+    const { parentSessionId, task, agentType, branch } = request.body
+    if (!parentSessionId || !task?.trim()) {
+      return reply.status(400).send({ error: 'parentSessionId and task are required' })
+    }
+    const parent = sessionManager.getSession(parentSessionId)
+    if (!parent) return reply.status(404).send({ error: 'parent session not found' })
+    await sessionManager.collaborationManager.handleSpawnAgent(parentSessionId, {
+      task: task.trim(),
+      agentType: agentType ?? 'claude',
+      branch,
+    })
+    return { ok: true }
+  },
+)
+
+// POST /collaboration/delegate — 向另一个 session 发消息
+fastify.post<{
+  Body: { fromSessionId: string; toSessionId: string; message: string }
+}>(
+  '/collaboration/delegate',
+  async (request, reply) => {
+    const { fromSessionId, toSessionId, message } = request.body
+    if (!fromSessionId || !toSessionId || !message?.trim()) {
+      return reply.status(400).send({ error: 'fromSessionId, toSessionId, and message are required' })
+    }
+    const from = sessionManager.getSession(fromSessionId)
+    const to = sessionManager.getSession(toSessionId)
+    if (!from) return reply.status(404).send({ error: 'from session not found' })
+    if (!to) return reply.status(404).send({ error: 'to session not found' })
+    sessionManager.collaborationManager.handleDelegate(fromSessionId, toSessionId, message.trim())
+    return { ok: true }
+  },
+)
+
+// POST /collaboration/await — 让当前 session 等待另一个 session 完成
+fastify.post<{
+  Body: { waitingSessionId: string; targetSessionId: string; timeoutSeconds?: number }
+}>(
+  '/collaboration/await',
+  async (request, reply) => {
+    const { waitingSessionId, targetSessionId, timeoutSeconds = 300 } = request.body
+    if (!waitingSessionId || !targetSessionId) {
+      return reply.status(400).send({ error: 'waitingSessionId and targetSessionId are required' })
+    }
+    const waiting = sessionManager.getSession(waitingSessionId)
+    const target = sessionManager.getSession(targetSessionId)
+    if (!waiting) return reply.status(404).send({ error: 'waiting session not found' })
+    if (!target) return reply.status(404).send({ error: 'target session not found' })
+    sessionManager.collaborationManager.registerAwait(waitingSessionId, targetSessionId, timeoutSeconds)
+    return { ok: true }
+  },
+)
+
 fastify.get('/ws', { websocket: true }, socket => {
   clients.add(socket)
   fastify.log.info(`WebSocket client connected (total: ${clients.size})`)
