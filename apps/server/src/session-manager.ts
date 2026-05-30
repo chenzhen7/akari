@@ -239,7 +239,12 @@ export class SessionManager {
     return this.worktreeManager.getDiff(sessionId, session.baseBranch)
   }
 
-  handleApproval(sessionId: string, decision: 'approved' | 'rejected', comment?: string): void {
+  handleApproval(
+    sessionId: string,
+    decision: 'approved' | 'rejected',
+    comment?: string,
+    approvalOption?: string,
+  ): void {
     const session = this.getSession(sessionId)
     if (!session || session.status !== 'waiting') return
 
@@ -256,12 +261,15 @@ export class SessionManager {
     if (decision === 'approved') {
       this.updateStatus(sessionId, 'running')
       if (!resolvedByHook) {
-        this.terminalMux.sendToTerminal(sessionId, 'y\n')
+        // approvalOption: '1' = Yes, '2' = Yes+always, '3' = No (rejected path)
+        const key = approvalOption ?? '1'
+        this.terminalMux.sendToTerminal(sessionId, `${key}\n`)
       }
     } else {
       this.updateStatus(sessionId, 'paused')
       if (!resolvedByHook) {
-        this.terminalMux.sendToTerminal(sessionId, 'n\n')
+        // Reject always sends '3' (No) to PTY
+        this.terminalMux.sendToTerminal(sessionId, '3\n')
       }
     }
   }

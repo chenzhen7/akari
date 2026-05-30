@@ -36,7 +36,7 @@ interface SessionStore {
   toggleCommandCenter: () => void
   toggleCreateDialog: () => void
   toggleCollaborationPanel: () => void
-  approveSession: (id: string) => void
+  approveSession: (id: string, approvalOption?: string) => void
   rejectSession: (id: string) => void
   archiveSession: (id: string) => void
   deleteSession: (id: string) => void
@@ -181,11 +181,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   toggleCollaborationPanel: () =>
     set(state => ({ collaborationPanelOpen: !state.collaborationPanelOpen })),
 
-  approveSession: (id) => {
+  approveSession: (id: string, approvalOption?: string) => {
     fetch(`${API_BASE}/sessions/${id}/approval`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision: 'approved' }),
+      body: JSON.stringify({ decision: 'approved', approvalOption }),
     }).catch(err => console.error('[approveSession] failed:', err))
     terminalBus.emit(id, '\r\n\x1b[32m> ✅ Approved, resuming...\x1b[0m\r\n')
     set(state => ({
@@ -195,7 +195,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }))
   },
 
-  rejectSession: (id) => {
+  rejectSession: (id: string) => {
     fetch(`${API_BASE}/sessions/${id}/approval`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

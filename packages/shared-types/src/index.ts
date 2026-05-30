@@ -63,12 +63,20 @@ export interface GitDiff {
   summary: { additions: number; deletions: number; files: number }
 }
 
+export interface ApprovalOption {
+  key: string        // '1' | '2' | '3'
+  label: string      // 'Yes' | 'Yes, and always allow...'
+  description?: string
+}
+
 export interface ApprovalRequest {
   type: 'checkpoint' | 'destructive-op' | 'merge-ready'
   message: string
   diff?: GitDiff
   command?: string
   timestamp: Date
+  /** Options to show in the approval prompt (default: standard Yes/No/Cancel) */
+  options?: ApprovalOption[]
 }
 
 export interface AgentSession {

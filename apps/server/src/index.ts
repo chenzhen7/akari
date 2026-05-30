@@ -71,17 +71,17 @@ fastify.patch<{ Params: { id: string }; Body: { status: SessionStatus } }>(
   },
 )
 
-fastify.post<{ Params: { id: string }; Body: { decision: 'approved' | 'rejected'; comment?: string } }>(
+fastify.post<{ Params: { id: string }; Body: { decision: 'approved' | 'rejected'; comment?: string; approvalOption?: string } }>(
   '/sessions/:id/approval',
   async (request, reply) => {
     const { id } = request.params
-    const { decision, comment } = request.body
+    const { decision, comment, approvalOption } = request.body
     const session = sessionManager.getSession(id)
     if (!session) return reply.status(404).send({ error: 'session not found' })
     if (session.status !== 'waiting') {
       return reply.status(422).send({ error: 'session is not waiting for approval' })
     }
-    sessionManager.handleApproval(id, decision, comment)
+    sessionManager.handleApproval(id, decision, comment, approvalOption)
     return { ok: true }
   },
 )

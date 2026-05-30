@@ -11,11 +11,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { useSessionStore } from '@/stores/session-store'
+import { cn } from '@/lib/utils'
+import type { ApprovalOption } from '@akari/shared-types'
 import {
   Radio,
   Send,
-  Check,
-  X,
   Eye,
   Circle,
   Bot,
@@ -76,6 +76,12 @@ const STATUS_META: Record<string, {
   },
 }
 
+const DEFAULT_APPROVAL_OPTIONS: ApprovalOption[] = [
+  { key: '1', label: 'Yes' },
+  { key: '2', label: 'Yes, and always allow access from this project' },
+  { key: '3', label: 'No' },
+]
+
 function SessionChip({
   id,
   name,
@@ -121,13 +127,17 @@ function ApprovalCard({
   sessionId: string
   name: string
   status: string
-  pendingApproval?: { command?: string; message?: string }
-  onApprove: () => void
+  pendingApproval?: { command?: string; message?: string; options?: ApprovalOption[] }
+  onApprove: (option: string) => void
   onReject: () => void
   onView: () => void
   onClose: () => void
 }) {
   const meta = STATUS_META[status] ?? STATUS_META['waiting']
+  const options = pendingApproval?.options?.length
+    ? pendingApproval.options
+    : DEFAULT_APPROVAL_OPTIONS
+
   return (
     <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -135,33 +145,16 @@ function ApprovalCard({
           <Circle className={`h-2.5 w-2.5 shrink-0 ${meta.dot}`} />
           <span className="truncate text-xs font-medium">{name}</span>
         </div>
-        <div className="flex gap-1 shrink-0">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-6 w-6 text-green-500 hover:bg-green-500/15 hover:text-green-400"
-            onClick={onApprove}
-          >
-            <Check className="h-3 w-3" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-6 w-6 text-red-500 hover:bg-red-500/15 hover:text-red-400"
-            onClick={onReject}
-          >
-            <X className="h-3 w-3" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-6 w-6 text-muted-foreground hover:bg-muted"
-            onClick={() => { onView(); onClose() }}
-          >
-            <Eye className="h-3 w-3" />
-          </Button>
-        </div>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6 text-muted-foreground hover:bg-muted shrink-0"
+          onClick={() => { onView(); onClose() }}
+        >
+          <Eye className="h-3 w-3" />
+        </Button>
       </div>
+
       {pendingApproval?.command ? (
         <code className="block truncate rounded bg-black/40 px-2 py-1 font-mono text-[10px] text-amber-300/90 border border-amber-500/15">
           {pendingApproval.command}
@@ -171,6 +164,36 @@ function ApprovalCard({
           {pendingApproval?.message ?? '等待审批'}
         </p>
       )}
+
+      {/* Approval options */}
+      <div className="flex flex-col gap-1">
+        {options.map(opt => (
+          <Button
+            key={opt.key}
+            variant="outline"
+            size="sm"
+            className={cn(
+              'h-7 justify-start text-xs font-normal gap-2 w-full',
+              opt.key === '1'
+                ? 'border-green-500/40 text-green-600 hover:bg-green-500/10 hover:border-green-500/60'
+                : opt.key === '2'
+                  ? 'border-blue-500/40 text-blue-600 hover:bg-blue-500/10 hover:border-blue-500/60'
+                  : 'border-red-500/40 text-red-600 hover:bg-red-500/10 hover:border-red-500/60'
+            )}
+            onClick={() => {
+              if (opt.key === '3') {
+                onReject()
+              } else {
+                onApprove(opt.key)
+              }
+              onClose()
+            }}
+          >
+            <span className="font-mono font-medium w-4 shrink-0">{opt.key}.</span>
+            <span className="truncate">{opt.label}</span>
+          </Button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -377,7 +400,7 @@ export function CommandCenter() {
                       name={s.name}
                       status={s.status}
                       pendingApproval={s.pendingApproval}
-                      onApprove={() => approveSession(s.id)}
+                      onApprove={(option) => approveSession(s.id, option)}
                       onReject={() => rejectSession(s.id)}
                       onView={() => openTab(s.id)}
                       onClose={toggleCommandCenter}
