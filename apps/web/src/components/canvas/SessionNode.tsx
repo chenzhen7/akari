@@ -361,7 +361,7 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
           >
             {miniTerminal.length > 0 ? (
               miniTerminal.map((line, i) => (
-                <div key={i} className="truncate">{line}</div>
+                <div key={i} className="truncate min-h-[1em]">{line}</div>
               ))
             ) : (
               <span style={{ color: '#484f58' }}>等待输出…</span>

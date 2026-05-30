@@ -256,7 +256,7 @@ export function getTerminalViewportLines(sessionId: string, maxLines = 5): strin
     const line = buf.getLine(row)
     if (!line) continue
     const text = line.translateToString(true).trimEnd()
-    if (text) result.unshift(text)
+    result.unshift(text)
   }
   return result
 }
