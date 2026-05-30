@@ -201,7 +201,8 @@ function CanvasViewContent() {
           prevSession?.status !== s.status ||
           prevSession?.progress !== s.progress ||
           prevSession?.name !== s.name ||
-          prevSession?.branchName !== s.branchName
+          prevSession?.branchName !== s.branchName ||
+          prevSession?.lastAiMessage !== s.lastAiMessage
         ) {
           changed = true
           return {

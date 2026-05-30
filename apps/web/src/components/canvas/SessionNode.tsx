@@ -24,21 +24,21 @@ type SessionNodeData = {
 type SessionNodeType = Node<SessionNodeData>
 
 const agentConfig: Record<string, { bg: string; Icon: LucideIcon }> = {
-  claude:               { bg: '#7c3aed', Icon: Bot },
+  claude: { bg: '#7c3aed', Icon: Bot },
   'claude-orchestrator': { bg: '#b45309', Icon: Crown },
-  aider:                { bg: '#2563eb', Icon: Code2 },
-  shell:                { bg: '#374151', Icon: Terminal },
+  aider: { bg: '#2563eb', Icon: Code2 },
+  shell: { bg: '#374151', Icon: Terminal },
 }
 
 const statusConfig: Record<string, { color: string; label: string }> = {
-  running:      { color: '#22c55e', label: '运行中'   },
-  waiting:      { color: '#f59e0b', label: '待审批'   },
-  failed:       { color: '#ef4444', label: '失败'     },
-  completed:    { color: '#3b82f6', label: '已完成'   },
+  running: { color: '#22c55e', label: '运行中' },
+  waiting: { color: '#f59e0b', label: '待审批' },
+  failed: { color: '#ef4444', label: '失败' },
+  completed: { color: '#3b82f6', label: '已完成' },
   initializing: { color: '#94a3b8', label: '初始化中' },
-  paused:       { color: '#f97316', label: '已暂停'   },
-  review:       { color: '#a855f7', label: '审查中'   },
-  archived:     { color: '#64748b', label: '已归档'   },
+  paused: { color: '#f97316', label: '已暂停' },
+  review: { color: '#a855f7', label: '审查中' },
+  archived: { color: '#64748b', label: '已归档' },
 }
 
 function truncateMessage(msg: string, maxLen = 200): string {
@@ -79,8 +79,8 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
 
   const roleLabel: Record<string, string> = {
     orchestrator: 'Orchestrator',
-    worker:       'Worker',
-    reviewer:     'Reviewer',
+    worker: 'Worker',
+    reviewer: 'Reviewer',
   }
 
   return (
@@ -133,18 +133,18 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
           background: 'radial-gradient(ellipse at 50% 0%, #242424 0%, #111111 75%)',
           boxShadow: hovered
             ? [
-                'inset 0 14px 3px -13px rgba(255,255,255,0.22)',
-                '0 0 0 1px rgba(255,255,255,0.10)',
-                `0 0 0 1px ${color}45`,
-                `0 0 24px ${color}20`,
-                '0 20px 48px rgba(0,0,0,0.80)',
-              ].join(', ')
+              'inset 0 14px 3px -13px rgba(255,255,255,0.22)',
+              '0 0 0 1px rgba(255,255,255,0.10)',
+              `0 0 0 1px ${color}45`,
+              `0 0 24px ${color}20`,
+              '0 20px 48px rgba(0,0,0,0.80)',
+            ].join(', ')
             : [
-                'inset 0 14px 3px -13px rgba(255,255,255,0.10)',
-                '0 0 0 1px rgba(255,255,255,0.06)',
-                `0 0 0 1px ${color}28`,
-                '0 8px 24px rgba(0,0,0,0.65)',
-              ].join(', '),
+              'inset 0 14px 3px -13px rgba(255,255,255,0.10)',
+              '0 0 0 1px rgba(255,255,255,0.06)',
+              `0 0 0 1px ${color}28`,
+              '0 8px 24px rgba(0,0,0,0.65)',
+            ].join(', '),
           transition: 'box-shadow 0.2s ease',
         }}
       >
@@ -283,14 +283,14 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
             className={cn(
               session.status === 'waiting' && 'animate-pulse',
             )}
-            style={{ background: `${color}18`, color, borderColor: `${color}35` , fontSize: '9px' }}
+            style={{ background: `${color}18`, color, borderColor: `${color}35`, fontSize: '9px' }}
           >
             {session.status === 'waiting' && <Bell />}
             {cfg.label}
           </Badge>
           {session.collaborationRole && session.collaborationRole !== 'standalone' && (
             <Badge
-              
+
               variant="outline"
               style={{ background: 'rgba(180,83,9,0.12)', color: '#d97706', borderColor: 'rgba(180,83,9,0.3)', fontSize: '9px' }}
             >
@@ -341,37 +341,37 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
         onPointerUp={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
       >
-      <Dialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-      >
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>彻底删除会话</DialogTitle>
-            <DialogDescription>
-              将删除 Worktree 目录（
-              <span className="font-mono text-foreground">.agent-worktrees/{session.id}</span>
-              ）和分支（
-              <span className="font-mono text-foreground">{session.branchName}</span>
-              ），此操作不可恢复。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
-              取消
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                deleteSession(session.id)
-                setDeleteOpen(false)
-              }}
-            >
-              确认删除
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <Dialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+        >
+          <DialogContent showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>彻底删除会话</DialogTitle>
+              <DialogDescription>
+                将删除 Worktree 目录（
+                <span className="font-mono text-foreground">.agent-worktrees/{session.id}</span>
+                ）和分支（
+                <span className="font-mono text-foreground">{session.branchName}</span>
+                ），此操作不可恢复。
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+                取消
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  deleteSession(session.id)
+                  setDeleteOpen(false)
+                }}
+              >
+                确认删除
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </>
   )
