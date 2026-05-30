@@ -187,7 +187,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ decision: 'approved', approvalOption }),
     }).catch(err => console.error('[approveSession] failed:', err))
-    terminalBus.emit(id, '\r\n\x1b[32m> ✅ Approved, resuming...\x1b[0m\r\n')
     set(state => ({
       sessions: state.sessions.map(s =>
         s.id === id ? { ...s, status: 'running' as SessionStatus } : s
@@ -201,7 +200,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ decision: 'rejected' }),
     }).catch(err => console.error('[rejectSession] failed:', err))
-    terminalBus.emit(id, '\r\n\x1b[31m> ❌ Rejected, paused\x1b[0m\r\n')
     set(state => ({
       sessions: state.sessions.map(s =>
         s.id === id ? { ...s, status: 'paused' as SessionStatus } : s
@@ -396,12 +394,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             g.id === msg.payload.groupId ? { ...g, sharedContext: msg.payload.context } : g
           ),
         }))
-        break
-      case 'agent:message':
-        terminalBus.emit(
-          msg.payload.toSessionId,
-          `\r\n\x1b[36m[Message from ${msg.payload.fromSessionId}]\x1b[0m ${msg.payload.content}\r\n`,
-        )
         break
     }
   },
