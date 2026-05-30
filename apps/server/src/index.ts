@@ -88,17 +88,14 @@ fastify.post<{ Params: { id: string }; Body: { decision: 'approved' | 'rejected'
   },
 )
 
-// 调试端点：直接向 PTY 写入任意字符串，用于验证 PTY 写入本身是否工作
-fastify.post<{ Params: { id: string }; Body: { data: string } }>(
-  '/sessions/:id/pty-write',
+// 忽略审批：清除 hook 的等待，让 Claude Code 自己处理（不解锁 PTY）
+fastify.post<{ Params: { id: string } }>(
+  '/sessions/:id/approval-ignore',
   async (request, reply) => {
     const { id } = request.params
-    const { data } = request.body
-    if (!data) return reply.status(400).send({ error: 'data is required' })
     const session = sessionManager.getSession(id)
     if (!session) return reply.status(404).send({ error: 'session not found' })
-    fastify.log.info({ sessionId: id, data: JSON.stringify(data) }, '[pty-write] DEBUG writing to PTY')
-    sessionManager.sendToTerminal(id, data)
+    sessionManager.dismissApproval(id)
     return { ok: true }
   },
 )

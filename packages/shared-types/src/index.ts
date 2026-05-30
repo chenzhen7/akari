@@ -173,6 +173,7 @@ export type HookEventName =
   | 'TaskCompleted'
   | 'Stop'
   | 'StopFailure'
+  | 'UserPromptSubmit'
 
 interface HookEventBase {
   hook_event_name: HookEventName
@@ -215,6 +216,10 @@ export interface StopFailurePayload extends HookEventBase {
   error?: string
 }
 
+export interface UserPromptSubmitPayload extends HookEventBase {
+  hook_event_name: 'UserPromptSubmit'
+}
+
 export type HookEvent =
   | SessionStartPayload
   | PermissionRequestPayload
@@ -223,6 +228,7 @@ export type HookEvent =
   | TaskCompletedPayload
   | StopPayload
   | StopFailurePayload
+  | UserPromptSubmitPayload
 
 export interface HookResponse {
   hookSpecificOutput?: {

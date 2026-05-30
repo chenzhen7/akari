@@ -38,6 +38,7 @@ interface SessionStore {
   toggleCollaborationPanel: () => void
   approveSession: (id: string, approvalOption?: string) => void
   rejectSession: (id: string) => void
+  ignoreApproval: (id: string) => void
   archiveSession: (id: string) => void
   deleteSession: (id: string) => void
   restoreSession: (id: string) => void
@@ -203,6 +204,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set(state => ({
       sessions: state.sessions.map(s =>
         s.id === id ? { ...s, status: 'paused' as SessionStatus } : s
+      ),
+    }))
+  },
+
+  ignoreApproval: (id: string) => {
+    fetch(`${API_BASE}/sessions/${id}/approval-ignore`, { method: 'POST' })
+      .catch(err => console.error('[ignoreApproval] failed:', err))
+    set(state => ({
+      sessions: state.sessions.map(s =>
+        s.id === id ? { ...s, pendingApproval: undefined } : s
       ),
     }))
   },

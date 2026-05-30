@@ -62,7 +62,7 @@ const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
   running: ['waiting', 'paused', 'completed', 'failed', 'archived'],
   waiting: ['running', 'paused', 'failed', 'archived'],
   approved: ['running', 'archived'],
-  paused: ['running', 'failed', 'archived'],
+  paused: ['running', 'waiting', 'failed', 'archived'],
   review: ['completed', 'running', 'archived'],
   completed: ['merged', 'archived', 'running'],
   failed: ['archived', 'running'],
@@ -271,6 +271,15 @@ export class SessionManager {
       console.log(`[handleApproval] ★ sendToTerminal reject resolvedByHook=${resolvedByHook}`)
       this.terminalMux.sendToTerminal(sessionId, `3${eol}`)
     }
+  }
+
+  dismissApproval(sessionId: string): void {
+    this.db.prepare('UPDATE sessions SET pending_approval = NULL WHERE id = ?').run(sessionId)
+    const resolved = approvalRegistry.dismissApproval(sessionId)
+    if (!resolved) return
+    try {
+      this.updateStatus(sessionId, 'running')
+    } catch { /* not in waiting state */ }
   }
 
   setWaitingForApproval(sessionId: string, request: ApprovalRequest): void {

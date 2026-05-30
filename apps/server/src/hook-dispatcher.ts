@@ -27,6 +27,14 @@ export class ApprovalRegistry {
     return true
   }
 
+  dismissApproval(sessionId: string): boolean {
+    const entry = this.pending.get(sessionId)
+    if (!entry) return false
+    entry.reject(new Error('dismissed'))
+    this.pending.delete(sessionId)
+    return true
+  }
+
   hasPending(sessionId: string): boolean {
     return this.pending.has(sessionId)
   }
@@ -67,7 +75,13 @@ export async function dispatchHookEvent(
         timestamp: new Date(),
       }
       sessionManager.setWaitingForApproval(sessionId, request)
-      const decision = await approvalRegistry.waitForApproval(sessionId)
+      let decision: 'approve' | 'deny'
+      try {
+        decision = await approvalRegistry.waitForApproval(sessionId)
+      } catch (err) {
+        // dismissed — hook 返回错误响应，让 Claude Code 自己处理
+        throw err instanceof Error ? err : new Error(String(err))
+      }
       return {
         hookSpecificOutput: {
           hookEventName: 'PermissionRequest',
@@ -98,6 +112,14 @@ export async function dispatchHookEvent(
           sessionId,
           `\r\n\x1b[31m> [StopFailure] ${error}\x1b[0m\r\n`,
         )
+      }
+      return {}
+    }
+
+    case 'UserPromptSubmit': {
+      const session = sessionManager.getSession(sessionId)
+      if (session && (session.status === 'paused' || session.status === 'waiting')) {
+        sessionManager.updateStatus(sessionId, 'running')
       }
       return {}
     }

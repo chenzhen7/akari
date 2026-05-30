@@ -22,6 +22,7 @@ import {
   Zap,
   CheckCircle2,
   XCircle,
+  X,
   Archive,
 } from 'lucide-react'
 
@@ -121,6 +122,7 @@ function ApprovalCard({
   pendingApproval,
   onApprove,
   onReject,
+  onIgnore,
   onView,
   onClose,
 }: {
@@ -130,6 +132,7 @@ function ApprovalCard({
   pendingApproval?: { command?: string; message?: string; description?: string; options?: ApprovalOption[] }
   onApprove: (option: string) => void
   onReject: () => void
+  onIgnore: () => void
   onView: () => void
   onClose: () => void
 }) {
@@ -154,14 +157,24 @@ function ApprovalCard({
             {name}
           </span>
         </div>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-5 w-5 text-white/30 hover:text-white/70 hover:bg-white/5 shrink-0"
-          onClick={() => { onView(); onClose() }}
-        >
-          <Eye className="h-3 w-3" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-5 w-5 text-white/30 hover:text-white/70 hover:bg-white/5 shrink-0"
+            onClick={() => { onView(); onClose() }}
+          >
+            <Eye className="h-3 w-3" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-5 w-5 text-white/30 hover:text-white/70 hover:bg-white/5 shrink-0"
+            onClick={() => { onIgnore(); onClose() }}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
 
       {/* Terminal body */}
@@ -254,6 +267,7 @@ export function CommandCenter() {
     sessions,
     approveSession,
     rejectSession,
+    ignoreApproval,
     openTab,
     addTerminalLine,
   } = useSessionStore()
@@ -425,6 +439,7 @@ export function CommandCenter() {
                       pendingApproval={s.pendingApproval}
                       onApprove={(option) => approveSession(s.id, option)}
                       onReject={() => rejectSession(s.id)}
+                      onIgnore={() => ignoreApproval(s.id)}
                       onView={() => openTab(s.id)}
                       onClose={toggleCommandCenter}
                     />

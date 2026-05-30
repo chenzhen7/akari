@@ -32,7 +32,7 @@ async function writeClaudeSettings(worktreePath: string, sessionId: string): Pro
     existingSettings.hooks = {}
   }
 
-  const hookEvents = ['PermissionRequest', 'SessionStart', 'Stop', 'StopFailure'] as const
+  const hookEvents = ['PermissionRequest', 'SessionStart', 'Stop', 'StopFailure', 'UserPromptSubmit'] as const
 
   for (const event of hookEvents) {
     if (!Array.isArray(existingSettings.hooks[event])) {
