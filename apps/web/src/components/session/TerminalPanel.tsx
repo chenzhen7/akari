@@ -36,7 +36,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
 
     const existing = terminalInstances.get(session.id)
 
-    if (existing) {
+      if (existing) {
       // Tab switched back: re-attach the existing terminal element to the new container
       if (existing.term.element) {
         container.appendChild(existing.term.element)
@@ -44,6 +44,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
       requestAnimationFrame(() => {
         try {
           existing.fitAddon.fit()
+          existing.term.focus()
           send({
             event: 'terminal:resize',
             payload: { sessionId: session.id, cols: existing.term.cols, rows: existing.term.rows },
@@ -118,6 +119,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     requestAnimationFrame(() => {
       try {
         fitAddon.fit()
+        term.focus()
         send({
           event: 'terminal:resize',
           payload: { sessionId: session.id, cols: term.cols, rows: term.rows },
@@ -223,6 +225,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     if (!entry) return
     try {
       entry.fitAddon.fit()
+      entry.term.focus()
       send({
         event: 'terminal:resize',
         payload: { sessionId: session.id, cols: entry.term.cols, rows: entry.term.rows },
