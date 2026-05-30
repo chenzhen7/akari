@@ -34,6 +34,7 @@ export function TopNav() {
     toggleSidebar,
     viewMode,
     setViewMode,
+    activeTabId,
     setActiveTab,
     toggleCreateDialog,
     toggleCommandCenter,
@@ -78,8 +79,9 @@ export function TopNav() {
       {/* View mode switcher */}
       <div className="px-2">
         <Tabs
-          value={viewMode}
+          value={activeTabId ? '' : viewMode}
           onValueChange={v => {
+            if (!v) return
             setViewMode(v as 'canvas' | 'kanban')
             setActiveTab(null)
           }}
