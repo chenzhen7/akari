@@ -255,15 +255,16 @@ export class SessionManager {
     if (decision === 'approved') {
       this.updateStatus(sessionId, 'running')
       if (!resolvedByHook) {
-        // approvalOption: '1' = Yes, '2' = Yes+always, '3' = No (rejected path)
+        // Windows PTY 需要 CRLF 才能识别命令终止符；单独 LF 会被当作行继续符
+        const eol = process.platform === 'win32' ? '\r\n' : '\n'
         const key = approvalOption ?? '1'
-        this.terminalMux.sendToTerminal(sessionId, `${key}\n`)
+        this.terminalMux.sendToTerminal(sessionId, `${key}${eol}`)
       }
     } else {
       this.updateStatus(sessionId, 'paused')
       if (!resolvedByHook) {
-        // Reject always sends '3' (No) to PTY
-        this.terminalMux.sendToTerminal(sessionId, '3\n')
+        const eol = process.platform === 'win32' ? '\r\n' : '\n'
+        this.terminalMux.sendToTerminal(sessionId, `3${eol}`)
       }
     }
   }

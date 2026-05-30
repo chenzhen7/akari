@@ -58,7 +58,6 @@ function getDisplayLines(sessionId: string, maxLines: number): string[] {
     .replace(/[\x00-\x09\x0b-\x1f\x7f]/g, '')
     .split(/\r?\n/)
     .map(l => l.trimEnd())
-    .filter(l => l.trim())
     .slice(-maxLines)
 }
 

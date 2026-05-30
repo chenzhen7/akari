@@ -36,7 +36,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
 
     const existing = terminalInstances.get(session.id)
 
-      if (existing) {
+    if (existing) {
       // Tab switched back: re-attach the existing terminal element to the new container
       if (existing.term.element) {
         container.appendChild(existing.term.element)
