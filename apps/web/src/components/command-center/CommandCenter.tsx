@@ -116,6 +116,7 @@ function ApprovalCard({
   onApprove,
   onReject,
   onView,
+  onClose,
 }: {
   sessionId: string
   name: string
@@ -124,6 +125,7 @@ function ApprovalCard({
   onApprove: () => void
   onReject: () => void
   onView: () => void
+  onClose: () => void
 }) {
   const meta = STATUS_META[status] ?? STATUS_META['waiting']
   return (
@@ -154,7 +156,7 @@ function ApprovalCard({
             size="icon"
             variant="ghost"
             className="h-6 w-6 text-muted-foreground hover:bg-muted"
-            onClick={onView}
+            onClick={() => { onView(); onClose() }}
           >
             <Eye className="h-3 w-3" />
           </Button>
@@ -378,6 +380,7 @@ export function CommandCenter() {
                       onApprove={() => approveSession(s.id)}
                       onReject={() => rejectSession(s.id)}
                       onView={() => openTab(s.id)}
+                      onClose={toggleCommandCenter}
                     />
                   ))}
                 </div>
