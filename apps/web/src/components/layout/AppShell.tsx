@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { TopNav } from './TopNav'
 import { SessionSidebar } from './SessionSidebar'
 import { RightSidebar } from './RightSidebar'
@@ -16,7 +16,6 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable'
-import { usePanelRef } from 'react-resizable-panels'
 
 function WebSocketProvider() {
   useWebSocket()
@@ -29,49 +28,13 @@ export function AppShell() {
   const viewMode = useSessionStore(s => s.viewMode)
   const { send } = useWebSocket()
 
-  const leftPanelRef = usePanelRef()
-  const rightPanelRef = usePanelRef()
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(true)
 
   const session = activeTabId ? sessions.find(s => s.id === activeTabId) : undefined
 
-  // activeTabId 变化时自动展开/收起右侧
-  useEffect(() => {
-    const handle = rightPanelRef.current
-    if (!handle) return
-    if (activeTabId) {
-      handle.expand()
-      setRightCollapsed(false)
-    } else {
-      handle.collapse()
-      setRightCollapsed(true)
-    }
-  }, [activeTabId])
-
-  const toggleLeft = () => {
-    const handle = leftPanelRef.current
-    if (!handle) return
-    if (leftCollapsed) {
-      handle.expand()
-      setLeftCollapsed(false)
-    } else {
-      handle.collapse()
-      setLeftCollapsed(true)
-    }
-  }
-
-  const toggleRight = () => {
-    const handle = rightPanelRef.current
-    if (!handle) return
-    if (rightCollapsed) {
-      handle.expand()
-      setRightCollapsed(false)
-    } else {
-      handle.collapse()
-      setRightCollapsed(true)
-    }
-  }
+  const toggleLeft = () => setLeftCollapsed(prev => !prev)
+  const toggleRight = () => setRightCollapsed(prev => !prev)
 
   return (
     <TooltipProvider>
@@ -86,19 +49,15 @@ export function AppShell() {
         />
         <ResizablePanelGroup direction="horizontal" className="flex-1">
           {/* Left Sidebar */}
-          <ResizablePanel
-            panelRef={leftPanelRef}
-            defaultSize="15%"
-            minSize="12%"
-            maxSize="30%"
-            collapsible
-            collapsedSize="0%"
-            disabled={leftCollapsed}
-          >
-            <SessionSidebar />
-          </ResizablePanel>
-
-          <ResizableHandle withHandle disabled={leftCollapsed} />
+          {!leftCollapsed && (
+            <>
+              <ResizablePanel defaultSize="15%" minSize="12%" maxSize="30%">
+                <SessionSidebar />
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+            </>
+          )}
+          {leftCollapsed && <ResizableHandle withHandle disabled />}
 
           {/* Middle */}
           <ResizablePanel defaultSize={activeTabId ? '60%' : '85%'} minSize="30%">
@@ -111,28 +70,17 @@ export function AppShell() {
             )}
           </ResizablePanel>
 
-          {/* Right Handle */}
-          <ResizableHandle
-            withHandle
-            disabled={rightCollapsed || !activeTabId}
-          />
-
           {/* Right Sidebar */}
-          <ResizablePanel
-            panelRef={rightPanelRef}
-            defaultSize="25%"
-            minSize="15%"
-            maxSize="40%"
-            collapsible
-            collapsedSize="0%"
-            disabled={rightCollapsed}
-          >
-            {activeTabId && session ? (
-              <RightSidebar session={session} />
-            ) : (
-              <div />
-            )}
-          </ResizablePanel>
+          {!rightCollapsed && activeTabId ? (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize="25%" minSize="15%" maxSize="40%">
+                {session && <RightSidebar session={session} />}
+              </ResizablePanel>
+            </>
+          ) : (
+            <ResizableHandle withHandle disabled />
+          )}
         </ResizablePanelGroup>
         <CommandCenter />
         <CreateSessionDialog />
