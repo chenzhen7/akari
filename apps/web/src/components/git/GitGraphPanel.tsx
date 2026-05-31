@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { GitBranch, RefreshCw, Copy, Check, GitMerge, Tag, Globe, User, Clock, CircleDot } from 'lucide-react'
+import { GitBranch, RefreshCw, GitMerge, Tag, Globe, CircleDot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -11,7 +11,6 @@ import {
   graphColWidth,
   cx as laneCx,
   cy as laneCy,
-  relativeTime,
   truncate,
   ROW_H,
   DOT_R,
@@ -46,7 +45,6 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   const [search, setSearch] = useState('')
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [newBranch, setNewBranch] = useState<NewBranchState | null>(null)
-  const [copiedHash, setCopiedHash] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const logData: GitLogResponse | null = gitLogs[sessionId] ?? null
@@ -97,12 +95,6 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
 
   const gColW = graphColWidth(maxLane)
   const svgH = ROW_H * filteredCommits.length
-
-  const handleCopyHash = (hash: string) => {
-    void navigator.clipboard.writeText(hash)
-    setCopiedHash(true)
-    setTimeout(() => setCopiedHash(false), 1500)
-  }
 
   const handleCheckout = (hash: string) => {
     fetch(`${API_BASE}/sessions/${sessionId}/git/checkout`, {
@@ -179,19 +171,16 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
 
       {/* Table header */}
       <div
-        className="flex shrink-0 items-center border-b border-border bg-muted/30 text-[11px] font-medium text-muted-foreground select-none"
+        className="flex shrink-0 items-center border-b border-border bg-card text-[11px] font-medium text-muted-foreground select-none"
         style={{ height: 26 }}
       >
-        <div className="px-2" style={{ width: gColW + 160 }}>提交信息</div>
-        <div className="px-2" style={{ width: 120 }}>作者</div>
-        <div className="px-2" style={{ width: 80 }}>时间</div>
-        <div className="px-2 font-mono" style={{ width: 72 }}>Hash</div>
+        <div className="px-2">提交信息</div>
       </div>
 
       {/* Graph + rows (scrollable) */}
       <div ref={scrollRef} className="relative flex-1 overflow-auto">
         {/* Canvas area */}
-        <div className="relative" style={{ height: svgH, minWidth: gColW + 160 + 120 + 80 + 72 }}>
+        <div className="relative" style={{ height: svgH, minWidth: gColW + 160 }}>
 
           {/* SVG graph layer */}
           <svg
@@ -297,30 +286,6 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
                     </Badge>
                   )}
                 </div>
-
-                {/* Author */}
-                <div
-                  className="shrink-0 truncate px-2 text-muted-foreground"
-                  style={{ width: 120 }}
-                >
-                  {commit.author}
-                </div>
-
-                {/* Date */}
-                <div
-                  className="shrink-0 px-2 tabular-nums text-muted-foreground"
-                  style={{ width: 80 }}
-                >
-                  {relativeTime(commit.date)}
-                </div>
-
-                {/* Hash */}
-                <div
-                  className="shrink-0 px-2 font-mono text-muted-foreground"
-                  style={{ width: 72 }}
-                >
-                  {commit.shortHash}
-                </div>
               </div>
             )
           })}
@@ -338,30 +303,8 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
           <div className="flex flex-col gap-1 px-4 py-2 text-xs">
             <div className="flex items-center gap-2">
               <span className="font-mono text-muted-foreground text-[11px]">{selectedCommit.hash}</span>
-              <button
-                onClick={() => handleCopyHash(selectedCommit.hash)}
-                className="flex items-center gap-0.5 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {copiedHash ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-              </button>
             </div>
             <div className="font-medium text-foreground leading-snug">{selectedCommit.message}</div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <User className="h-3 w-3 shrink-0 text-foreground/40" />
-                {selectedCommit.author} &lt;{selectedCommit.email}&gt;
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock className="h-3 w-3 shrink-0 text-foreground/40" />
-                {new Date(selectedCommit.date).toLocaleString('zh-CN')}
-              </span>
-              {selectedCommit.parents.length > 1 && (
-                <span className="flex items-center gap-1 text-amber-500">
-                  <GitMerge className="h-3 w-3 shrink-0" />
-                  {selectedCommit.parents.map(p => p.slice(0, 7)).join(', ')}
-                </span>
-              )}
-            </div>
           </div>
         )}
       </div>
@@ -376,7 +319,6 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
           onClose={() => setContextMenu(null)}
           onCheckout={handleCheckout}
           onCreateBranch={handleCreateBranch}
-          onCopyHash={handleCopyHash}
         />
       )}
 

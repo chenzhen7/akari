@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { GitBranch, GitFork, Copy } from 'lucide-react'
+import { GitBranch, GitFork } from 'lucide-react'
 import type { GitCommit } from '@akari/shared-types'
 import { cn } from '@/lib/utils'
 
@@ -11,7 +11,6 @@ interface GitContextMenuProps {
   onClose: () => void
   onCheckout: (hash: string) => void
   onCreateBranch: (hash: string) => void
-  onCopyHash: (hash: string) => void
 }
 
 interface MenuItem {
@@ -30,7 +29,6 @@ export function GitContextMenu({
   onClose,
   onCheckout,
   onCreateBranch,
-  onCopyHash,
 }: GitContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -62,12 +60,6 @@ export function GitContextMenu({
       icon: GitFork,
       label: '从此提交新建分支',
       action: () => { onCreateBranch(commit.hash); onClose() },
-      show: true,
-    },
-    {
-      icon: Copy,
-      label: '复制完整 Hash',
-      action: () => { onCopyHash(commit.hash); onClose() },
       show: true,
     },
   ]
