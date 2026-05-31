@@ -1,6 +1,4 @@
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { ArrowLeft, Loader2 } from 'lucide-react'
 import { useSessionStore } from '@/stores/session-store'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { TerminalPanel } from './TerminalPanel'
@@ -13,7 +11,6 @@ import { cn } from '@/lib/utils'
 export function SessionDetail() {
   const activeTabId = useSessionStore(s => s.activeTabId)
   const sessions = useSessionStore(s => s.sessions)
-  const setActiveTab = useSessionStore(s => s.setActiveTab)
   const archiveSession = useSessionStore(s => s.archiveSession)
   const restoreSession = useSessionStore(s => s.restoreSession)
   const pendingOps = useSessionStore(s => s.pendingOps)
@@ -28,24 +25,6 @@ export function SessionDetail() {
 
   return (
     <div className="flex h-full w-full flex-col">
-      {/* Header */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
-        <Button variant="ghost" size="sm" className="gap-1 h-7 px-2" onClick={() => setActiveTab(null)}>
-          <ArrowLeft className="h-3.5 w-3.5" />
-          返回
-        </Button>
-        <div className="h-4 w-px bg-border" />
-        <span className="text-sm font-medium">{session.name}</span>
-        {session.status === 'initializing' && (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-        )}
-        {session.agentType && (
-          <span className="ml-auto rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-            {session.agentType}
-          </span>
-        )}
-      </div>
-
       {/* Body: activity bar + content */}
       <div className="flex flex-1 overflow-hidden">
         <ActivityBar
