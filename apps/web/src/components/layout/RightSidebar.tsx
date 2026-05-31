@@ -4,6 +4,7 @@ import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
 import { GitGraphPanel } from '@/components/git/GitGraphPanel'
 import { DiffFileList } from '@/components/diff/DiffFileList'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 const TABS: { id: 'git-graph' | 'diff' | 'info'; label: string; icon: React.ElementType }[] = [
   { id: 'git-graph', label: 'Git Graph', icon: GitBranch },
@@ -28,24 +29,27 @@ export function RightSidebar({ session }: RightSidebarProps) {
   return (
     <div className="flex h-full w-full flex-col bg-card">
       {/* Tab bar */}
-      <div className="flex h-9 shrink-0 items-center border-b border-border/50 px-1">
+      <div className="flex h-9 shrink-0 items-center border-b border-border/50 px-1 gap-0.5">
         {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => {
-              setActiveRightTab(id)
-              if (id !== 'diff') setSelectedDiffFile(null)
-            }}
-            className={cn(
-              'flex h-7 items-center gap-1.5 rounded px-2 text-xs transition-colors',
-              activeRightTab === id
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-          </button>
+          <Tooltip key={id}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => {
+                  setActiveRightTab(id)
+                  if (id !== 'diff') setSelectedDiffFile(null)
+                }}
+                className={cn(
+                  'flex h-7 w-7 items-center justify-center rounded transition-colors',
+                  activeRightTab === id
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{label}</TooltipContent>
+          </Tooltip>
         ))}
       </div>
 

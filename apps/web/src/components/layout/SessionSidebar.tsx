@@ -32,7 +32,7 @@ export function SessionSidebar() {
         </div>
 
         {/* Session list */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
           {sessions.map(session => {
             const isActive = session.id === activeTabId
             const additions = session.diffSummary?.additions ?? 0
@@ -42,16 +42,18 @@ export function SessionSidebar() {
                 key={session.id}
                 onClick={() => openTab(session.id)}
                 className={cn(
-                  'flex w-full items-center gap-2 border-b border-border/40 px-2 py-2 text-left transition-colors',
-                  isActive ? 'bg-primary/8' : 'hover:bg-muted/40',
+                  'flex w-full items-start gap-2 rounded-lg border px-2.5 py-2 text-left transition-all',
+                  isActive
+                    ? 'border-primary/40 bg-primary/5 shadow-sm'
+                    : 'border-transparent bg-muted/40 hover:bg-muted/60',
                 )}
               >
-                <Circle className={cn('h-2 w-2 shrink-0', statusColorMap[session.status] ?? 'fill-slate-400 text-slate-400')} />
+                <Circle className={cn('mt-0.5 h-2 w-2 shrink-0', statusColorMap[session.status] ?? 'fill-slate-400 text-slate-400')} />
                 <div className="min-w-0 flex-1">
                   <p className={cn('truncate text-xs font-medium', isActive && 'text-primary')}>
                     {session.name}
                   </p>
-                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
                     <GitBranch className="h-2.5 w-2.5 shrink-0" />
                     <span className="truncate">{session.branchName}</span>
                   </div>
