@@ -57,7 +57,7 @@ export function TopNav({
   const waitingCount = sessions.filter(s => s.status === 'waiting').length
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-0 border-b border-transparent bg-card px-3">
+    <header className="flex h-12 shrink-0 items-center gap-0 border-b border-transparent bg-panel px-3">
 
       {/* Brand */}
       <div className="flex items-center gap-2 px-1 pr-3">

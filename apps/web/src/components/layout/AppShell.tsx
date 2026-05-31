@@ -127,7 +127,7 @@ export function AppShell() {
   return (
     <TooltipProvider>
       <WebSocketProvider />
-      <div className={cn('flex h-svh flex-col bg-card select-none', isResizing && 'select-none cursor-col-resize')}>
+      <div className={cn('flex h-svh flex-col bg-panel select-none', isResizing && 'select-none cursor-col-resize')}>
         <TopNav
           leftCollapsed={leftCollapsed}
           onToggleLeft={toggleLeft}
@@ -154,7 +154,7 @@ export function AppShell() {
           />
 
           {/* Middle */}
-          <div className="min-w-0 flex-1 overflow-hidden rounded-xl" style={{ width: middleWidth }}>
+          <div className="min-w-0 flex-1 overflow-hidden rounded-xl bg-panel" style={{ width: middleWidth }}>
             {selectedDiffFile && session ? (
               <DiffViewer
                 session={session}

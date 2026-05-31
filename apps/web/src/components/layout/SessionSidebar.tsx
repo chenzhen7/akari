@@ -19,7 +19,7 @@ export function SessionSidebar() {
   const activeTabId = useSessionStore(s => s.activeTabId)
 
   return (
-    <aside className="flex h-full w-full flex-col bg-card">
+    <aside className="flex h-full w-full flex-col bg-panel">
       <div className="flex h-full w-full flex-col">
         {/* Header */}
         <div className="flex h-9 shrink-0 items-center border-b border-border/50 px-2">
