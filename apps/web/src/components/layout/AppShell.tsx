@@ -37,41 +37,39 @@ export function AppShell() {
 
   const session = activeTabId ? sessions.find(s => s.id === activeTabId) : undefined
 
+  // activeTabId 变化时自动展开/收起右侧
   useEffect(() => {
-    const handle = rightPanelRef.current
-    if (!handle) return
     if (activeTabId) {
-      handle.expand()
       setRightCollapsed(false)
     } else {
-      handle.collapse()
       setRightCollapsed(true)
     }
   }, [activeTabId])
 
-  const toggleLeft = () => {
+  // 展开左侧面板时恢复默认大小
+  useEffect(() => {
     const handle = leftPanelRef.current
     if (!handle) return
-    if (leftCollapsed) {
-      handle.expand()
-      setLeftCollapsed(false)
-    } else {
-      handle.collapse()
-      setLeftCollapsed(true)
+    if (!leftCollapsed) {
+      requestAnimationFrame(() => {
+        handle.resize('15%')
+      })
     }
-  }
+  }, [leftCollapsed])
 
-  const toggleRight = () => {
+  // 展开右侧面板时恢复默认大小
+  useEffect(() => {
     const handle = rightPanelRef.current
     if (!handle) return
-    if (rightCollapsed) {
-      handle.expand()
-      setRightCollapsed(false)
-    } else {
-      handle.collapse()
-      setRightCollapsed(true)
+    if (!rightCollapsed) {
+      requestAnimationFrame(() => {
+        handle.resize('25%')
+      })
     }
-  }
+  }, [rightCollapsed])
+
+  const toggleLeft = () => setLeftCollapsed(prev => !prev)
+  const toggleRight = () => setRightCollapsed(prev => !prev)
 
   return (
     <TooltipProvider>
@@ -91,16 +89,15 @@ export function AppShell() {
             defaultSize="15%"
             minSize="12%"
             maxSize="30%"
-            collapsible
-            collapsedSize="0%"
+            className={cn(leftCollapsed && 'hidden')}
           >
             <SessionSidebar />
           </ResizablePanel>
 
-          <ResizableHandle withHandle />
+          <ResizableHandle withHandle className={cn(leftCollapsed && 'hidden')} />
 
           {/* Middle */}
-          <ResizablePanel defaultSize={activeTabId ? '55%' : '85%'} minSize="30%">
+          <ResizablePanel defaultSize={activeTabId ? '60%' : '85%'} minSize="30%">
             {activeTabId && session ? (
               <TerminalPanel session={session} send={send} />
             ) : viewMode === 'canvas' ? (
@@ -113,7 +110,7 @@ export function AppShell() {
           {/* Right Handle */}
           <ResizableHandle
             withHandle
-            className={cn(!activeTabId && 'opacity-0 pointer-events-none')}
+            className={cn((!activeTabId || rightCollapsed) && 'hidden')}
           />
 
           {/* Right Sidebar */}
@@ -122,8 +119,7 @@ export function AppShell() {
             defaultSize="25%"
             minSize="15%"
             maxSize="40%"
-            collapsible
-            collapsedSize="0%"
+            className={cn(rightCollapsed && 'hidden')}
           >
             {activeTabId && session ? (
               <RightSidebar session={session} />
