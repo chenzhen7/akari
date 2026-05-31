@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
 import { TopNav } from './TopNav'
 import { SessionSidebar } from './SessionSidebar'
 import { RightSidebar } from './RightSidebar'
@@ -11,16 +11,49 @@ import { CreateSessionDialog } from '@/components/create-session/CreateSessionDi
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { Toaster } from 'sonner'
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from '@/components/ui/resizable'
-import { usePanelRef } from 'react-resizable-panels'
+import { useResizablePanels } from '@/hooks/useResizablePanels'
+import { cn } from '@/lib/utils'
+import { GripVertical } from 'lucide-react'
 
 function WebSocketProvider() {
   useWebSocket()
   return null
+}
+
+function ResizeHandle({
+  onMouseDown,
+  disabled,
+  isDragging,
+  className,
+}: {
+  onMouseDown: (e: React.MouseEvent) => void
+  disabled?: boolean
+  isDragging?: boolean
+  className?: string
+}) {
+  return (
+    <div
+      className={cn(
+        'group relative flex w-px shrink-0 items-center justify-center',
+        disabled ? 'cursor-not-allowed opacity-30' : 'cursor-col-resize',
+        isDragging && 'bg-primary',
+        className,
+      )}
+      onMouseDown={disabled ? undefined : onMouseDown}
+    >
+      <div
+        className={cn(
+          'absolute inset-y-0 w-1 -translate-x-1/2 transition-colors',
+          !disabled && !isDragging && 'bg-transparent group-hover:bg-primary/30',
+        )}
+      />
+      {!disabled && (
+        <div className="z-10 flex h-6 w-3 items-center justify-center rounded-sm border bg-border opacity-0 transition-opacity group-hover:opacity-100">
+          <GripVertical className="h-2.5 w-2.5" />
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function AppShell() {
@@ -29,42 +62,69 @@ export function AppShell() {
   const viewMode = useSessionStore(s => s.viewMode)
   const { send } = useWebSocket()
 
-  const [leftCollapsed, setLeftCollapsed] = useState(false)
-  const [rightCollapsed, setRightCollapsed] = useState(true)
-
-  const leftPanelRef = usePanelRef()
-  const rightPanelRef = usePanelRef()
+  const {
+    leftWidth,
+    rightWidth,
+    leftCollapsed,
+    rightCollapsed,
+    expandLeft,
+    collapseLeft,
+    expandRight,
+    collapseRight,
+    onLeftHandleMouseDown,
+    onRightHandleMouseDown,
+    isDraggingLeft,
+    isDraggingRight,
+  } = useResizablePanels({
+    initialLeftWidth: 15,
+    minLeftWidth: 12,
+    maxLeftWidth: 30,
+    initialRightWidth: 25,
+    minRightWidth: 15,
+    maxRightWidth: 40,
+  })
 
   const session = activeTabId ? sessions.find(s => s.id === activeTabId) : undefined
 
-  const toggleLeft = () => {
-    const handle = leftPanelRef.current
-    if (!handle) return
-    if (leftCollapsed) {
-      handle.expand()
-      setLeftCollapsed(false)
+  // activeTabId 变化时自动展开/收起右侧
+  useEffect(() => {
+    if (activeTabId) {
+      expandRight()
     } else {
-      handle.collapse()
-      setLeftCollapsed(true)
+      collapseRight()
+    }
+  }, [activeTabId, expandRight, collapseRight])
+
+  const toggleLeft = () => {
+    if (leftCollapsed) {
+      expandLeft()
+    } else {
+      collapseLeft()
     }
   }
 
   const toggleRight = () => {
-    const handle = rightPanelRef.current
-    if (!handle) return
     if (rightCollapsed) {
-      handle.expand()
-      setRightCollapsed(false)
+      expandRight()
     } else {
-      handle.collapse()
-      setRightCollapsed(true)
+      collapseRight()
     }
   }
+
+  const middleWidth = leftCollapsed
+    ? rightCollapsed
+      ? '100%'
+      : `${100 - rightWidth}%`
+    : rightCollapsed
+      ? `${100 - leftWidth}%`
+      : `${100 - leftWidth - rightWidth}%`
+
+  const isResizing = isDraggingLeft || isDraggingRight
 
   return (
     <TooltipProvider>
       <WebSocketProvider />
-      <div className="flex h-svh flex-col bg-background">
+      <div className={cn('flex h-svh flex-col bg-background select-none', isResizing && 'select-none cursor-col-resize')}>
         <TopNav
           leftCollapsed={leftCollapsed}
           onToggleLeft={toggleLeft}
@@ -72,23 +132,27 @@ export function AppShell() {
           onToggleRight={toggleRight}
           hasRightPanel={!!activeTabId}
         />
-        <ResizablePanelGroup direction="horizontal" className="flex-1">
+        <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar */}
-          <ResizablePanel
-            panelRef={leftPanelRef}
-            collapsible
-            collapsedSize={0}
-            disabled={leftCollapsed}
-            defaultSize={250}
-            minSize={200}
-            maxSize={500}
+          <div
+            className={cn(
+              'shrink-0 overflow-hidden transition-[width] duration-150',
+              isResizing && 'transition-none',
+            )}
+            style={{ width: leftCollapsed ? '0px' : `${leftWidth}%` }}
           >
             <SessionSidebar />
-          </ResizablePanel>
-          <ResizableHandle withHandle disabled={leftCollapsed} />
+          </div>
+
+          {/* Left Handle */}
+          <ResizeHandle
+            onMouseDown={onLeftHandleMouseDown}
+            disabled={leftCollapsed}
+            isDragging={isDraggingLeft}
+          />
 
           {/* Middle */}
-          <ResizablePanel defaultSize={600} minSize={400}>
+          <div className="min-w-0 flex-1 overflow-hidden" style={{ width: middleWidth }}>
             {activeTabId && session ? (
               <TerminalPanel session={session} send={send} />
             ) : viewMode === 'canvas' ? (
@@ -96,24 +160,35 @@ export function AppShell() {
             ) : (
               <KanbanView />
             )}
-          </ResizablePanel>
+          </div>
 
           {/* Right Handle */}
-          <ResizableHandle withHandle disabled={rightCollapsed || !activeTabId} />
+          {activeTabId && (
+            <ResizeHandle
+              onMouseDown={onRightHandleMouseDown}
+              disabled={rightCollapsed}
+              isDragging={isDraggingRight}
+            />
+          )}
 
           {/* Right Sidebar */}
-          <ResizablePanel
-            panelRef={rightPanelRef}
-            collapsible
-            collapsedSize={0}
-            disabled={rightCollapsed || !activeTabId}
-            defaultSize={300}
-            minSize={200}
-            maxSize={600}
+          <div
+            className={cn(
+              'shrink-0 overflow-hidden border-l border-border transition-[width] duration-150',
+              isResizing && 'transition-none',
+            )}
+            style={{
+              width: rightCollapsed || !activeTabId ? '0px' : `${rightWidth}%`,
+              display: rightCollapsed || !activeTabId ? 'none' : 'block',
+            }}
           >
-            {session && <RightSidebar session={session} />}
-          </ResizablePanel>
-        </ResizablePanelGroup>
+            {activeTabId && session ? (
+              <RightSidebar session={session} />
+            ) : (
+              <div />
+            )}
+          </div>
+        </div>
         <CommandCenter />
         <CreateSessionDialog />
       </div>
