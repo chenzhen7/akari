@@ -136,9 +136,9 @@ export function DiffViewer({ session, filePath, onBack }: DiffViewerProps) {
   const currentFile = diffFiles.find(f => f.path === filePath)
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden bg-card">
       {/* Toolbar with back button */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-1.5">
+      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/30 px-2 py-1.5">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={onBack}>
@@ -205,7 +205,7 @@ export function DiffViewer({ session, filePath, onBack }: DiffViewerProps) {
 
       {/* File diff stats */}
       {currentFile && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-1 text-[11px]">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border/50 bg-muted/20 px-3 py-1 text-[11px]">
           <span className="font-mono text-green-500">+{currentFile.additions}</span>
           <span className="font-mono text-red-400">-{currentFile.deletions}</span>
         </div>
