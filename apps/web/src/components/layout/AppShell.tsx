@@ -124,7 +124,7 @@ export function AppShell() {
   return (
     <TooltipProvider>
       <WebSocketProvider />
-      <div className={cn('flex h-svh flex-col bg-background select-none', isResizing && 'select-none cursor-col-resize')}>
+      <div className={cn('flex h-svh flex-col bg-card select-none', isResizing && 'select-none cursor-col-resize')}>
         <TopNav
           leftCollapsed={leftCollapsed}
           onToggleLeft={toggleLeft}
@@ -152,7 +152,7 @@ export function AppShell() {
           />
 
           {/* Middle */}
-          <div className="min-w-0 flex-1 overflow-hidden rounded-lg" style={{ width: middleWidth }}>
+          <div className="min-w-0 flex-1 overflow-hidden rounded-xl" style={{ width: middleWidth }}>
             {activeTabId && session ? (
               <TerminalPanel session={session} send={send} />
             ) : viewMode === 'canvas' ? (

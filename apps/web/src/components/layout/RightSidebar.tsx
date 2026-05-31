@@ -24,7 +24,7 @@ export function RightSidebar({ session }: RightSidebarProps) {
   return (
     <div className="flex h-full w-full flex-col bg-card">
       {/* Tab bar */}
-      <div className="flex h-9 shrink-0 items-center border-b border-border bg-muted/20 px-1">
+      <div className="flex h-9 shrink-0 items-center border-b border-border/50 px-1">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
