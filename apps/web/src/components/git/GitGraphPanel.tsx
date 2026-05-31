@@ -149,7 +149,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
     : null
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-background">
+    <div className="flex h-full flex-col overflow-hidden bg-card">
       {/* Toolbar */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
         <select
@@ -330,7 +330,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       {/* Commit detail panel */}
       <div
         className={cn(
-          'shrink-0 overflow-hidden border-t border-border bg-muted/20 transition-all duration-150',
+          'shrink-0 overflow-hidden border-t border-border bg-card transition-all duration-150',
           selectedCommit ? 'h-[118px]' : 'h-0',
         )}
       >

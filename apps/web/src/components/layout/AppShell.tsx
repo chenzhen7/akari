@@ -152,7 +152,7 @@ export function AppShell() {
           />
 
           {/* Middle */}
-          <div className="min-w-0 flex-1 overflow-hidden" style={{ width: middleWidth }}>
+          <div className="min-w-0 flex-1 overflow-hidden rounded-lg" style={{ width: middleWidth }}>
             {activeTabId && session ? (
               <TerminalPanel session={session} send={send} />
             ) : viewMode === 'canvas' ? (
@@ -174,13 +174,10 @@ export function AppShell() {
           {/* Right Sidebar */}
           <div
             className={cn(
-              'shrink-0 overflow-hidden border-l border-border transition-[width] duration-150',
+              'shrink-0 overflow-hidden transition-[width] duration-150',
               isResizing && 'transition-none',
             )}
-            style={{
-              width: rightCollapsed || !activeTabId ? '0px' : `${rightWidth}%`,
-              display: rightCollapsed || !activeTabId ? 'none' : 'block',
-            }}
+            style={{ width: rightCollapsed ? '0px' : `${rightWidth}%` }}
           >
             {activeTabId && session ? (
               <RightSidebar session={session} />
