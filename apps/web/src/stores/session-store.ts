@@ -21,6 +21,10 @@ interface SessionStore {
   pendingOps: Set<string>
   /** 存储右键新建会话时的画布位置 */
   pendingCreatePosition: { x: number; y: number } | null
+  /** 右侧面板当前 Tab（git-graph | diff | info） */
+  activeRightTab: 'git-graph' | 'diff' | 'info'
+  /** 选中的变更文件路径（选中后中间面板切换为 DiffViewer） */
+  selectedDiffFile: string | null
 
   addSession: (name: string, task: string, baseBranch?: string, agentType?: AgentType, canvasPosition?: { x: number; y: number }) => void
   openCreateDialog: (position?: { x: number; y: number }) => void
@@ -44,6 +48,8 @@ interface SessionStore {
   clearTerminal: (id: string) => void
   setGitLog: (sessionId: string, log: GitLogResponse) => void
   setConnectionStatus: (status: ConnectionStatus) => void
+  setActiveRightTab: (tab: 'git-graph' | 'diff' | 'info') => void
+  setSelectedDiffFile: (path: string | null) => void
   handleServerMessage: (msg: ServerMessage) => void
 }
 
@@ -64,6 +70,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   terminalReadyTick: {},
   pendingOps: new Set(),
   pendingCreatePosition: null,
+  activeRightTab: 'git-graph',
+  selectedDiffFile: null,
 
   openCreateDialog: (position) => {
     set({ createDialogOpen: true, pendingCreatePosition: position ?? null })
@@ -308,6 +316,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       get().fetchCanvasEdges()
     }
   },
+
+  setActiveRightTab: (tab) => set({ activeRightTab: tab }),
+
+  setSelectedDiffFile: (path) => set({ selectedDiffFile: path }),
 
   handleServerMessage: (msg) => {
     switch (msg.event) {

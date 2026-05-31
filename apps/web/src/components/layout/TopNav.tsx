@@ -11,7 +11,6 @@ import {
   RefreshCw,
   PanelLeft,
   PanelRight,
-  Plus,
 } from 'lucide-react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 
@@ -48,7 +47,6 @@ export function TopNav({
     activeTabId,
     setActiveTab,
     toggleCommandCenter,
-    toggleCreateDialog,
     sessions,
     connectionStatus,
     disconnectedAt,
@@ -156,40 +154,37 @@ export function TopNav({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
+              variant="ghost"
+              className="h-7 gap-1.5 text-xs relative"
+              onClick={toggleCommandCenter}
+            >
+              <Radio className="h-3.5 w-3.5" />
+              指挥中心
+              {waitingCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none">
+                  {waitingCount}
+                </span>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">指挥中心</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
               variant={rightCollapsed ? 'ghost' : 'secondary'}
               size="xs"
-              className="h-7 gap-1.5 text-xs"
+              className="h-7 w-7 p-0"
               onClick={toggleRight}
             >
               <PanelRight className="h-3.5 w-3.5" />
-              {rightCollapsed ? '展开详情' : '收起详情'}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {rightCollapsed ? '展开右侧面板' : '收起右侧面板'}
+            {rightCollapsed ? '展开详情' : '收起详情'}
           </TooltipContent>
         </Tooltip>
-
-        <Button
-          variant="ghost"
-          className="h-7 gap-1.5 text-xs relative"
-          onClick={toggleCommandCenter}
-        >
-          <Radio className="h-3.5 w-3.5" />
-          指挥中心
-          {waitingCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none">
-              {waitingCount}
-            </span>
-          )}
-        </Button>
-        <Button
-          className="h-7 gap-1.5 text-xs"
-          onClick={toggleCreateDialog}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          新建会话
-        </Button>
       </div>
     </header>
   )

@@ -1,14 +1,11 @@
-import { useState } from 'react'
 import { GitBranch, FileCode, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { AgentSession } from '@/types'
+import { useSessionStore } from '@/stores/session-store'
 import { GitGraphPanel } from '@/components/git/GitGraphPanel'
-import { DiffViewer } from '@/components/diff/DiffViewer'
-import { SessionInfoPanel } from '@/components/session/SessionInfoPanel'
+import { DiffFileList } from '@/components/diff/DiffFileList'
 
-type RightPanelTab = 'git-graph' | 'diff' | 'info'
-
-const TABS: { id: RightPanelTab; label: string; icon: React.ElementType }[] = [
+const TABS: { id: 'git-graph' | 'diff' | 'info'; label: string; icon: React.ElementType }[] = [
   { id: 'git-graph', label: 'Git Graph', icon: GitBranch },
   { id: 'diff', label: '变更', icon: FileCode },
   { id: 'info', label: '信息', icon: Info },
@@ -19,7 +16,14 @@ interface RightSidebarProps {
 }
 
 export function RightSidebar({ session }: RightSidebarProps) {
-  const [activeTab, setActiveTab] = useState<RightPanelTab>('git-graph')
+  const activeRightTab = useSessionStore(s => s.activeRightTab)
+  const selectedDiffFile = useSessionStore(s => s.selectedDiffFile)
+  const setActiveRightTab = useSessionStore(s => s.setActiveRightTab)
+  const setSelectedDiffFile = useSessionStore(s => s.setSelectedDiffFile)
+
+  const handleSelectFile = (path: string) => {
+    setSelectedDiffFile(path)
+  }
 
   return (
     <div className="flex h-full w-full flex-col bg-card">
@@ -28,10 +32,13 @@ export function RightSidebar({ session }: RightSidebarProps) {
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
-            onClick={() => setActiveTab(id)}
+            onClick={() => {
+              setActiveRightTab(id)
+              if (id !== 'diff') setSelectedDiffFile(null)
+            }}
             className={cn(
               'flex h-7 items-center gap-1.5 rounded px-2 text-xs transition-colors',
-              activeTab === id
+              activeRightTab === id
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
             )}
@@ -44,14 +51,18 @@ export function RightSidebar({ session }: RightSidebarProps) {
 
       {/* Content */}
       <div className="relative flex-1 overflow-hidden">
-        <div className={cn('absolute inset-0', activeTab !== 'git-graph' && 'hidden')}>
+        <div className={cn('absolute inset-0', activeRightTab !== 'git-graph' && 'hidden')}>
           <GitGraphPanel sessionId={session.id} />
         </div>
-        <div className={cn('absolute inset-0 overflow-hidden', activeTab !== 'diff' && 'hidden')}>
-          <DiffViewer session={session} />
+        <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'diff' && 'hidden')}>
+          <DiffFileList
+            session={session}
+            selectedFile={selectedDiffFile}
+            onSelectFile={handleSelectFile}
+          />
         </div>
-        <div className={cn('absolute inset-0 overflow-hidden', activeTab !== 'info' && 'hidden')}>
-          <SessionInfoPanel session={session} />
+        <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'info' && 'hidden')}>
+          {/* SessionInfoPanel */}
         </div>
       </div>
     </div>

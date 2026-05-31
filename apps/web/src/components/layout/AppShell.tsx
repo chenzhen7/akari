@@ -6,6 +6,7 @@ import { useSessionStore } from '@/stores/session-store'
 import { CanvasView } from '@/components/canvas/CanvasView'
 import { KanbanView } from '@/components/kanban/KanbanView'
 import { TerminalPanel } from '@/components/session/TerminalPanel'
+import { DiffViewer } from '@/components/diff/DiffViewer'
 import { CommandCenter } from '@/components/command-center/CommandCenter'
 import { CreateSessionDialog } from '@/components/create-session/CreateSessionDialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -60,6 +61,8 @@ export function AppShell() {
   const activeTabId = useSessionStore(s => s.activeTabId)
   const sessions = useSessionStore(s => s.sessions)
   const viewMode = useSessionStore(s => s.viewMode)
+  const selectedDiffFile = useSessionStore(s => s.selectedDiffFile)
+  const setSelectedDiffFile = useSessionStore(s => s.setSelectedDiffFile)
   const { send } = useWebSocket()
 
   const {
@@ -152,7 +155,13 @@ export function AppShell() {
 
           {/* Middle */}
           <div className="min-w-0 flex-1 overflow-hidden rounded-xl" style={{ width: middleWidth }}>
-            {activeTabId && session ? (
+            {selectedDiffFile && session ? (
+              <DiffViewer
+                session={session}
+                filePath={selectedDiffFile}
+                onBack={() => setSelectedDiffFile(null)}
+              />
+            ) : activeTabId && session ? (
               <TerminalPanel session={session} send={send} />
             ) : viewMode === 'canvas' ? (
               <CanvasView />
