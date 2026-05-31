@@ -157,6 +157,14 @@
   background: transparent;
 }
 
+/* Override xterm.js default background to match vs-dark theme */
+.xterm {
+  background-color: #1e1e1e !important;
+}
+.xterm-viewport::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
 /* Firefox */
 * {
   scrollbar-width: thin;
