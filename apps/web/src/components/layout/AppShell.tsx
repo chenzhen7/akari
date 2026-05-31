@@ -16,6 +16,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable'
+import { usePanelRef } from 'react-resizable-panels'
 
 function WebSocketProvider() {
   useWebSocket()
@@ -31,10 +32,34 @@ export function AppShell() {
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [rightCollapsed, setRightCollapsed] = useState(true)
 
+  const leftPanelRef = usePanelRef()
+  const rightPanelRef = usePanelRef()
+
   const session = activeTabId ? sessions.find(s => s.id === activeTabId) : undefined
 
-  const toggleLeft = () => setLeftCollapsed(prev => !prev)
-  const toggleRight = () => setRightCollapsed(prev => !prev)
+  const toggleLeft = () => {
+    const handle = leftPanelRef.current
+    if (!handle) return
+    if (leftCollapsed) {
+      handle.expand()
+      setLeftCollapsed(false)
+    } else {
+      handle.collapse()
+      setLeftCollapsed(true)
+    }
+  }
+
+  const toggleRight = () => {
+    const handle = rightPanelRef.current
+    if (!handle) return
+    if (rightCollapsed) {
+      handle.expand()
+      setRightCollapsed(false)
+    } else {
+      handle.collapse()
+      setRightCollapsed(true)
+    }
+  }
 
   return (
     <TooltipProvider>
@@ -49,18 +74,21 @@ export function AppShell() {
         />
         <ResizablePanelGroup direction="horizontal" className="flex-1">
           {/* Left Sidebar */}
-          {!leftCollapsed && (
-            <>
-              <ResizablePanel defaultSize="15%" minSize="12%" maxSize="30%">
-                <SessionSidebar />
-              </ResizablePanel>
-              <ResizableHandle withHandle />
-            </>
-          )}
-          {leftCollapsed && <ResizableHandle withHandle disabled />}
+          <ResizablePanel
+            panelRef={leftPanelRef}
+            collapsible
+            collapsedSize={0}
+            disabled={leftCollapsed}
+            defaultSize={250}
+            minSize={200}
+            maxSize={500}
+          >
+            <SessionSidebar />
+          </ResizablePanel>
+          <ResizableHandle withHandle disabled={leftCollapsed} />
 
           {/* Middle */}
-          <ResizablePanel defaultSize={activeTabId ? '60%' : '85%'} minSize="30%">
+          <ResizablePanel defaultSize={600} minSize={400}>
             {activeTabId && session ? (
               <TerminalPanel session={session} send={send} />
             ) : viewMode === 'canvas' ? (
@@ -70,17 +98,21 @@ export function AppShell() {
             )}
           </ResizablePanel>
 
+          {/* Right Handle */}
+          <ResizableHandle withHandle disabled={rightCollapsed || !activeTabId} />
+
           {/* Right Sidebar */}
-          {!rightCollapsed && activeTabId ? (
-            <>
-              <ResizableHandle withHandle />
-              <ResizablePanel defaultSize="25%" minSize="15%" maxSize="40%">
-                {session && <RightSidebar session={session} />}
-              </ResizablePanel>
-            </>
-          ) : (
-            <ResizableHandle withHandle disabled />
-          )}
+          <ResizablePanel
+            panelRef={rightPanelRef}
+            collapsible
+            collapsedSize={0}
+            disabled={rightCollapsed || !activeTabId}
+            defaultSize={300}
+            minSize={200}
+            maxSize={600}
+          >
+            {session && <RightSidebar session={session} />}
+          </ResizablePanel>
         </ResizablePanelGroup>
         <CommandCenter />
         <CreateSessionDialog />
