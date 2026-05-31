@@ -130,7 +130,6 @@ export function AppShell() {
           onToggleLeft={toggleLeft}
           rightCollapsed={rightCollapsed}
           onToggleRight={toggleRight}
-          hasRightPanel={!!activeTabId}
         />
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar */}

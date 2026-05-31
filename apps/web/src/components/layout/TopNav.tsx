@@ -6,12 +6,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import {
   LayoutGrid,
   Columns3,
-  Plus,
   Radio,
   Circle,
   RefreshCw,
   PanelLeft,
   PanelRight,
+  Plus,
 } from 'lucide-react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 
@@ -34,23 +34,21 @@ interface TopNavProps {
   onToggleLeft: () => void
   rightCollapsed: boolean
   onToggleRight: () => void
-  hasRightPanel: boolean
 }
 
 export function TopNav({
   leftCollapsed,
   onToggleLeft,
   rightCollapsed,
-  onToggleRight,
-  hasRightPanel,
+  onToggleRight: toggleRight,
 }: TopNavProps) {
   const {
     viewMode,
     setViewMode,
     activeTabId,
     setActiveTab,
-    toggleCreateDialog,
     toggleCommandCenter,
+    toggleCreateDialog,
     sessions,
     connectionStatus,
     disconnectedAt,
@@ -155,24 +153,22 @@ export function TopNav({
           </TooltipContent>
         </Tooltip>
 
-        {/* Right sidebar toggle */}
-        {hasRightPanel && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={rightCollapsed ? 'ghost' : 'secondary'}
-                size="xs"
-                className="h-7 w-7 p-0"
-                onClick={onToggleRight}
-              >
-                <PanelRight className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {rightCollapsed ? '展开右侧面板' : '收起右侧面板'}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={rightCollapsed ? 'ghost' : 'secondary'}
+              size="xs"
+              className="h-7 gap-1.5 text-xs"
+              onClick={toggleRight}
+            >
+              <PanelRight className="h-3.5 w-3.5" />
+              {rightCollapsed ? '展开详情' : '收起详情'}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {rightCollapsed ? '展开右侧面板' : '收起右侧面板'}
+          </TooltipContent>
+        </Tooltip>
 
         <Button
           variant="ghost"
