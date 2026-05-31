@@ -11,6 +11,7 @@ import {
   Circle,
   RefreshCw,
   PanelLeft,
+  PanelRight,
 } from 'lucide-react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 
@@ -28,10 +29,22 @@ const connLabels: Record<string, string> = {
   failed: '连接失败',
 }
 
-export function TopNav() {
+interface TopNavProps {
+  leftCollapsed: boolean
+  onToggleLeft: () => void
+  rightCollapsed: boolean
+  onToggleRight: () => void
+  hasRightPanel: boolean
+}
+
+export function TopNav({
+  leftCollapsed,
+  onToggleLeft,
+  rightCollapsed,
+  onToggleRight,
+  hasRightPanel,
+}: TopNavProps) {
   const {
-    sidebarOpen,
-    toggleSidebar,
     viewMode,
     setViewMode,
     activeTabId,
@@ -62,16 +75,16 @@ export function TopNav() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant={sidebarOpen ? 'secondary' : 'ghost'}
+            variant={leftCollapsed ? 'ghost' : 'secondary'}
             size="xs"
             className="h-7 w-7 p-0"
-            onClick={toggleSidebar}
+            onClick={onToggleLeft}
           >
             <PanelLeft className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom">
-          {sidebarOpen ? '收起会话列表' : '展开会话列表'}
+          {leftCollapsed ? '展开会话列表' : '收起会话列表'}
         </TooltipContent>
       </Tooltip>
 
@@ -142,6 +155,24 @@ export function TopNav() {
           </TooltipContent>
         </Tooltip>
 
+        {/* Right sidebar toggle */}
+        {hasRightPanel && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={rightCollapsed ? 'ghost' : 'secondary'}
+                size="xs"
+                className="h-7 w-7 p-0"
+                onClick={onToggleRight}
+              >
+                <PanelRight className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {rightCollapsed ? '展开右侧面板' : '收起右侧面板'}
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         <Button
           variant="ghost"
