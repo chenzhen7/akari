@@ -16,7 +16,6 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable'
-import { cn } from '@/lib/utils'
 import { usePanelRef } from 'react-resizable-panels'
 
 function WebSocketProvider() {
@@ -39,37 +38,40 @@ export function AppShell() {
 
   // activeTabId 变化时自动展开/收起右侧
   useEffect(() => {
+    const handle = rightPanelRef.current
+    if (!handle) return
     if (activeTabId) {
+      handle.expand()
       setRightCollapsed(false)
     } else {
+      handle.collapse()
       setRightCollapsed(true)
     }
   }, [activeTabId])
 
-  // 展开左侧面板时恢复默认大小
-  useEffect(() => {
+  const toggleLeft = () => {
     const handle = leftPanelRef.current
     if (!handle) return
-    if (!leftCollapsed) {
-      requestAnimationFrame(() => {
-        handle.resize('15%')
-      })
+    if (leftCollapsed) {
+      handle.expand()
+      setLeftCollapsed(false)
+    } else {
+      handle.collapse()
+      setLeftCollapsed(true)
     }
-  }, [leftCollapsed])
+  }
 
-  // 展开右侧面板时恢复默认大小
-  useEffect(() => {
+  const toggleRight = () => {
     const handle = rightPanelRef.current
     if (!handle) return
-    if (!rightCollapsed) {
-      requestAnimationFrame(() => {
-        handle.resize('25%')
-      })
+    if (rightCollapsed) {
+      handle.expand()
+      setRightCollapsed(false)
+    } else {
+      handle.collapse()
+      setRightCollapsed(true)
     }
-  }, [rightCollapsed])
-
-  const toggleLeft = () => setLeftCollapsed(prev => !prev)
-  const toggleRight = () => setRightCollapsed(prev => !prev)
+  }
 
   return (
     <TooltipProvider>
@@ -89,12 +91,14 @@ export function AppShell() {
             defaultSize="15%"
             minSize="12%"
             maxSize="30%"
-            className={cn(leftCollapsed && 'hidden')}
+            collapsible
+            collapsedSize="0%"
+            disabled={leftCollapsed}
           >
             <SessionSidebar />
           </ResizablePanel>
 
-          <ResizableHandle withHandle className={cn(leftCollapsed && 'hidden')} />
+          <ResizableHandle withHandle disabled={leftCollapsed} />
 
           {/* Middle */}
           <ResizablePanel defaultSize={activeTabId ? '60%' : '85%'} minSize="30%">
@@ -110,7 +114,7 @@ export function AppShell() {
           {/* Right Handle */}
           <ResizableHandle
             withHandle
-            className={cn((!activeTabId || rightCollapsed) && 'hidden')}
+            disabled={rightCollapsed || !activeTabId}
           />
 
           {/* Right Sidebar */}
@@ -119,7 +123,9 @@ export function AppShell() {
             defaultSize="25%"
             minSize="15%"
             maxSize="40%"
-            className={cn(rightCollapsed && 'hidden')}
+            collapsible
+            collapsedSize="0%"
+            disabled={rightCollapsed}
           >
             {activeTabId && session ? (
               <RightSidebar session={session} />
