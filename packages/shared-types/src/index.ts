@@ -123,6 +123,7 @@ export type ServerMessage =
   | { event: 'session:status'; payload: { id: string; status: SessionStatus; progress: number } }
   | { event: 'terminal:data'; payload: { sessionId: string; data: string } }
   | { event: 'terminal:ready'; payload: { sessionId: string } }
+  | { event: 'terminal:resized'; payload: { sessionId: string } }
   | { event: 'diff:update'; payload: { sessionId: string; diff: GitDiff } }
   | { event: 'approval:required'; payload: { sessionId: string; request: ApprovalRequest } }
   | { event: 'sessions:list'; payload: AgentSession[] }

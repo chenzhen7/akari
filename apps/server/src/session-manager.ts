@@ -483,6 +483,13 @@ export class SessionManager {
       },
     )
 
+    this.terminalMux.on(
+      'terminal:resized',
+      ({ sessionId }: { sessionId: string }) => {
+        this.broadcast({ event: 'terminal:resized', payload: { sessionId } })
+      },
+    )
+
   }
 
   private pushTerminalDisplay(sessionId: string, data: string): void {

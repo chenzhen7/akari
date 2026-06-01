@@ -7,6 +7,7 @@ import '@xterm/xterm/css/xterm.css'
 import type { AgentSession } from '@/types'
 import type { ClientMessage } from '@akari/shared-types'
 import { terminalBus } from '@/lib/terminalBus'
+import { resizeMutex } from '@/lib/ptyResizeMutex'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
@@ -18,18 +19,19 @@ interface TerminalPanelProps {
 interface TerminalEntry {
   term: Terminal
   fitAddon: FitAddon
-  unsubscribe: () => void
+  unsubscribeData: () => void
+  unsubscribeResized: () => void
 }
 
-// Module-level registry: keeps Terminal instances alive across tab switches.
-// Instances are never disposed until the session is explicitly destroyed.
+/** Module-level registry: keeps Terminal instances alive across tab switches. */
 const terminalInstances = new Map<string, TerminalEntry>()
 
 export function TerminalPanel({ session, send }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalReadyTick = useSessionStore(s => s.terminalReadyTick[session.id] ?? 0)
 
-  // Mount/unmount effect — re-runs only when session ID changes
+  /* ─── Mount / unmount ─────────────────────────────────────────────────── */
+
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -37,7 +39,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     const existing = terminalInstances.get(session.id)
 
     if (existing) {
-      // Tab switched back: re-attach the existing terminal element to the new container
+      // Tab switched back: re-attach DOM element
       if (existing.term.element) {
         container.appendChild(existing.term.element)
       }
@@ -45,180 +47,25 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
         try {
           existing.fitAddon.fit()
           existing.term.focus()
-          send({
-            event: 'terminal:resize',
-            payload: { sessionId: session.id, cols: existing.term.cols, rows: existing.term.rows },
-          })
         } catch { /* ignore if disposed */ }
       })
-
-      let resizeTimer: ReturnType<typeof setTimeout> | null = null
-      const ro = new ResizeObserver(() => {
-        try { existing.fitAddon.fit() } catch { /* ignore if disposed */ }
-        if (resizeTimer) clearTimeout(resizeTimer)
-        resizeTimer = setTimeout(() => {
-          resizeTimer = null
-          try {
-            existing.term.write('\x1b[2J\x1b[H')
-            send({
-              event: 'terminal:resize',
-              payload: { sessionId: session.id, cols: existing.term.cols, rows: existing.term.rows },
-            })
-          } catch { /* ignore if disposed */ }
-        }, 100)
-      })
-      ro.observe(container)
-
-      return () => {
-        if (resizeTimer) clearTimeout(resizeTimer)
-        ro.disconnect()
-        // Detach element from DOM but keep the instance alive in the registry
-        if (existing.term.element && container.contains(existing.term.element)) {
-          container.removeChild(existing.term.element)
-        }
-      }
+    } else {
+      // First mount: create a fresh terminal
+      createTerminal(session.id, container, send)
     }
 
-    // First mount for this session: create a new terminal instance
-    const term = new Terminal({
-      cursorBlink: true,
-      fontFamily: '"Cascadia Code", "Fira Code", Menlo, "Courier New", monospace',
-      fontSize: 12,
-      lineHeight: 1.4,
-      scrollback: 5000,
-      theme: {
-        background: '#1e1e1e',
-        foreground: '#d4d4d4',
-        cursor: '#aeafad',
-        selectionBackground: '#264f78',
-        black: '#000000',
-        red: '#cd3131',
-        green: '#0dbc79',
-        yellow: '#e5e510',
-        blue: '#2472c8',
-        magenta: '#bc3fbc',
-        cyan: '#11a8cd',
-        white: '#e5e5e5',
-        brightBlack: '#666666',
-        brightRed: '#f14c4c',
-        brightGreen: '#23d18b',
-        brightYellow: '#f5f543',
-        brightBlue: '#3b8eea',
-        brightMagenta: '#d670d6',
-        brightCyan: '#29b8db',
-        brightWhite: '#ffffff',
-      },
-    })
-
-    const fitAddon = new FitAddon()
-    const webLinksAddon = new WebLinksAddon()
-    term.loadAddon(fitAddon)
-    term.loadAddon(webLinksAddon)
-    term.open(container)
-
-    requestAnimationFrame(() => {
-      try {
-        fitAddon.fit()
-        term.focus()
-        send({
-          event: 'terminal:resize',
-          payload: { sessionId: session.id, cols: term.cols, rows: term.rows },
-        })
-      } catch { /* ignore if disposed */ }
-    })
-
-    // Subscribe first so no streaming data is missed during the history fetch.
-    // This subscription is persistent — it stays alive as long as the session exists.
-    let historyLoaded = false
-    let pendingChunks: string[] = []
-    let fetchAborted = false
-
-    const unsubscribe = terminalBus.on(session.id, data => {
-      if (historyLoaded) {
-        term.write(data)
-      } else {
-        pendingChunks.push(data)
-      }
-    })
-
-    // Fetch full history from server once (survives page refresh on first mount)
-    fetch(`${API_BASE}/sessions/${session.id}/terminal-buffer`)
-      .then(r => r.json())
-      .then(({ buffer }: { buffer: string[] }) => {
-        if (fetchAborted) {
-          unsubscribe()
-          term.dispose()
-          return
-        }
-        // Skip TUI full-screen animation frames (\x1b[H = cursor home).
-        // These frames re-render the entire conversation history each tick;
-        // replaying them in xterm.js pushes duplicate history into scrollback.
-        // The current screen state is restored by \x1b[2J\x1b[H + ConPTY dump below.
-        buffer
-          .filter(chunk => !chunk.includes('\x1b[H'))
-          .forEach(chunk => term.write(chunk))
-        term.write('\x1b[2J\x1b[H')  // clear active screen (keeps scrollback); ConPTY dump fills it fresh
-        // Write pending chunks AFTER clearing: if ConPTY dump arrived before fetch completed
-        // (a race condition), it would have been buffered in pendingChunks and must not be
-        // discarded — its \x1b[H will correctly repaint the active screen from (0,0).
-        const pending = pendingChunks
-        pendingChunks = []
-        historyLoaded = true
-        pending.forEach(chunk => term.write(chunk))
-
-        // Register in the module-level registry only after history is fully loaded.
-        // Subsequent mounts (tab switches) will find the entry and skip the server fetch.
-        terminalInstances.set(session.id, { term, fitAddon, unsubscribe })
-      })
-      .catch((err: unknown) => {
-        console.error('[TerminalPanel] failed to fetch terminal buffer:', err)
-      })
-
-    // Forward keystrokes to backend PTY
-    term.onData(data => {
-      send({ event: 'terminal:input', payload: { sessionId: session.id, data } })
-    })
-
-    // Sync PTY dimensions on container resize (debounced to prevent rapid ConPTY dumps)
-    let resizeTimer: ReturnType<typeof setTimeout> | null = null
-    const ro = new ResizeObserver(() => {
-      try { fitAddon.fit() } catch { /* ignore if disposed */ }
-      if (resizeTimer) clearTimeout(resizeTimer)
-      resizeTimer = setTimeout(() => {
-        resizeTimer = null
-        try {
-          if (historyLoaded) term.write('\x1b[2J\x1b[H')  // clear before ConPTY dump
-          send({
-            event: 'terminal:resize',
-            payload: { sessionId: session.id, cols: term.cols, rows: term.rows },
-          })
-        } catch { /* ignore if disposed */ }
-      }, 100)
-    })
-    ro.observe(container)
-
     return () => {
-      fetchAborted = true
-      pendingChunks = []
-      if (resizeTimer) clearTimeout(resizeTimer)
-      ro.disconnect()
-
-      if (terminalInstances.has(session.id)) {
-        // History finished loading before unmount — just detach from DOM, keep instance alive
-        const entry = terminalInstances.get(session.id)!
-        if (entry.term.element && container.contains(entry.term.element)) {
-          container.removeChild(entry.term.element)
-        }
-      } else {
-        // Unmounted before history fetch completed — full cleanup
-        unsubscribe()
-        term.dispose()
+      // Detach DOM element but keep the instance alive
+      const entry = terminalInstances.get(session.id)
+      if (entry?.term.element && container.contains(entry.term.element)) {
+        container.removeChild(entry.term.element)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id])
 
-  // Re-sync PTY size when terminal:ready is received from server (PTY just created)
+  /* ─── Terminal:ready from server ──────────────────────────────────────── */
+
   useEffect(() => {
     if (terminalReadyTick === 0) return
     const entry = terminalInstances.get(session.id)
@@ -226,12 +73,42 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     try {
       entry.fitAddon.fit()
       entry.term.focus()
-      send({
-        event: 'terminal:resize',
-        payload: { sessionId: session.id, cols: entry.term.cols, rows: entry.term.rows },
-      })
     } catch { /* ignore */ }
-  }, [terminalReadyTick, session.id, send])
+  }, [terminalReadyTick, session.id])
+
+  /* ─── ResizeObserver (debounced) — set up on every mount ──────────────── */
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const entry = terminalInstances.get(session.id)
+    if (!entry) return
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+    const ro = new ResizeObserver(() => {
+      try { entry.fitAddon.fit() } catch { /* ignore */ }
+
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null
+        // Coalesce rapid resize events: acquire() returns false if a resize
+        // is already in flight for this session.
+        if (!resizeMutex.acquire(session.id)) return
+        try {
+          const { cols, rows } = entry.term
+          send({ event: 'terminal:resize', payload: { sessionId: session.id, cols, rows } })
+        } catch { /* ignore if disposed */ }
+      }, 150)
+    })
+    ro.observe(container)
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      ro.disconnect()
+    }
+  }, [session.id])
 
   return (
     <div className="h-full p-2" style={{ background: '#1e1e1e' }}>
@@ -239,6 +116,125 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     </div>
   )
 }
+
+/* ─── Terminal creation (runs once per session) ─────────────────────────── */
+
+function createTerminal(
+  sessionId: string,
+  container: HTMLDivElement,
+  send: (msg: ClientMessage) => void,
+): void {
+  const term = new Terminal({
+    cursorBlink: true,
+    fontFamily: '"Cascadia Code", "Fira Code", Menlo, "Courier New", monospace',
+    fontSize: 12,
+    lineHeight: 1.4,
+    scrollback: 5000,
+    theme: {
+      background: '#1e1e1e',
+      foreground: '#d4d4d4',
+      cursor: '#aeafad',
+      selectionBackground: '#264f78',
+      black: '#000000',
+      red: '#cd3131',
+      green: '#0dbc79',
+      yellow: '#e5e510',
+      blue: '#2472c8',
+      magenta: '#bc3fbc',
+      cyan: '#11a8cd',
+      white: '#e5e5e5',
+      brightBlack: '#666666',
+      brightRed: '#f14c4c',
+      brightGreen: '#23d18b',
+      brightYellow: '#f5f543',
+      brightBlue: '#3b8eea',
+      brightMagenta: '#d670d6',
+      brightCyan: '#29b8db',
+      brightWhite: '#ffffff',
+    },
+  })
+
+  const fitAddon = new FitAddon()
+  const webLinksAddon = new WebLinksAddon()
+  term.loadAddon(fitAddon)
+  term.loadAddon(webLinksAddon)
+  term.open(container)
+
+  requestAnimationFrame(() => {
+    try {
+      fitAddon.fit()
+      term.focus()
+      send({ event: 'terminal:resize', payload: { sessionId, cols: term.cols, rows: term.rows } })
+    } catch { /* ignore if disposed */ }
+  })
+
+  // Keystrokes → backend PTY
+  term.onData(data => {
+    send({ event: 'terminal:input', payload: { sessionId, data } })
+  })
+
+  // ── Subscribe to terminal:data events (buffered during resize) ──────────
+  let historyLoaded = false
+  let pendingChunks: string[] = []
+
+  const unsubscribeData = terminalBus.on(sessionId, data => {
+    if (resizeMutex.buffer(sessionId, data)) return  // buffered during resize
+    if (historyLoaded) {
+      term.write(data)
+    } else {
+      pendingChunks.push(data)
+    }
+  })
+
+  // ── Subscribe to terminal:resized: flush buffered data ─────────────────
+  const unsubscribeResized = terminalBus.onResized(sessionId, () => {
+    const entry = terminalInstances.get(sessionId)
+    if (!entry) return
+    const buffered = resizeMutex.release(sessionId)
+    if (buffered.length > 0) {
+      term.write(buffered.join(''))
+    }
+    try {
+      term.scrollToBottom()
+    } catch { /* ignore */ }
+  })
+
+  // ── Fetch history from server ──────────────────────────────────────────
+  let fetchAborted = false
+
+  fetch(`${API_BASE}/sessions/${sessionId}/terminal-buffer`)
+    .then(r => r.json())
+    .then(({ buffer }: { buffer: string[] }) => {
+      if (fetchAborted) {
+        unsubscribeData()
+        unsubscribeResized()
+        term.dispose()
+        return
+      }
+
+      // Skip TUI animation frames (\x1b[H = cursor home) that would push
+      // duplicate history into scrollback on replay.
+      buffer
+        .filter(chunk => !chunk.includes('\x1b[H'))
+        .forEach(chunk => term.write(chunk))
+
+      // Flush any data that arrived during the fetch
+      historyLoaded = true
+      const pending = pendingChunks.splice(0)
+      pending.forEach(chunk => term.write(chunk))
+
+      // Register only after history is fully loaded so tab-switch mounts
+      // find the entry and skip the fetch.
+      terminalInstances.set(sessionId, { term, fitAddon, unsubscribeData, unsubscribeResized })
+    })
+    .catch((err: unknown) => {
+      console.error('[TerminalPanel] failed to fetch terminal buffer:', err)
+      // Still register on error so the terminal is usable
+      terminalInstances.set(sessionId, { term, fitAddon, unsubscribeData, unsubscribeResized })
+    })
+}
+
+/* ─── Public helpers ─────────────────────────────────────────────────────── */
 
 /**
  * Read the last `maxLines` non-empty lines from the currently visible xterm viewport.
@@ -265,8 +261,10 @@ export function getTerminalViewportLines(sessionId: string, maxLines = 5): strin
 export function destroyTerminalInstance(sessionId: string): void {
   const entry = terminalInstances.get(sessionId)
   if (entry) {
-    entry.unsubscribe()
+    entry.unsubscribeData()
+    entry.unsubscribeResized()
     entry.term.dispose()
     terminalInstances.delete(sessionId)
   }
+  resizeMutex.release(sessionId) // drain any residual buffer
 }

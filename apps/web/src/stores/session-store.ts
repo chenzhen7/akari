@@ -356,6 +356,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           },
         }))
         break
+      case 'terminal:resized':
+        terminalBus.resized(msg.payload.sessionId)
+        break
       case 'approval:required':
         set(state => ({
           sessions: state.sessions.map(s =>

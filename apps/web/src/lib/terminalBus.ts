@@ -42,4 +42,23 @@ export const terminalBus = {
     _listeners.delete(sessionId)
     _buffers.delete(sessionId)
   },
+
+  /**
+   * Notify all listeners for a session that the PTY has finished resizing.
+   * Listeners (TerminalPanel) use this to flush their frontend-side resize buffer.
+   */
+  resized(sessionId: string): void {
+    _resizedListeners.get(sessionId)?.forEach(h => h())
+  },
+
+  /** Subscribe to resize-complete notifications for a session. */
+  onResized(sessionId: string, handler: () => void): () => void {
+    if (!_resizedListeners.has(sessionId)) _resizedListeners.set(sessionId, new Set())
+    _resizedListeners.get(sessionId)!.add(handler)
+    return () => {
+      _resizedListeners.get(sessionId)?.delete(handler)
+    }
+  },
 }
+
+const _resizedListeners = new Map<string, Set<() => void>>()

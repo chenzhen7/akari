@@ -7,6 +7,10 @@ interface TerminalEntry {
   pty: pty.IPty
   buffer: string[]
   status: 'running' | 'exited'
+  /** Temporary buffer for data that arrives while PTY is resizing */
+  resizeBuffer: string[]
+  /** Whether a resize is currently in-flight for this session */
+  resizing: boolean
 }
 
 export class TerminalMultiplexer extends EventEmitter {
@@ -45,11 +49,15 @@ export class TerminalMultiplexer extends EventEmitter {
       } as Record<string, string>,
     })
 
-    const entry: TerminalEntry = { sessionId, pty: proc, buffer: [], status: 'running' }
+    const entry: TerminalEntry = { sessionId, pty: proc, buffer: [], status: 'running', resizeBuffer: [], resizing: false }
 
     proc.onData((data: string) => {
       this.appendBuffer(entry, data)
-      this.emit('terminal:data', { sessionId, data })
+      if (entry.resizing) {
+        entry.resizeBuffer.push(data)
+      } else {
+        this.emit('terminal:data', { sessionId, data })
+      }
     })
 
     proc.onExit(({ exitCode }) => {
@@ -71,7 +79,16 @@ export class TerminalMultiplexer extends EventEmitter {
   resizeTerminal(sessionId: string, cols: number, rows: number): void {
     const entry = this.terminals.get(sessionId)
     if (entry?.status === 'running') {
+      entry.resizing = true
       entry.pty.resize(cols, rows)
+      setImmediate(() => {
+        entry.resizing = false
+        const buffered = entry.resizeBuffer.splice(0)
+        if (buffered.length > 0) {
+          this.emit('terminal:data', { sessionId, data: buffered.join('') })
+        }
+        this.emit('terminal:resized', { sessionId })
+      })
     } else {
       this.pendingResize.set(sessionId, { cols, rows })
     }
