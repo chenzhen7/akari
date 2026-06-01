@@ -154,7 +154,7 @@ export function AppShell() {
           />
 
           {/* Middle */}
-          <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl bg-panel" style={{ width: middleWidth }}>
+          <div className="min-w-0 flex-1 overflow-hidden rounded-xl bg-panel" style={{ width: middleWidth }}>
             {selectedDiffFile && session ? (
               <DiffViewer
                 session={session}
