@@ -26,11 +26,6 @@ export const terminalBus = {
     }
   },
 
-  /** Get the full ring buffer (for initial replay when terminal mounts). */
-  getBuffer(sessionId: string): readonly string[] {
-    return _buffers.get(sessionId) ?? []
-  },
-
   /** Clear the ring buffer and notify listeners with ANSI clear sequence. */
   clear(sessionId: string): void {
     _buffers.set(sessionId, [])
