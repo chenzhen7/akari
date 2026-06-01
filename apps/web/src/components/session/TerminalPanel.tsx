@@ -199,19 +199,13 @@ function createTerminal(
     } catch { /* ignore */ }
   })
 
-  // ── Fetch history from server ──────────────────────────────────────────
-  let fetchAborted = false
+  // Register immediately so tab-switch cleanup can always find and detach the DOM.
+  terminalInstances.set(sessionId, { term, fitAddon, unsubscribeData, unsubscribeResized })
 
+  // ── Fetch history from server ──────────────────────────────────────────
   fetch(`${API_BASE}/sessions/${sessionId}/terminal-buffer`)
     .then(r => r.json())
     .then(({ buffer }: { buffer: string[] }) => {
-      if (fetchAborted) {
-        unsubscribeData()
-        unsubscribeResized()
-        term.dispose()
-        return
-      }
-
       // Skip TUI animation frames (\x1b[H = cursor home) that would push
       // duplicate history into scrollback on replay.
       buffer
@@ -222,15 +216,13 @@ function createTerminal(
       historyLoaded = true
       const pending = pendingChunks.splice(0)
       pending.forEach(chunk => term.write(chunk))
-
-      // Register only after history is fully loaded so tab-switch mounts
-      // find the entry and skip the fetch.
-      terminalInstances.set(sessionId, { term, fitAddon, unsubscribeData, unsubscribeResized })
     })
     .catch((err: unknown) => {
       console.error('[TerminalPanel] failed to fetch terminal buffer:', err)
-      // Still register on error so the terminal is usable
-      terminalInstances.set(sessionId, { term, fitAddon, unsubscribeData, unsubscribeResized })
+      // Even on error mark history as loaded so new PTY data flows through.
+      historyLoaded = true
+      const pending = pendingChunks.splice(0)
+      pending.forEach(chunk => term.write(chunk))
     })
 }
 
