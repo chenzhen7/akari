@@ -89,14 +89,11 @@ export function AppShell() {
 
   const session = activeTabId ? sessions.find(s => s.id === activeTabId) : undefined
 
-  // activeTabId 变化时自动展开/收起右侧
+  // 初始加载时展开右侧
   useEffect(() => {
-    if (activeTabId) {
-      expandRight()
-    } else {
-      collapseRight()
-    }
-  }, [activeTabId, expandRight, collapseRight])
+    expandRight()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const toggleLeft = () => {
     if (leftCollapsed) {
@@ -176,13 +173,11 @@ export function AppShell() {
           </div>
 
           {/* Right Handle */}
-          {activeTabId && (
-            <ResizeHandle
-              onMouseDown={onRightHandleMouseDown}
-              disabled={rightCollapsed}
-              isDragging={isDraggingRight}
-            />
-          )}
+          <ResizeHandle
+            onMouseDown={onRightHandleMouseDown}
+            disabled={rightCollapsed}
+            isDragging={isDraggingRight}
+          />
 
           {/* Right Sidebar */}
           <div
@@ -192,10 +187,10 @@ export function AppShell() {
             )}
             style={{ width: rightCollapsed ? '0px' : `${rightWidth}%` }}
           >
-            {activeTabId && session ? (
+            {session ? (
               <RightSidebar session={session} />
             ) : (
-              <div />
+              <RightSidebar />
             )}
           </div>
         </div>

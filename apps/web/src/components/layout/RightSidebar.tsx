@@ -14,7 +14,7 @@ const TABS: { id: 'git-graph' | 'diff' | 'info'; label: string; icon: React.Elem
 ]
 
 interface RightSidebarProps {
-  session: AgentSession
+  session?: AgentSession
 }
 
 export function RightSidebar({ session }: RightSidebarProps) {
@@ -56,19 +56,27 @@ export function RightSidebar({ session }: RightSidebarProps) {
 
       {/* Content */}
       <div className="relative flex-1 overflow-hidden">
-        <div className={cn('absolute inset-0', activeRightTab !== 'git-graph' && 'hidden')}>
-          <GitGraphPanel sessionId={session.id} />
-        </div>
-        <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'diff' && 'hidden')}>
-          <DiffFileList
-            session={session}
-            selectedFile={selectedDiffFile}
-            onSelectFile={handleSelectFile}
-          />
-        </div>
-        <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'info' && 'hidden')}>
-          <SessionInfoPanel session={session} />
-        </div>
+        {session ? (
+          <>
+            <div className={cn('absolute inset-0', activeRightTab !== 'git-graph' && 'hidden')}>
+              <GitGraphPanel sessionId={session.id} />
+            </div>
+            <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'diff' && 'hidden')}>
+              <DiffFileList
+                session={session}
+                selectedFile={selectedDiffFile}
+                onSelectFile={handleSelectFile}
+              />
+            </div>
+            <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'info' && 'hidden')}>
+              <SessionInfoPanel session={session} />
+            </div>
+          </>
+        ) : (
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            <p className="text-xs">请选择一个会话以查看详情</p>
+          </div>
+        )}
       </div>
     </div>
   )
