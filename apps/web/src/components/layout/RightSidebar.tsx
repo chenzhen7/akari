@@ -4,6 +4,7 @@ import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
 import { GitGraphPanel } from '@/components/git/GitGraphPanel'
 import { DiffFileList } from '@/components/diff/DiffFileList'
+import { SessionInfoPanel } from '@/components/session/SessionInfoPanel'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 const TABS: { id: 'git-graph' | 'diff' | 'info'; label: string; icon: React.ElementType }[] = [
@@ -66,7 +67,7 @@ export function RightSidebar({ session }: RightSidebarProps) {
           />
         </div>
         <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'info' && 'hidden')}>
-          {/* SessionInfoPanel */}
+          <SessionInfoPanel session={session} />
         </div>
       </div>
     </div>

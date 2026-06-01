@@ -3,9 +3,9 @@ import { TopNav } from './TopNav'
 import { SessionSidebar } from './SessionSidebar'
 import { RightSidebar } from './RightSidebar'
 import { useSessionStore } from '@/stores/session-store'
+import { SessionDetail } from '@/components/session/SessionDetail'
 import { CanvasView } from '@/components/canvas/CanvasView'
 import { KanbanView } from '@/components/kanban/KanbanView'
-import { TerminalPanel } from '@/components/session/TerminalPanel'
 import { DiffViewer } from '@/components/diff/DiffViewer'
 import { CommandCenter } from '@/components/command-center/CommandCenter'
 import { CreateSessionDialog } from '@/components/create-session/CreateSessionDialog'
@@ -14,7 +14,7 @@ import { useWebSocket } from '@/hooks/useWebSocket'
 import { Toaster } from 'sonner'
 import { useResizablePanels } from '@/hooks/useResizablePanels'
 import { cn } from '@/lib/utils'
-import { GripVertical } from 'lucide-react'
+import { GripVertical, LayoutGrid } from 'lucide-react'
 
 function WebSocketProvider() {
   useWebSocket()
@@ -60,7 +60,7 @@ function ResizeHandle({
 export function AppShell() {
   const activeTabId = useSessionStore(s => s.activeTabId)
   const sessions = useSessionStore(s => s.sessions)
-  const viewMode = useSessionStore(s => s.viewMode)
+  const detailViewMode = useSessionStore(s => s.detailViewMode)
   const selectedDiffFile = useSessionStore(s => s.selectedDiffFile)
   const setSelectedDiffFile = useSessionStore(s => s.setSelectedDiffFile)
   const { send } = useWebSocket()
@@ -161,12 +161,17 @@ export function AppShell() {
                 filePath={selectedDiffFile}
                 onBack={() => setSelectedDiffFile(null)}
               />
-            ) : activeTabId && session ? (
-              <TerminalPanel session={session} send={send} />
-            ) : viewMode === 'canvas' ? (
+            ) : detailViewMode === 'terminal' && session ? (
+              <SessionDetail session={session} send={send} />
+            ) : detailViewMode === 'canvas' ? (
               <CanvasView />
-            ) : (
+            ) : detailViewMode === 'kanban' ? (
               <KanbanView />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+                <LayoutGrid className="h-10 w-10 opacity-30" />
+                <p className="text-sm">暂无会话，点击「新建会话」开始</p>
+              </div>
             )}
           </div>
 

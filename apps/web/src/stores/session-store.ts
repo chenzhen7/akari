@@ -9,7 +9,6 @@ interface SessionStore {
   sessions: AgentSession[]
   canvasEdges: CanvasEdge[]
   gitLogs: Record<string, GitLogResponse>
-  viewMode: 'canvas' | 'kanban'
   openTabs: string[]
   activeTabId: string | null
   commandCenterOpen: boolean
@@ -25,6 +24,8 @@ interface SessionStore {
   activeRightTab: 'git-graph' | 'diff' | 'info'
   /** 选中的变更文件路径（选中后中间面板切换为 DiffViewer） */
   selectedDiffFile: string | null
+  /** 会话详情页主内容区当前视图（terminal | canvas | kanban） */
+  detailViewMode: 'terminal' | 'canvas' | 'kanban'
 
   addSession: (name: string, task: string, baseBranch?: string, agentType?: AgentType, canvasPosition?: { x: number; y: number }) => void
   openCreateDialog: (position?: { x: number; y: number }) => void
@@ -35,7 +36,7 @@ interface SessionStore {
   openTab: (id: string) => void
   closeTab: (id: string) => void
   setActiveTab: (id: string | null) => void
-  setViewMode: (mode: 'canvas' | 'kanban') => void
+  setDetailViewMode: (mode: 'terminal' | 'canvas' | 'kanban') => void
   toggleCommandCenter: () => void
   toggleCreateDialog: () => void
   approveSession: (id: string, approvalOption?: string) => void
@@ -60,7 +61,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   canvasEdges: [],
   gitLogs: {},
-  viewMode: 'canvas',
   openTabs: [],
   activeTabId: null,
   commandCenterOpen: false,
@@ -72,6 +72,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   pendingCreatePosition: null,
   activeRightTab: 'git-graph',
   selectedDiffFile: null,
+  detailViewMode: 'terminal',
 
   openCreateDialog: (position) => {
     set({ createDialogOpen: true, pendingCreatePosition: position ?? null })
@@ -176,7 +177,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   setActiveTab: (id) => set({ activeTabId: id }),
 
-  setViewMode: (mode) => set({ viewMode: mode }),
+  setDetailViewMode: (mode) => set({ detailViewMode: mode }),
 
   toggleCommandCenter: () =>
     set(state => ({ commandCenterOpen: !state.commandCenterOpen })),
@@ -324,7 +325,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   handleServerMessage: (msg) => {
     switch (msg.event) {
       case 'sessions:list':
-        set({ sessions: msg.payload })
+        set(state => {
+          let nextActiveTabId = state.activeTabId
+          // 如果当前没有选中会话或选中的已不存在，自动选中第一个
+          if (!nextActiveTabId || !msg.payload.some((s: AgentSession) => s.id === nextActiveTabId)) {
+            nextActiveTabId = msg.payload.length > 0 ? msg.payload[0].id : null
+          }
+          return { sessions: msg.payload, activeTabId: nextActiveTabId }
+        })
         break
       case 'session:created':
         set(state => ({

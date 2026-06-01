@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
+  Terminal,
   LayoutGrid,
   Columns3,
   Radio,
@@ -42,10 +43,8 @@ export function TopNav({
   onToggleRight: toggleRight,
 }: TopNavProps) {
   const {
-    viewMode,
-    setViewMode,
-    activeTabId,
-    setActiveTab,
+    detailViewMode,
+    setDetailViewMode,
     toggleCommandCenter,
     sessions,
     connectionStatus,
@@ -88,14 +87,17 @@ export function TopNav({
       {/* View mode switcher */}
       <div className="px-2">
         <Tabs
-          value={activeTabId ? '' : viewMode}
+          value={detailViewMode}
           onValueChange={v => {
             if (!v) return
-            setViewMode(v as 'canvas' | 'kanban')
-            setActiveTab(null)
+            setDetailViewMode(v as 'terminal' | 'canvas' | 'kanban')
           }}
         >
           <TabsList className="h-7">
+            <TabsTrigger value="terminal" className="gap-1.5 px-2.5 text-xs">
+              <Terminal className="h-3.5 w-3.5" />
+              终端
+            </TabsTrigger>
             <TabsTrigger value="canvas" className="gap-1.5 px-2.5 text-xs">
               <LayoutGrid className="h-3.5 w-3.5" />
               画布

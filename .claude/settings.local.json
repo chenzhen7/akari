@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npx shadcn *)",
       "Bash(pnpm add *)",
-      "Bash(pnpm typecheck *)"
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm *)"
     ]
   }
 }
