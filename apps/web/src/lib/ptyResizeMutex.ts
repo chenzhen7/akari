@@ -51,6 +51,11 @@ export interface ResizeMutex {
    * Returns true if buffered, false if passed straight through.
    */
   buffer(sessionId: string, data: string): boolean
+
+  /**
+   * Drain all buffered data for a session without releasing the lock.
+   */
+  flush(sessionId: string): string[]
 }
 
 function createResizeMutex(): ResizeMutex {
@@ -91,6 +96,12 @@ function createResizeMutex(): ResizeMutex {
       if (!s || !s.busy) return false
       s.buffer.push(data)
       return true
+    },
+
+    flush(sessionId: string): string[] {
+      const s = states.get(sessionId)
+      if (!s) return []
+      return s.buffer.splice(0)
     },
   }
 }
