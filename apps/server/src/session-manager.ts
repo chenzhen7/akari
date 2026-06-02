@@ -575,9 +575,15 @@ export class SessionManager {
       this.terminalMux.createTerminal(terminalId, id, worktreePath)
 
       const tab: SessionTab = { id: nanoid(6), type: 'terminal', label: 'Terminal 1', terminalId }
+      session.tabs = [tab]
+      session.activeTabId = tab.id
+      session.terminalId = terminalId
       this.db
         .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ?, terminal_id = ? WHERE id = ?')
         .run(JSON.stringify([tab]), tab.id, terminalId, id)
+
+      this.broadcast({ event: 'tab:created', payload: { sessionId: id, tab } })
+      this.broadcast({ event: 'tab:activated', payload: { sessionId: id, tabId: tab.id } })
 
       this.pushTerminalDisplay(id, `> Terminal ready (agent: ${session.agentType})\r\n`)
 
