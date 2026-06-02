@@ -42,7 +42,7 @@ export function RightSidebar({ session }: RightSidebarProps) {
                 className={cn(
                   'flex h-7 w-7 items-center justify-center rounded transition-colors',
                   activeRightTab === id
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'bg-muted/50 text-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
                 )}
               >
