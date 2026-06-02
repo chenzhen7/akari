@@ -57,67 +57,72 @@ function SessionItem({ session, isActive }: { session: AgentSession; isActive: b
       <button
         onClick={() => openTab(session.id)}
         className={cn(
-          'group flex w-full items-start gap-2 rounded-lg border px-2.5 py-2 text-left transition-all',
+          'group flex w-full flex-col gap-0.5 rounded-lg border px-2.5 py-2 text-left transition-all',
           isActive
             ? 'border-primary/40 bg-primary/5 shadow-sm'
-            : 'border-transparent bg-muted/40 hover:bg-muted/60',
+            : 'border-transparent hover:bg-muted/60 hover:border-border/30',
         )}
       >
-        <Circle className={cn('mt-0.5 h-2 w-2 shrink-0', statusColorMap[session.status] ?? 'fill-slate-400 text-slate-400')} />
-        <div className="min-w-0 flex-1">
-          <p className={cn('truncate text-xs font-medium', isActive && 'text-primary')}>
-            {session.name}
-          </p>
-          <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
-            <GitBranch className="h-2.5 w-2.5 shrink-0" />
-            <span className="truncate">{session.branchName}</span>
+        {/* 第一行：状态 + 名称 + 右上角 diff */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2 min-w-0">
+            <Circle className={cn('mt-0.5 h-2 w-2 shrink-0', statusColorMap[session.status] ?? 'fill-slate-400 text-slate-400')} />
+            <p className={cn('truncate text-xs font-medium', isActive && 'text-primary')}>
+              {session.name}
+            </p>
           </div>
           {(additions > 0 || deletions > 0) && (
-            <div className="mt-0.5 flex items-center gap-1 text-[10px] font-mono">
-              {additions > 0 && <span className="text-green-500">+{additions}</span>}
+            <div className="flex items-center gap-1 text-[10px] font-mono shrink-0">
               {deletions > 0 && <span className="text-red-500">-{deletions}</span>}
+              {additions > 0 && <span className="text-green-500">+{additions}</span>}
             </div>
           )}
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          {!isTerminal && (
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-              disabled={isPending}
-              onClick={handleArchive}
-              title="归档"
-            >
-              {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Archive className="h-3 w-3" />}
-            </Button>
-          )}
-          {session.status === 'archived' && (
-            <>
+        {/* 第二行：branchName + 右下角操作按钮 */}
+        <div className="flex items-center justify-between gap-1 pl-4">
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground min-w-0">
+            <GitBranch className="h-2.5 w-2.5 shrink-0" />
+            <span className="truncate">{session.branchName}</span>
+          </div>
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+            {!isTerminal && (
               <Button
                 variant="ghost"
                 size="xs"
                 className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                 disabled={isPending}
-                onClick={handleRestore}
-                title="恢复"
+                onClick={handleArchive}
+                title="归档"
               >
-                {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Archive className="h-3 w-3" />}
               </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                disabled={isPending}
-                onClick={handleDelete}
-                title="删除"
-              >
-                {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-              </Button>
-            </>
-          )}
+            )}
+            {session.status === 'archived' && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                  disabled={isPending}
+                  onClick={handleRestore}
+                  title="恢复"
+                >
+                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                  disabled={isPending}
+                  onClick={handleDelete}
+                  title="删除"
+                >
+                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </button>
 
