@@ -59,7 +59,7 @@ function SortableTab({
       {...listeners}
       onClick={onActivate}
       className={cn(
-        'group relative flex h-full shrink-0 items-center gap-1.5 border-r border-border/50 px-2.5 text-xs transition-colors select-none',
+        'group relative flex h-full shrink-0 items-center gap-1.5 px-2.5 text-xs transition-colors select-none',
         isActive
           ? 'bg-[#1e1e1e] text-foreground'
           : 'text-muted-foreground hover:bg-muted/50',
@@ -131,7 +131,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
   }
 
   return (
-    <div className="flex h-10 shrink-0 items-center border-b border-border bg-muted/30">
+    <div className="flex h-10 shrink-0 items-center bg-muted/30">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -158,7 +158,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
       <Button
         variant="ghost"
         size="xs"
-        className="h-6 w-6 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+        className="mr-1 h-6 w-6 shrink-0 p-0 text-muted-foreground hover:text-foreground"
         onClick={handleCreateTerminal}
         title="新建终端"
       >
