@@ -38,6 +38,8 @@ canvasEdgeStore.initDb()
 
 fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
 
+fastify.get('/repo/branches', async () => sessionManager.getRepoBranches())
+
 fastify.get('/sessions', async () => sessionManager.listSessions())
 
 interface CreateSessionBody {

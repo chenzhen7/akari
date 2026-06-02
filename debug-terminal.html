@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>xterm resize debug</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    #terminal { width: 100%; height: 100%; background: #1e1e1e; }
+  </style>
+</head>
+<body>
+  <div id="terminal"></div>
+  <script>
+    const term = new Terminal({
+      fontSize: 12,
+      fontFamily: '"Cascadia Code", "Fira Code", Menlo, "Courier New", monospace',
+      theme: { background: '#1e1e1e', foreground: '#d4d4d4' }
+    });
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('terminal'));
+    fitAddon.fit();
+
+    // Fill with content to make resize visible
+    for (let i = 0; i < 100; i++) {
+      term.writeln('Line ' + String(i).padStart(3, '0') + ': ' + 'abcdefghijklmnopqrstuvwxyz'.repeat(10));
+    }
+
+    const ro = new ResizeObserver(() => {
+      fitAddon.fit();
+    });
+    ro.observe(document.getElementById('terminal'));
+
+    // Also log cols/rows on resize
+    term.onResize(({ cols, rows }) => {
+      console.log('xterm resized to:', cols, 'x', rows);
+    });
+  </script>
+</body>
+</html>

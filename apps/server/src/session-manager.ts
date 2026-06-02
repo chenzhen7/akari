@@ -311,6 +311,10 @@ export class SessionManager {
     return this.worktreeManager.getGitBranches(sessionId)
   }
 
+  async getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]> {
+    return this.worktreeManager.getRepoBranches()
+  }
+
   async commitAll(sessionId: string, message: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)

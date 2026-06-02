@@ -227,6 +227,25 @@ export class WorktreeManager {
     }
   }
 
+  async getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]> {
+    try {
+      const raw = await this.git(['branch', '--format=%(refname:short)|%(HEAD)'])
+      return raw
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map(line => {
+          const parts = line.split('|')
+          const name = (parts[0] ?? '').trim()
+          const isCurrent = (parts[1] ?? '').trim() === '*'
+          return { name, isCurrent }
+        })
+        .filter(b => b.name)
+    } catch {
+      return []
+    }
+  }
+
   async commitAll(sessionId: string, message: string): Promise<void> {
     const cwd = this.getWorktreePath(sessionId)
     await this.git(['add', '-A'], cwd)

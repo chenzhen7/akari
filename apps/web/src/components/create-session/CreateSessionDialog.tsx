@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { AgentType } from '@akari/shared-types'
 import {
   Dialog,
@@ -18,23 +18,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Sparkles } from 'lucide-react'
+import { Plus, Sparkles, Loader2 } from 'lucide-react'
 import { useSessionStore } from '@/stores/session-store'
+import { API_BASE } from '@/stores/session-store'
+
+interface RepoBranch {
+  name: string
+  isCurrent: boolean
+}
 
 export function CreateSessionDialog() {
   const { createDialogOpen, toggleCreateDialog, addSession } = useSessionStore()
   const [name, setName] = useState('')
   const [task, setTask] = useState('')
-  const [baseBranch, setBaseBranch] = useState('main')
+  const [baseBranch, setBaseBranch] = useState('')
   const [agentType, setAgentType] = useState<AgentType>('claude')
+  const [branches, setBranches] = useState<RepoBranch[]>([])
+  const [branchesLoading, setBranchesLoading] = useState(false)
+
+  useEffect(() => {
+    if (!createDialogOpen) return
+    setBranchesLoading(true)
+    fetch(`${API_BASE}/repo/branches`)
+      .then(async res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = (await res.json()) as RepoBranch[]
+        setBranches(data)
+        const current = data.find(b => b.isCurrent)
+        setBaseBranch(current?.name ?? data[0]?.name ?? '')
+      })
+      .catch(err => {
+        console.error('[CreateSessionDialog] fetch branches failed:', err)
+        // 降级：保留空列表，让用户可以手动输入
+        setBranches([])
+        setBaseBranch('')
+      })
+      .finally(() => setBranchesLoading(false))
+  }, [createDialogOpen])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim() || !task.trim()) return
+    if (!name.trim() || !task.trim() || !baseBranch.trim()) return
     addSession(name.trim(), task.trim(), baseBranch, agentType)
     setName('')
     setTask('')
-    setBaseBranch('main')
+    setBaseBranch('')
     setAgentType('claude')
   }
 
@@ -86,15 +114,34 @@ export function CreateSessionDialog() {
             <div className="grid grid-cols-2 gap-3">
               <Field>
                 <FieldLabel htmlFor="session-branch">基础分支</FieldLabel>
-                <Select value={baseBranch} onValueChange={setBaseBranch}>
-                  <SelectTrigger id="session-branch" className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="main">main</SelectItem>
-                    <SelectItem value="develop">develop</SelectItem>
-                  </SelectContent>
-                </Select>
+                {branchesLoading ? (
+                  <div className="flex h-8 items-center gap-2 rounded-md border border-input px-3 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    加载分支…
+                  </div>
+                ) : branches.length > 0 ? (
+                  <Select value={baseBranch} onValueChange={setBaseBranch}>
+                    <SelectTrigger id="session-branch" className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches.map(b => (
+                        <SelectItem key={b.name} value={b.name}>
+                          {b.name}{b.isCurrent ? ' (当前)' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id="session-branch"
+                    placeholder="例如 main"
+                    value={baseBranch}
+                    onChange={e => setBaseBranch(e.target.value)}
+                    className="h-8 text-xs"
+                    required
+                  />
+                )}
               </Field>
 
               <Field>
