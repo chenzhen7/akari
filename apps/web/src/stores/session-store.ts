@@ -50,7 +50,7 @@ interface SessionStore {
   setGitLog: (sessionId: string, log: GitLogResponse) => void
   setConnectionStatus: (status: ConnectionStatus) => void
   setActiveRightTab: (tab: 'git-graph' | 'diff' | 'info') => void
-  createTab: (sessionId: string, type: 'terminal' | 'diff', filePath?: string) => void
+  createTab: (sessionId: string, type: 'terminal' | 'claude' | 'diff', filePath?: string) => void
   closeTab: (sessionId: string, tabId: string) => void
   activateTab: (sessionId: string, tabId: string) => void
   reorderTabs: (sessionId: string, orderedTabIds: string[]) => void

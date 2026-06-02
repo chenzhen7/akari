@@ -296,7 +296,7 @@ fastify.get<{ Params: { id: string } }>(
   },
 )
 
-fastify.post<{ Params: { id: string }; Body: { type: 'terminal' | 'diff'; filePath?: string } }>(
+fastify.post<{ Params: { id: string }; Body: { type: 'terminal' | 'claude' | 'diff'; filePath?: string } }>(
   '/sessions/:id/tabs',
   async (request, reply) => {
     const { id } = request.params

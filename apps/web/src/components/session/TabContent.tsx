@@ -20,7 +20,7 @@ export function TabContent({ session, send }: TabContentProps) {
     )
   }
 
-  if (activeTab.type === 'terminal') {
+  if (activeTab.type === 'terminal' || activeTab.type === 'claude') {
     return (
       <TerminalPanel
         sessionId={session.id}

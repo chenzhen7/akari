@@ -218,7 +218,7 @@ export class SessionManager {
     const targets = sessionIds ? active.filter(s => sessionIds.includes(s.id)) : active
     for (const s of targets) {
       const data = `\r\n📢 Broadcast: ${message}\r\n`
-      const terminalTab = s.tabs.find(t => t.type === 'terminal')
+      const terminalTab = s.tabs.find(t => t.type === 'terminal' || t.type === 'claude')
       if (terminalTab?.terminalId) {
         this.terminalMux.sendToTerminal(terminalTab.terminalId, `${message}\n`)
         this.broadcast({ event: 'terminal:data', payload: { sessionId: s.id, terminalId: terminalTab.terminalId, data } })
@@ -229,7 +229,7 @@ export class SessionManager {
 
   // ─── Tab management ───────────────────────────────────────────────────────
 
-  createTab(sessionId: string, type: 'terminal' | 'diff', filePath?: string): SessionTab {
+  createTab(sessionId: string, type: 'terminal' | 'claude' | 'diff', filePath?: string): SessionTab {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
 
@@ -237,10 +237,14 @@ export class SessionManager {
     let terminalId: string | undefined
     let label: string
 
-    if (type === 'terminal') {
+    if (type === 'terminal' || type === 'claude') {
       terminalId = nanoid(8)
-      const count = session.tabs.filter(t => t.type === 'terminal').length + 1
-      label = `Terminal ${count}`
+      if (type === 'claude') {
+        label = 'Claude'
+      } else {
+        const count = session.tabs.filter(t => t.type === 'terminal').length + 1
+        label = `Terminal ${count}`
+      }
     } else {
       label = filePath ?? 'Diff'
     }
@@ -253,7 +257,7 @@ export class SessionManager {
       .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ? WHERE id = ?')
       .run(JSON.stringify(updatedTabs), activeTabId, sessionId)
 
-    if (type === 'terminal' && terminalId) {
+    if ((type === 'terminal' || type === 'claude') && terminalId) {
       const worktreePath = this.worktreeManager.getWorktreePath(sessionId)
       this.terminalMux.createTerminal(terminalId, sessionId, worktreePath)
     }
@@ -281,7 +285,7 @@ export class SessionManager {
       .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ? WHERE id = ?')
       .run(JSON.stringify(updatedTabs), activeTabId, sessionId)
 
-    if (tab.type === 'terminal' && tab.terminalId) {
+    if ((tab.type === 'terminal' || tab.type === 'claude') && tab.terminalId) {
       this.terminalMux.killTerminal(tab.terminalId)
     }
 
@@ -358,14 +362,14 @@ export class SessionManager {
       // Windows PTY 需要 CRLF 才能识别命令终止符；单独 LF 会被当作行继续符
       const eol = process.platform === 'win32' ? '\r\n' : '\n'
       const key = approvalOption ?? '1'
-      const terminalTab = session.tabs.find(t => t.type === 'terminal')
+      const terminalTab = session.tabs.find(t => t.type === 'terminal' || t.type === 'claude')
       if (terminalTab?.terminalId) {
         this.terminalMux.sendToTerminal(terminalTab.terminalId, `${key}${eol}`)
       }
     } else {
       this.updateStatus(sessionId, 'paused')
       const eol = process.platform === 'win32' ? '\r\n' : '\n'
-      const terminalTab = session.tabs.find(t => t.type === 'terminal')
+      const terminalTab = session.tabs.find(t => t.type === 'terminal' || t.type === 'claude')
       if (terminalTab?.terminalId) {
         this.terminalMux.sendToTerminal(terminalTab.terminalId, `3${eol}`)
       }
@@ -499,14 +503,15 @@ export class SessionManager {
       if (tabs.length === 0) {
         // Legacy session without tabs: create a default terminal tab
         const terminalId = nanoid(8)
-        const tab: SessionTab = { id: nanoid(6), type: 'terminal', label: 'Terminal 1', terminalId }
+        const isClaudeAgent = session.agentType === 'claude' || session.agentType === 'claude-orchestrator'
+        const tab: SessionTab = { id: nanoid(6), type: isClaudeAgent ? 'claude' : 'terminal', label: isClaudeAgent ? 'Claude' : 'Terminal 1', terminalId }
         tabs = [tab]
         activeTabId = tab.id
         this.terminalMux.createTerminal(terminalId, session.id, worktreePath)
       } else {
         const restoredTabs: SessionTab[] = []
         for (const tab of tabs) {
-          if (tab.type === 'terminal') {
+          if (tab.type === 'terminal' || tab.type === 'claude') {
             const terminalId = nanoid(8)
             this.terminalMux.createTerminal(terminalId, session.id, worktreePath)
             restoredTabs.push({ ...tab, terminalId })
@@ -574,7 +579,8 @@ export class SessionManager {
       const terminalId = nanoid(8)
       this.terminalMux.createTerminal(terminalId, id, worktreePath)
 
-      const tab: SessionTab = { id: nanoid(6), type: 'terminal', label: 'Terminal 1', terminalId }
+      const isClaudeAgent = session.agentType === 'claude' || session.agentType === 'claude-orchestrator'
+      const tab: SessionTab = { id: nanoid(6), type: isClaudeAgent ? 'claude' : 'terminal', label: isClaudeAgent ? 'Claude' : 'Terminal 1', terminalId }
       session.tabs = [tab]
       session.activeTabId = tab.id
       session.terminalId = terminalId
@@ -671,7 +677,7 @@ export class SessionManager {
   private pushTerminalDisplay(sessionId: string, data: string): void {
     const session = this.getSession(sessionId)
     const activeTab = session?.tabs.find(t => t.id === session.activeTabId)
-    const terminalId = activeTab?.type === 'terminal' ? activeTab.terminalId : session?.tabs.find(t => t.type === 'terminal')?.terminalId
+    const terminalId = (activeTab?.type === 'terminal' || activeTab?.type === 'claude') ? activeTab.terminalId : session?.tabs.find(t => t.type === 'terminal' || t.type === 'claude')?.terminalId
     if (terminalId) {
       this.broadcast({ event: 'terminal:data', payload: { sessionId, terminalId, data } })
     }

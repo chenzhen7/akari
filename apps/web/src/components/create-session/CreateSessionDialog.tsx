@@ -18,7 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Sparkles, Loader2 } from 'lucide-react'
+import { Plus, Sparkles, Loader2, Bot, Code2, Terminal } from 'lucide-react'
+import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { useSessionStore } from '@/stores/session-store'
 import { API_BASE } from '@/stores/session-store'
 
@@ -148,13 +149,54 @@ export function CreateSessionDialog() {
                 <FieldLabel htmlFor="session-agent">Agent 类型</FieldLabel>
                 <Select value={agentType} onValueChange={v => setAgentType(v as AgentType)}>
                   <SelectTrigger id="session-agent" className="h-8 text-xs">
-                    <SelectValue />
+                    <SelectValue placeholder="选择 Agent 类型">
+                      {(() => {
+                        const icons: Record<string, React.ReactNode> = {
+                          claude: <ClaudeIcon className="h-3.5 w-3.5 shrink-0 text-[#D97757]" />,
+                          'claude-orchestrator': <Bot className="h-3.5 w-3.5 shrink-0 text-[#b45309]" />,
+                          aider: <Code2 className="h-3.5 w-3.5 shrink-0 text-[#2563eb]" />,
+                          shell: <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />,
+                        }
+                        const labels: Record<string, string> = {
+                          claude: 'Claude Code',
+                          'claude-orchestrator': 'Claude Orchestrator',
+                          aider: 'Aider',
+                          shell: 'Shell（自定义）',
+                        }
+                        return (
+                          <span className="flex items-center gap-1.5">
+                            {icons[agentType]}
+                            {labels[agentType]}
+                          </span>
+                        )
+                      })()}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="claude">Claude Code</SelectItem>
-                    <SelectItem value="claude-orchestrator">Claude Orchestrator</SelectItem>
-                    <SelectItem value="aider">Aider</SelectItem>
-                    <SelectItem value="shell">Shell（自定义）</SelectItem>
+                    <SelectItem value="claude">
+                      <span className="flex items-center gap-1.5">
+                        <ClaudeIcon className="h-3.5 w-3.5 shrink-0 text-[#D97757]" />
+                        Claude Code
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="claude-orchestrator">
+                      <span className="flex items-center gap-1.5">
+                        <Bot className="h-3.5 w-3.5 shrink-0 text-[#b45309]" />
+                        Claude Orchestrator
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="aider">
+                      <span className="flex items-center gap-1.5">
+                        <Code2 className="h-3.5 w-3.5 shrink-0 text-[#2563eb]" />
+                        Aider
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="shell">
+                      <span className="flex items-center gap-1.5">
+                        <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        Shell（自定义）
+                      </span>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </Field>

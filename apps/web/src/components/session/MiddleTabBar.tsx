@@ -1,4 +1,5 @@
-import { Terminal, FileCode, Plus, X } from 'lucide-react'
+import { FileCode, Plus, X, Terminal } from 'lucide-react'
+import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { cn } from '@/lib/utils'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
@@ -49,7 +50,7 @@ function SortableTab({
     zIndex: isDragging ? 10 : undefined,
   }
 
-  const Icon = tab.type === 'terminal' ? Terminal : FileCode
+  const Icon = tab.type === 'diff' ? FileCode : tab.type === 'claude' ? ClaudeIcon : Terminal
 
   return (
     <button
@@ -67,7 +68,11 @@ function SortableTab({
         isActive && 'after:absolute after:bottom-0 after:left-2 after:right-2 after:h-[2px] after:rounded-full after:bg-primary',
       )}
     >
-      <Icon className="h-3 w-3 shrink-0" />
+      {tab.type === 'claude' ? (
+        <ClaudeIcon className="h-3 w-3 shrink-0 text-[#D97757]" />
+      ) : (
+        <Icon className="h-3 w-3 shrink-0" />
+      )}
       <span className="max-w-[120px] truncate">{tab.label}</span>
       <span
         onClick={e => {
@@ -120,7 +125,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
   const handleClose = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation()
     const tab = tabs.find(t => t.id === tabId)
-    if (tab?.type === 'terminal' && tab.terminalId) {
+    if ((tab?.type === 'terminal' || tab?.type === 'claude') && tab.terminalId) {
       destroyTerminalInstance(tab.terminalId)
     }
     closeTab(session.id, tabId)
