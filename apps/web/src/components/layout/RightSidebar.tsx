@@ -5,6 +5,7 @@ import { useSessionStore } from '@/stores/session-store'
 import { GitGraphPanel } from '@/components/git/GitGraphPanel'
 import { DiffFileList } from '@/components/diff/DiffFileList'
 import { SessionInfoPanel } from '@/components/session/SessionInfoPanel'
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 const TABS: { id: 'git-graph' | 'diff' | 'info'; label: string; icon: React.ElementType }[] = [
@@ -34,20 +35,22 @@ export function RightSidebar({ session }: RightSidebarProps) {
         {TABS.map(({ id, label, icon: Icon }) => (
           <Tooltip key={id}>
             <TooltipTrigger asChild>
-              <button
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => {
                   setActiveRightTab(id)
                   if (id !== 'diff') setSelectedDiffFile(null)
                 }}
                 className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded transition-colors',
+                  'rounded',
                   activeRightTab === id
                     ? 'bg-muted/50 text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                    : 'text-muted-foreground',
                 )}
               >
                 <Icon className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">{label}</TooltipContent>
           </Tooltip>
