@@ -11,9 +11,11 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 
 ---
 
-## 当前状态（2026-05-30）
+## 当前状态（2026-06-02）
 
 **整体进度**：**阶段八（HTTP Hooks 机制改造）全部完成**。魔法字符串机制已完全废弃，HTTP Hook 单轨驱动上线。阶段七改造完成：`SPAWN_AGENT` / `DELEGATE` / `AWAIT_SESSION` 协议检测**全部移除**，改为纯 REST 端点 + UI 按钮触发。协作管理面板中 Orchestrator 的 System Prompt 也已同步更新为 REST 调用说明。
+
+**文档同步说明**：本文件与 `AGENTS.md` / `CLAUDE.md` 同步更新。若发现三处描述不一致，以本文件（progress.md）和实际源码为准。
 
 ### ✅ 已完成
 
@@ -42,6 +44,9 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 适配器工厂 | `apps/server/src/agent-adapters/index.ts` | `createAgentAdapter(agentType)` 工厂，SessionManager 集成 |
 | CanvasEdgeStore | `apps/server/src/canvas-edge-store.ts` | 画布连线独立持久化（DB 表 `canvas_edges`）|
 | Canvas 连线持久化 API | `apps/server/src/index.ts` | `GET/POST/DELETE /canvas/edges` REST 端点 + `canvas:edges` WS 事件 |
+| Git 可视化 | `apps/web/src/components/git/GitGraphPanel.tsx` | Git 提交图（SVG 渲染）、分支/Commit/Merge/Checkout/Discard |
+| Diff 视图 | `apps/web/src/components/diff/DiffViewer.tsx` | Monaco DiffEditor（side-by-side）、DiffFileList、resolvedBase 修复 |
+| 审批 UI | `apps/web/src/components/session/SessionInfoPanel.tsx` | ApprovalRequest 渲染、选项按钮、批量审批 |
 | 画布节点 Handle | `apps/web/src/components/canvas/SessionNode.tsx` | source/target Handle（hover 显现）；claude-orchestrator 图标 |
 
 ### 🔄 已回退（Phase-7 多 Agent 协作）
@@ -64,8 +69,8 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | F1 | **会话管理 CRUD** | `session-manager.ts`、SQLite schema | Store 移除 Mock 数据，完全由 WS 驱动 | F0 ✅ |
 | F2 | **Worktree 管理** | `worktree-manager.ts`（simple-git） | 创建进度反馈、画布/看板状态同步 | F1 |
 | F3 | **终端多路复用** | `terminal-mux.ts`（node-pty） | `TerminalPanel` 接 xterm.js | F1 |
-| F4 | **实时 Diff** | chokidar 监听 + `git diff` 推送 | `DiffViewer.tsx`（Monaco Diff Editor） | F2 |
-| F5 | **审批工作流** | `approval-workflow.ts` | 审批弹窗、批量审批、TopNav 角标 | F3 + F4 |
+| F4 | **实时 Diff** | chokidar 监听 + `git diff` 推送 | `DiffViewer.tsx`（Monaco Diff Editor） | F2 ✅ |
+| F5 | **审批工作流** | `hook-dispatcher.ts`（ApprovalRegistry） | `SessionInfoPanel.tsx` 审批 UI、CommandCenter | F3 + F4 ✅ |
 | F6 | **Agent 适配器** | `agent-adapters/claude.ts` + `aider.ts` | — | F2 + F3 |
 | F7 | **收尾打磨** | 错误处理、重连、超时 | 快捷键、全局搜索、报告导出 | F1-F6 |
 
@@ -84,9 +89,9 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | 阶段一 | Monorepo + 后端骨架 + WebSocket 联通 | ✅ 完成 | [phase-1](./开发计划/phase-1-工程化基础.md) |
 | 阶段二 | WorktreeManager + TerminalMux + SessionManager | ✅ 完成 | [phase-2](./开发计划/phase-2-核心后端.md) |
 | 阶段三 | xterm.js 终端 + Monaco Diff + 创建流程 | ✅ 完成 | [phase-3](./开发计划/phase-3-前端真实化.md) |
-| 阶段四 | 审批后端 + 审批 UI | 🔲 待开始 | [phase-4](./开发计划/phase-4-审批工作流.md) |
+| 阶段四 | 审批后端 + 审批 UI | 完成 | [phase-4](./开发计划/phase-4-审批工作流.md) |
 | 阶段五 | Claude / Aider / Shell 适配器 | ✅ Claude + Orchestrator 完成 | [phase-5](./开发计划/phase-5-Agent适配器.md) |
-| 阶段六 | Git 可视化 | 🔲 待开始 | [phase-6](./开发计划/phase-6-git可视化.md) |
+| 阶段六 | Git 可视化 | 完成 | [phase-6](./开发计划/phase-6-git可视化.md) |
 | 阶段七 | 多 Agent 协作 | 🔄 已回退（群组功能移除，保留 Canvas 连线持久化） | [phase-7](./开发计划/phase-7-多agent协作.md) |
 | 阶段八 | 基于 Hooks 的 Agent 状态流程机制改造 | ✅ 核心完成（8.1~8.4，PreToolUse/MCP 暂不做） | [phase-8](./开发计划/phase-8-基于Hooks的Agent状态流程机制改造计划.md) |
 
@@ -97,9 +102,9 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | **M1** Monorepo + WebSocket 联通 | 阶段一 | ✅ |
 | **M2** 会话生命周期完整跑通 | 阶段二 | ✅ |
 | **M3** 真实终端 + Diff + 创建流程 | 阶段三 | ✅ |
-| **M4** 审批工作流闭环 | 阶段四 | 🔲 |
+| **M4** 审批工作流闭环 | 阶段四 | 完成 |
 | **M5** Claude Code / Aider 可用 | 阶段五 | � Claude 适配已完成，待验证 |
-| **M6** 生产就绪 | 阶段六 | 🔲 |
+| **M6** 生产就绪 | 阶段六 | 完成 |
 
 ---
 
@@ -115,15 +120,32 @@ akari/
 │   │       ├── index.ts           # ✅ Fastify 入口，端口 3001
 │   │       ├── session-manager.ts # ✅ SessionManager（SQLite + 状态机）
 │   │       ├── worktree-manager.ts# ✅ WorktreeManager（git worktree + chokidar diff）
-│   │       ├── terminal-mux.ts    # ✅ TerminalMultiplexer（child_process + 环形 Buffer）
-│       └── agent-adapters/    # ✅ AgentAdapter 接口 + ClaudeAdapter（阶段五）
-│           ├── base.ts        # AgentAdapter 接口 + PtyCommand 类型
-│           ├── claude.ts      # ClaudeAdapter（--append-system-prompt，交互模式）
-│           └── index.ts       # createAgentAdapter() 工厂
+│   │       ├── terminal-mux.ts    # ✅ TerminalMultiplexer（node-pty + 环形 Buffer）
+│   │       ├── hook-dispatcher.ts # ✅ HookDispatcher（ApprovalRegistry + HTTP Hook）
+│   │       ├── canvas-edge-store.ts # ✅ CanvasEdgeStore（DB 表 canvas_edges）
+│   │       └── agent-adapters/    # ✅ AgentAdapter 接口 + ClaudeAdapter
+│   │           ├── base.ts        # AgentAdapter 接口 + PtyCommand 类型
+│   │           ├── claude.ts      # ClaudeAdapter（--append-system-prompt）
+│   │           └── index.ts       # createAgentAdapter() 工厂
 │   └── web/src/
 │       ├── components/            # ✅ 全部前端组件
+│       │   ├── canvas/            # CanvasView + SessionNode + FlowEdge + ContextMenu
+│       │   ├── kanban/            # KanbanView + KanbanCard + KanbanColumn
+│       │   ├── session/           # SessionDetail + TerminalPanel + SessionInfoPanel
+│       │   ├── diff/              # DiffViewer + DiffFileList
+│       │   ├── git/               # GitGraphPanel + GitContextMenu + Dialogs
+│       │   ├── command-center/    # CommandCenter
+│       │   ├── create-session/    # CreateSessionDialog
+│       │   └── layout/            # AppShell + TopNav + RightSidebar
 │       ├── stores/session-store.ts  # ✅ WebSocket 驱动
-│       ├── hooks/useWebSocket.ts  # ✅ 自动重连
+│       ├── hooks/
+│       │   ├── useWebSocket.ts    # ✅ 自动重连
+│       │   └── useResizablePanels.ts # ✅ 可拖拽分栏
+│       ├── lib/
+│       │   ├── utils.ts           # cn() 工具
+│       │   ├── terminalBus.ts     # 终端事件总线
+│       │   ├── ptyResizeMutex.ts  # resize 互斥锁
+│       │   └── git-graph-utils.ts # Git 图布局算法
 │       └── types/index.ts         # 重新导出 @akari/shared-types
 └── packages/shared-types/src/     # ✅ 前后端共享类型
     └── index.ts
