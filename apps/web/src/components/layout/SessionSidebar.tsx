@@ -165,6 +165,9 @@ export function SessionSidebar() {
   const openCreateDialog = useSessionStore(s => s.openCreateDialog)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
 
+  const activeSessions = sessions.filter(s => s.status !== 'archived')
+  const archivedSessions = sessions.filter(s => s.status === 'archived')
+
   return (
     <aside className="flex h-full w-full flex-col bg-panel">
       <div className="flex h-full w-full flex-col">
@@ -174,7 +177,7 @@ export function SessionSidebar() {
             会话列表
           </span>
           <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
-            {sessions.length}
+            {activeSessions.length}
           </span>
           <Button
             variant="ghost"
@@ -187,9 +190,9 @@ export function SessionSidebar() {
           </Button>
         </div>
 
-        {/* Session list */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-          {sessions.map(session => (
+        {/* Active session list */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1.5 min-h-0">
+          {activeSessions.map(session => (
             <SessionItem
               key={session.id}
               session={session}
@@ -197,6 +200,29 @@ export function SessionSidebar() {
             />
           ))}
         </div>
+
+        {/* Archived list */}
+        {archivedSessions.length > 0 && (
+          <>
+            <div className="flex h-7 shrink-0 items-center px-2 gap-2 border-t border-border/50">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                归档
+              </span>
+              <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
+                {archivedSessions.length}
+              </span>
+            </div>
+            <div className="shrink-0 overflow-y-auto p-2 space-y-1.5 max-h-[35%]">
+              {archivedSessions.map(session => (
+                <SessionItem
+                  key={session.id}
+                  session={session}
+                  isActive={session.id === activeSessionId}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </aside>
   )
