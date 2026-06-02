@@ -147,6 +147,10 @@ export class WorktreeManager {
 
     watcher.on('add', trigger).on('change', trigger).on('unlink', trigger)
     this.watchers.set(sessionId, watcher)
+
+    // Push initial diff immediately so the client sees the starting state.
+    void this.getDiff(sessionId, baseBranch).then(callback)
+
     return watcher
   }
 
