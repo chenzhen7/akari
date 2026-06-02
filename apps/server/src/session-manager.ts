@@ -302,6 +302,26 @@ export class SessionManager {
     this.broadcast({ event: 'tab:activated', payload: { sessionId, tabId } })
   }
 
+  reorderTabs(sessionId: string, orderedTabIds: string[]): void {
+    const session = this.getSession(sessionId)
+    if (!session) return
+
+    const tabMap = new Map(session.tabs.map(t => [t.id, t]))
+    if (orderedTabIds.length !== session.tabs.length || !orderedTabIds.every(id => tabMap.has(id))) {
+      return
+    }
+
+    const reordered = orderedTabIds.map(id => tabMap.get(id)!)
+    this.db
+      .prepare('UPDATE sessions SET tabs = ? WHERE id = ?')
+      .run(JSON.stringify(reordered), sessionId)
+
+    this.broadcast({
+      event: 'tabs:sync',
+      payload: { sessionId, tabs: reordered, activeTabId: session.activeTabId },
+    })
+  }
+
   getTabs(sessionId: string): SessionTab[] {
     return this.getSession(sessionId)?.tabs ?? []
   }

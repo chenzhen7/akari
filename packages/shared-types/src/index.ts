@@ -154,6 +154,7 @@ export type ClientMessage =
   | { event: 'tab:create'; payload: { sessionId: string; type: 'terminal' | 'diff'; filePath?: string } }
   | { event: 'tab:close'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:activate'; payload: { sessionId: string; tabId: string } }
+  | { event: 'tab:reorder'; payload: { sessionId: string; orderedTabIds: string[] } }
   | { event: 'terminal:create'; payload: { sessionId: string } }
 
 // ─── Phase 8: HTTP Hook Event Types ──────────────────────────────────────────

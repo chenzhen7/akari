@@ -446,6 +446,11 @@ function handleClientMessage(msg: ClientMessage): void {
       sessionManager.activateTab(sessionId, tabId)
       break
     }
+    case 'tab:reorder': {
+      const { sessionId, orderedTabIds } = msg.payload
+      sessionManager.reorderTabs(sessionId, orderedTabIds)
+      break
+    }
     case 'terminal:create': {
       const { sessionId } = msg.payload
       try {

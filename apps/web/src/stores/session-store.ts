@@ -53,6 +53,7 @@ interface SessionStore {
   createTab: (sessionId: string, type: 'terminal' | 'diff', filePath?: string) => void
   closeTab: (sessionId: string, tabId: string) => void
   activateTab: (sessionId: string, tabId: string) => void
+  reorderTabs: (sessionId: string, orderedTabIds: string[]) => void
   createTerminal: (sessionId: string) => void
   handleServerMessage: (msg: ServerMessage) => void
 }
@@ -348,6 +349,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const ws = getWebSocket()
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ event: 'tab:activate', payload: { sessionId, tabId } }))
+    }
+  },
+
+  reorderTabs: (sessionId, orderedTabIds) => {
+    // Optimistically update local order so the UI doesn't flash on drag end.
+    set(state => ({
+      sessions: state.sessions.map(s => {
+        if (s.id !== sessionId) return s
+        const tabMap = new Map(s.tabs.map(t => [t.id, t]))
+        const reordered = orderedTabIds.map(id => tabMap.get(id)).filter((t): t is NonNullable<typeof t> => !!t)
+        return { ...s, tabs: reordered }
+      }),
+    }))
+
+    const ws = getWebSocket()
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ event: 'tab:reorder', payload: { sessionId, orderedTabIds } }))
     }
   },
 
