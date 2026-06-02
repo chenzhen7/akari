@@ -167,7 +167,7 @@ export function SessionSidebar() {
     <aside className="flex h-full w-full flex-col bg-panel">
       <div className="flex h-full w-full flex-col">
         {/* Header */}
-        <div className="flex h-9 shrink-0 items-center border-b border-border/50 px-2 gap-2">
+        <div className="flex h-9 shrink-0 items-center px-2 gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             会话列表
           </span>
