@@ -81,7 +81,7 @@ export interface AgentSession {
   progress: number
   terminalOutput: string[]
   lastAiMessage: string
-  diffSummary: string
+  diffSummary: { additions: number; deletions: number }
   diffFull?: string
   diffFiles?: DiffFile[]
 

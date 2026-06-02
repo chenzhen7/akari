@@ -130,7 +130,7 @@ export class SessionManager {
       progress: 0,
       terminalOutput: [],
       lastAiMessage: '',
-      diffSummary: '',
+      diffSummary: { additions: 0, deletions: 0 },
       createdAt: new Date(),
       tags: params.tags ?? [],
       collaborationRole: 'standalone' as CollaborationRole,
@@ -436,7 +436,7 @@ export class SessionManager {
       }
 
       this.worktreeManager.watchDiff(id, resolvedBase, async diff => {
-        this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, id)
+        this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(JSON.stringify(diff.summary), id)
         this.broadcast({ event: 'diff:update', payload: { sessionId: id, diff } })
         try {
           const log = await this.worktreeManager.getGitLog(id)
@@ -518,7 +518,7 @@ export class SessionManager {
         kanban_column       TEXT NOT NULL DEFAULT 'backlog',
         terminal_id         TEXT NOT NULL,
         progress            INTEGER NOT NULL DEFAULT 0,
-        diff_summary        TEXT NOT NULL DEFAULT '',
+        diff_summary        TEXT NOT NULL DEFAULT '{"additions":0,"deletions":0}',
         created_at          TEXT NOT NULL,
         tags                TEXT NOT NULL DEFAULT '[]',
         pending_approval    TEXT,
@@ -568,7 +568,7 @@ export class SessionManager {
         s.kanbanColumn,
         s.terminalId,
         s.progress,
-        s.diffSummary,
+        JSON.stringify(s.diffSummary),
         s.lastAiMessage,
         s.createdAt instanceof Date ? s.createdAt.toISOString() : String(s.createdAt),
         JSON.stringify(s.tags),
@@ -578,6 +578,20 @@ export class SessionManager {
         JSON.stringify(s.childSessionIds),
       )
   }
+}
+
+function parseDiffSummary(raw: string): { additions: number; deletions: number } {
+  try {
+    const parsed = JSON.parse(raw)
+    if (typeof parsed.additions === 'number' && typeof parsed.deletions === 'number') {
+      return parsed
+    }
+  } catch {
+    // fallback: try to parse old string format like "5 insertions(+), 3 deletions(-)"
+  }
+  const additions = parseInt(raw.match(/(\d+) insertion/)?.[1] ?? '0') || 0
+  const deletions = parseInt(raw.match(/(\d+) deletion/)?.[1] ?? '0') || 0
+  return { additions, deletions }
 }
 
 function rowToSession(r: DbRow): AgentSession {
@@ -595,7 +609,7 @@ function rowToSession(r: DbRow): AgentSession {
     kanbanColumn: r.kanban_column as KanbanColumn,
     terminalId: r.terminal_id,
     progress: r.progress,
-    diffSummary: r.diff_summary,
+    diffSummary: parseDiffSummary(r.diff_summary),
     lastAiMessage: r.last_ai_message,
     terminalOutput: [],
     createdAt: new Date(r.created_at),

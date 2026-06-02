@@ -382,7 +382,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             s.id === msg.payload.sessionId
               ? {
                 ...s,
-                diffSummary: msg.payload.diff.stat,
+                diffSummary: msg.payload.diff.summary,
                 diffFull: msg.payload.diff.fullDiff,
                 diffFiles: msg.payload.diff.files,
               }

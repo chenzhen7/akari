@@ -126,8 +126,12 @@ export function TaskPanel({ session }: TaskPanelProps) {
               </div>
             ))}
           </div>
-          {session.diffSummary && (
-            <p className="text-xs text-muted-foreground">{session.diffSummary}</p>
+          {(session.diffSummary.additions > 0 || session.diffSummary.deletions > 0) && (
+            <p className="text-xs text-muted-foreground">
+              {session.diffSummary.additions > 0 && `${session.diffSummary.additions} 处新增`}
+              {session.diffSummary.additions > 0 && session.diffSummary.deletions > 0 && '，'}
+              {session.diffSummary.deletions > 0 && `${session.diffSummary.deletions} 处删除`}
+            </p>
           )}
         </div>
       )}
