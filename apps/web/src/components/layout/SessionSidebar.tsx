@@ -25,7 +25,7 @@ const statusColorMap: Record<string, string> = {
 }
 
 function SessionItem({ session, isActive }: { session: AgentSession; isActive: boolean }) {
-  const openTab = useSessionStore(s => s.openTab)
+  const selectSession = useSessionStore(s => s.selectSession)
   const archiveSession = useSessionStore(s => s.archiveSession)
   const deleteSession = useSessionStore(s => s.deleteSession)
   const restoreSession = useSessionStore(s => s.restoreSession)
@@ -55,7 +55,7 @@ function SessionItem({ session, isActive }: { session: AgentSession; isActive: b
   return (
     <>
       <button
-        onClick={() => openTab(session.id)}
+        onClick={() => selectSession(session.id)}
         className={cn(
           'group flex w-full flex-col gap-0.5 rounded-lg border px-2.5 py-2 text-left transition-all',
           isActive
@@ -161,7 +161,7 @@ function SessionItem({ session, isActive }: { session: AgentSession; isActive: b
 export function SessionSidebar() {
   const sessions = useSessionStore(s => s.sessions)
   const openCreateDialog = useSessionStore(s => s.openCreateDialog)
-  const activeTabId = useSessionStore(s => s.activeTabId)
+  const activeSessionId = useSessionStore(s => s.activeSessionId)
 
   return (
     <aside className="flex h-full w-full flex-col bg-panel">
@@ -191,7 +191,7 @@ export function SessionSidebar() {
             <SessionItem
               key={session.id}
               session={session}
-              isActive={session.id === activeTabId}
+              isActive={session.id === activeSessionId}
             />
           ))}
         </div>

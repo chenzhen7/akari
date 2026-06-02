@@ -4,7 +4,6 @@ import type { AgentSession, AgentType, CanvasEdge, GitLogResponse, KanbanColumn,
 import type { ConnectionStatus } from '@/hooks/useWebSocket'
 import { terminalBus } from '@/lib/terminalBus'
 
-
 interface SessionStore {
   sessions: AgentSession[]
   canvasEdges: CanvasEdge[]
@@ -22,10 +21,10 @@ interface SessionStore {
   pendingCreatePosition: { x: number; y: number } | null
   /** 右侧面板当前 Tab（git-graph | diff | info） */
   activeRightTab: 'git-graph' | 'diff' | 'info'
-  /** 选中的变更文件路径（选中后中间面板切换为 DiffViewer） */
-  selectedDiffFile: string | null
-  /** 会话详情页主内容区当前视图（terminal | canvas | kanban） */
-  detailViewMode: 'terminal' | 'canvas' | 'kanban'
+  /** 全局视图模式：null 表示显示会话标签，canvas/kanban 表示显示全局视图 */
+  globalViewMode: 'canvas' | 'kanban' | null
+  /** 当前选中的会话 ID（侧边栏高亮 + 中间区域显示该会话的标签栏） */
+  activeSessionId: string | null
 
   addSession: (name: string, task: string, baseBranch?: string, agentType?: AgentType, canvasPosition?: { x: number; y: number }) => void
   openCreateDialog: (position?: { x: number; y: number }) => void
@@ -36,7 +35,8 @@ interface SessionStore {
   openTab: (id: string) => void
   closeTab: (id: string) => void
   setActiveTab: (id: string | null) => void
-  setDetailViewMode: (mode: 'terminal' | 'canvas' | 'kanban') => void
+  selectSession: (id: string) => void
+  setGlobalViewMode: (mode: 'canvas' | 'kanban' | null) => void
   toggleCommandCenter: () => void
   toggleCreateDialog: () => void
   approveSession: (id: string, approvalOption?: string) => void
@@ -50,10 +50,12 @@ interface SessionStore {
   setGitLog: (sessionId: string, log: GitLogResponse) => void
   setConnectionStatus: (status: ConnectionStatus) => void
   setActiveRightTab: (tab: 'git-graph' | 'diff' | 'info') => void
-  setSelectedDiffFile: (path: string | null) => void
+  createTab: (sessionId: string, type: 'terminal' | 'diff', filePath?: string) => void
+  closeTab: (sessionId: string, tabId: string) => void
+  activateTab: (sessionId: string, tabId: string) => void
+  createTerminal: (sessionId: string) => void
   handleServerMessage: (msg: ServerMessage) => void
 }
-
 
 export const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
@@ -71,8 +73,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   pendingOps: new Set(),
   pendingCreatePosition: null,
   activeRightTab: 'git-graph',
-  selectedDiffFile: null,
-  detailViewMode: 'terminal',
+  globalViewMode: null,
+  activeSessionId: null,
 
   openCreateDialog: (position) => {
     set({ createDialogOpen: true, pendingCreatePosition: position ?? null })
@@ -177,7 +179,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   setActiveTab: (id) => set({ activeTabId: id }),
 
-  setDetailViewMode: (mode) => set({ detailViewMode: mode }),
+  selectSession: (id) => {
+    set(state => {
+      const tabs = state.openTabs.includes(id) ? state.openTabs : [...state.openTabs, id]
+      return { activeSessionId: id, globalViewMode: null, openTabs: tabs, activeTabId: id }
+    })
+  },
+
+  setGlobalViewMode: (mode) => set({ globalViewMode: mode, activeSessionId: null }),
 
   toggleCommandCenter: () =>
     set(state => ({ commandCenterOpen: !state.commandCenterOpen })),
@@ -255,6 +264,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           sessions: state.sessions.filter(s => s.id !== id),
           openTabs: state.openTabs.filter(t => t !== id),
           activeTabId: state.activeTabId === id ? null : state.activeTabId,
+          activeSessionId: state.activeSessionId === id ? null : state.activeSessionId,
         }))
       })
       .catch(err => console.error('[deleteSession] failed:', err))
@@ -320,18 +330,44 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   setActiveRightTab: (tab) => set({ activeRightTab: tab }),
 
-  setSelectedDiffFile: (path) => set({ selectedDiffFile: path }),
+  createTab: (sessionId, type, filePath) => {
+    const ws = getWebSocket()
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ event: 'tab:create', payload: { sessionId, type, filePath } }))
+    }
+  },
+
+  closeTab: (sessionId, tabId) => {
+    const ws = getWebSocket()
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ event: 'tab:close', payload: { sessionId, tabId } }))
+    }
+  },
+
+  activateTab: (sessionId, tabId) => {
+    const ws = getWebSocket()
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ event: 'tab:activate', payload: { sessionId, tabId } }))
+    }
+  },
+
+  createTerminal: (sessionId) => {
+    const ws = getWebSocket()
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ event: 'terminal:create', payload: { sessionId } }))
+    }
+  },
 
   handleServerMessage: (msg) => {
     switch (msg.event) {
       case 'sessions:list':
         set(state => {
-          let nextActiveTabId = state.activeTabId
+          let nextActiveSessionId = state.activeSessionId
           // 如果当前没有选中会话或选中的已不存在，自动选中第一个
-          if (!nextActiveTabId || !msg.payload.some((s: AgentSession) => s.id === nextActiveTabId)) {
-            nextActiveTabId = msg.payload.length > 0 ? msg.payload[0].id : null
+          if (!nextActiveSessionId || !msg.payload.some((s: AgentSession) => s.id === nextActiveSessionId)) {
+            nextActiveSessionId = msg.payload.length > 0 ? msg.payload[0].id : null
           }
-          return { sessions: msg.payload, activeTabId: nextActiveTabId }
+          return { sessions: msg.payload, activeSessionId: nextActiveSessionId }
         })
         break
       case 'session:created':
@@ -354,18 +390,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }))
         break
       case 'terminal:data':
-        terminalBus.emit(msg.payload.sessionId, msg.payload.data)
+        terminalBus.emit(msg.payload.terminalId, msg.payload.data)
         break
       case 'terminal:ready':
         set(state => ({
           terminalReadyTick: {
             ...state.terminalReadyTick,
-            [msg.payload.sessionId]: (state.terminalReadyTick[msg.payload.sessionId] ?? 0) + 1,
+            [msg.payload.terminalId]: (state.terminalReadyTick[msg.payload.terminalId] ?? 0) + 1,
           },
         }))
         break
       case 'terminal:resized':
-        terminalBus.resized(msg.payload.sessionId)
+        terminalBus.resized(msg.payload.terminalId)
         break
       case 'approval:required':
         set(state => ({
@@ -407,6 +443,52 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ),
         }))
         break
+      case 'tab:created':
+        set(state => ({
+          sessions: state.sessions.map(s =>
+            s.id === msg.payload.sessionId
+              ? { ...s, tabs: [...s.tabs, msg.payload.tab] }
+              : s
+          ),
+        }))
+        break
+      case 'tab:closed':
+        set(state => ({
+          sessions: state.sessions.map(s =>
+            s.id === msg.payload.sessionId
+              ? { ...s, tabs: s.tabs.filter(t => t.id !== msg.payload.tabId) }
+              : s
+          ),
+        }))
+        break
+      case 'tab:activated':
+        set(state => ({
+          sessions: state.sessions.map(s =>
+            s.id === msg.payload.sessionId
+              ? { ...s, activeTabId: msg.payload.tabId }
+              : s
+          ),
+        }))
+        break
+      case 'tabs:sync':
+        set(state => ({
+          sessions: state.sessions.map(s =>
+            s.id === msg.payload.sessionId
+              ? { ...s, tabs: msg.payload.tabs, activeTabId: msg.payload.activeTabId }
+              : s
+          ),
+        }))
+        break
     }
   },
 }))
+
+let _ws: WebSocket | null = null
+
+export function setWebSocket(ws: WebSocket | null) {
+  _ws = ws
+}
+
+function getWebSocket(): WebSocket | null {
+  return _ws
+}

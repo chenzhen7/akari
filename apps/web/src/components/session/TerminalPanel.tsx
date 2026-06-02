@@ -4,7 +4,6 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
-import type { AgentSession } from '@/types'
 import type { ClientMessage } from '@akari/shared-types'
 import { terminalBus } from '@/lib/terminalBus'
 import { resizeMutex } from '@/lib/ptyResizeMutex'
@@ -12,7 +11,8 @@ import { resizeMutex } from '@/lib/ptyResizeMutex'
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 interface TerminalPanelProps {
-  session: AgentSession
+  sessionId: string
+  terminalId: string
   send: (msg: ClientMessage) => void
 }
 
@@ -26,9 +26,9 @@ interface TerminalEntry {
 /** Module-level registry: keeps Terminal instances alive across tab switches. */
 const terminalInstances = new Map<string, TerminalEntry>()
 
-export function TerminalPanel({ session, send }: TerminalPanelProps) {
+export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const terminalReadyTick = useSessionStore(s => s.terminalReadyTick[session.id] ?? 0)
+  const terminalReadyTick = useSessionStore(s => s.terminalReadyTick[terminalId] ?? 0)
 
   /* ─── Mount / unmount ─────────────────────────────────────────────────── */
 
@@ -36,7 +36,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     const container = containerRef.current
     if (!container) return
 
-    const existing = terminalInstances.get(session.id)
+    const existing = terminalInstances.get(terminalId)
 
     if (existing) {
       // Tab switched back: re-attach DOM element
@@ -51,30 +51,30 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
       })
     } else {
       // First mount: create a fresh terminal
-      createTerminal(session.id, container, send)
+      createTerminal(sessionId, terminalId, container, send)
     }
 
     return () => {
       // Detach DOM element but keep the instance alive
-      const entry = terminalInstances.get(session.id)
+      const entry = terminalInstances.get(terminalId)
       if (entry?.term.element && container.contains(entry.term.element)) {
         container.removeChild(entry.term.element)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.id])
+  }, [terminalId])
 
   /* ─── Terminal:ready from server ──────────────────────────────────────── */
 
   useEffect(() => {
     if (terminalReadyTick === 0) return
-    const entry = terminalInstances.get(session.id)
+    const entry = terminalInstances.get(terminalId)
     if (!entry) return
     try {
       entry.fitAddon.fit()
       entry.term.focus()
     } catch { /* ignore */ }
-  }, [terminalReadyTick, session.id])
+  }, [terminalReadyTick, terminalId])
 
   /* ─── ResizeObserver (debounced) — set up on every mount ──────────────── */
 
@@ -82,7 +82,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
     const container = containerRef.current
     if (!container) return
 
-    const entry = terminalInstances.get(session.id)
+    const entry = terminalInstances.get(terminalId)
     if (!entry) return
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -94,11 +94,11 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
       debounceTimer = setTimeout(() => {
         debounceTimer = null
         // Coalesce rapid resize events: acquire() returns false if a resize
-        // is already in flight for this session.
-        if (!resizeMutex.acquire(session.id)) return
+        // is already in flight for this terminal.
+        if (!resizeMutex.acquire(terminalId)) return
         try {
           const { cols, rows } = entry.term
-          send({ event: 'terminal:resize', payload: { sessionId: session.id, cols, rows } })
+          send({ event: 'terminal:resize', payload: { sessionId, terminalId, cols, rows } })
         } catch { /* ignore if disposed */ }
       }, 150)
     })
@@ -108,7 +108,7 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
       if (debounceTimer) clearTimeout(debounceTimer)
       ro.disconnect()
     }
-  }, [session.id])
+  }, [terminalId, sessionId, send])
 
   return (
     <div className="h-full p-2" style={{ background: '#1e1e1e' }}>
@@ -117,10 +117,11 @@ export function TerminalPanel({ session, send }: TerminalPanelProps) {
   )
 }
 
-/* ─── Terminal creation (runs once per session) ─────────────────────────── */
+/* ─── Terminal creation (runs once per terminalId) ──────────────────────── */
 
 function createTerminal(
   sessionId: string,
+  terminalId: string,
   container: HTMLDivElement,
   send: (msg: ClientMessage) => void,
 ): void {
@@ -164,21 +165,21 @@ function createTerminal(
     try {
       fitAddon.fit()
       term.focus()
-      send({ event: 'terminal:resize', payload: { sessionId, cols: term.cols, rows: term.rows } })
+      send({ event: 'terminal:resize', payload: { sessionId, terminalId, cols: term.cols, rows: term.rows } })
     } catch { /* ignore if disposed */ }
   })
 
   // Keystrokes → backend PTY
   term.onData(data => {
-    send({ event: 'terminal:input', payload: { sessionId, data } })
+    send({ event: 'terminal:input', payload: { sessionId, terminalId, data } })
   })
 
   // ── Subscribe to terminal:data events (buffered during resize) ──────────
   let historyLoaded = false
   let pendingChunks: string[] = []
 
-  const unsubscribeData = terminalBus.on(sessionId, data => {
-    if (resizeMutex.buffer(sessionId, data)) return  // buffered during resize
+  const unsubscribeData = terminalBus.on(terminalId, data => {
+    if (resizeMutex.buffer(terminalId, data)) return  // buffered during resize
     if (historyLoaded) {
       term.write(data)
     } else {
@@ -187,10 +188,10 @@ function createTerminal(
   })
 
   // ── Subscribe to terminal:resized: flush buffered data ─────────────────
-  const unsubscribeResized = terminalBus.onResized(sessionId, () => {
-    const entry = terminalInstances.get(sessionId)
+  const unsubscribeResized = terminalBus.onResized(terminalId, () => {
+    const entry = terminalInstances.get(terminalId)
     if (!entry) return
-    const buffered = resizeMutex.release(sessionId)
+    const buffered = resizeMutex.release(terminalId)
     if (buffered.length > 0) {
       term.write(buffered.join(''))
     }
@@ -200,10 +201,10 @@ function createTerminal(
   })
 
   // Register immediately so tab-switch cleanup can always find and detach the DOM.
-  terminalInstances.set(sessionId, { term, fitAddon, unsubscribeData, unsubscribeResized })
+  terminalInstances.set(terminalId, { term, fitAddon, unsubscribeData, unsubscribeResized })
 
   // ── Fetch history from server ──────────────────────────────────────────
-  fetch(`${API_BASE}/sessions/${sessionId}/terminal-buffer`)
+  fetch(`${API_BASE}/sessions/${sessionId}/terminal-buffer?terminalId=${terminalId}`)
     .then(r => r.json())
     .then(({ buffer }: { buffer: string[] }) => {
       // Skip TUI animation frames (\x1b[H = cursor home) that would push
@@ -232,8 +233,8 @@ function createTerminal(
  * Read the last `maxLines` non-empty lines from the currently visible xterm viewport.
  * Returns [] if the terminal instance hasn't been created yet.
  */
-export function getTerminalViewportLines(sessionId: string, maxLines = 5): string[] {
-  const entry = terminalInstances.get(sessionId)
+export function getTerminalViewportLines(terminalId: string, maxLines = 5): string[] {
+  const entry = terminalInstances.get(terminalId)
   if (!entry) return []
   const { term } = entry
   const buf = term.buffer.active
@@ -249,14 +250,14 @@ export function getTerminalViewportLines(sessionId: string, maxLines = 5): strin
   return result
 }
 
-/** Call when a session is permanently deleted to free xterm resources. */
-export function destroyTerminalInstance(sessionId: string): void {
-  const entry = terminalInstances.get(sessionId)
+/** Call when a terminal tab is closed to free xterm resources. */
+export function destroyTerminalInstance(terminalId: string): void {
+  const entry = terminalInstances.get(terminalId)
   if (entry) {
     entry.unsubscribeData()
     entry.unsubscribeResized()
     entry.term.dispose()
-    terminalInstances.delete(sessionId)
+    terminalInstances.delete(terminalId)
   }
-  resizeMutex.release(sessionId) // drain any residual buffer
+  resizeMutex.release(terminalId) // drain any residual buffer
 }

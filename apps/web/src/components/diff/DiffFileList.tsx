@@ -30,11 +30,10 @@ const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 interface DiffFileListProps {
   session: AgentSession
-  selectedFile: string | null
   onSelectFile: (path: string) => void
 }
 
-export function DiffFileList({ session, selectedFile, onSelectFile }: DiffFileListProps) {
+export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   const diffFiles = session.diffFiles ?? []
   const hasDiff = diffFiles.length > 0
 
@@ -196,7 +195,8 @@ export function DiffFileList({ session, selectedFile, onSelectFile }: DiffFileLi
       <div className="flex-1 overflow-y-auto py-0.5">
         {diffFiles.map(f => {
           const { dir, name } = splitPath(f.path)
-          const isSelected = selectedFile === f.path
+          const activeTab = session.tabs.find(t => t.id === session.activeTabId)
+          const isSelected = activeTab?.type === 'diff' && activeTab.filePath === f.path
           const hasAdd = f.additions > 0
           const hasDel = f.deletions > 0
           return (

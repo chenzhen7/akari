@@ -3,10 +3,10 @@ import { TopNav } from './TopNav'
 import { SessionSidebar } from './SessionSidebar'
 import { RightSidebar } from './RightSidebar'
 import { useSessionStore } from '@/stores/session-store'
-import { SessionDetail } from '@/components/session/SessionDetail'
+import { MiddleTabBar } from '@/components/session/MiddleTabBar'
+import { TabContent } from '@/components/session/TabContent'
 import { CanvasView } from '@/components/canvas/CanvasView'
 import { KanbanView } from '@/components/kanban/KanbanView'
-import { DiffViewer } from '@/components/diff/DiffViewer'
 import { CommandCenter } from '@/components/command-center/CommandCenter'
 import { CreateSessionDialog } from '@/components/create-session/CreateSessionDialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -58,11 +58,9 @@ function ResizeHandle({
 }
 
 export function AppShell() {
-  const activeTabId = useSessionStore(s => s.activeTabId)
+  const activeSessionId = useSessionStore(s => s.activeSessionId)
+  const globalViewMode = useSessionStore(s => s.globalViewMode)
   const sessions = useSessionStore(s => s.sessions)
-  const detailViewMode = useSessionStore(s => s.detailViewMode)
-  const selectedDiffFile = useSessionStore(s => s.selectedDiffFile)
-  const setSelectedDiffFile = useSessionStore(s => s.setSelectedDiffFile)
   const { send } = useWebSocket()
 
   const {
@@ -87,7 +85,7 @@ export function AppShell() {
     maxRightWidth: 40,
   })
 
-  const session = activeTabId ? sessions.find(s => s.id === activeTabId) : undefined
+  const session = activeSessionId ? sessions.find(s => s.id === activeSessionId) : undefined
 
   // 初始加载时展开右侧
   useEffect(() => {
@@ -152,18 +150,17 @@ export function AppShell() {
 
           {/* Middle */}
           <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl bg-[#1e1e1e]" style={{ width: middleWidth }}>
-            {selectedDiffFile && session ? (
-              <DiffViewer
-                session={session}
-                filePath={selectedDiffFile}
-                onBack={() => setSelectedDiffFile(null)}
-              />
-            ) : detailViewMode === 'terminal' && session ? (
-              <SessionDetail session={session} send={send} />
-            ) : detailViewMode === 'canvas' ? (
+            {globalViewMode === 'canvas' ? (
               <CanvasView />
-            ) : detailViewMode === 'kanban' ? (
+            ) : globalViewMode === 'kanban' ? (
               <KanbanView />
+            ) : activeSessionId && session ? (
+              <div className="flex h-full flex-col">
+                <MiddleTabBar session={session} />
+                <div className="flex-1 overflow-hidden">
+                  <TabContent session={session} send={send} />
+                </div>
+              </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
                 <LayoutGrid className="h-10 w-10 opacity-30" />

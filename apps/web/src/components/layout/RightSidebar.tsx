@@ -20,12 +20,22 @@ interface RightSidebarProps {
 
 export function RightSidebar({ session }: RightSidebarProps) {
   const activeRightTab = useSessionStore(s => s.activeRightTab)
-  const selectedDiffFile = useSessionStore(s => s.selectedDiffFile)
   const setActiveRightTab = useSessionStore(s => s.setActiveRightTab)
-  const setSelectedDiffFile = useSessionStore(s => s.setSelectedDiffFile)
+  const selectSession = useSessionStore(s => s.selectSession)
+  const createTab = useSessionStore(s => s.createTab)
+  const activateTab = useSessionStore(s => s.activateTab)
 
   const handleSelectFile = (path: string) => {
-    setSelectedDiffFile(path)
+    if (!session) return
+    // Select the session first (ensures middle area shows this session's tab bar)
+    selectSession(session.id)
+    // Check if a diff tab for this file already exists
+    const existingTab = session.tabs.find(t => t.type === 'diff' && t.filePath === path)
+    if (existingTab) {
+      activateTab(session.id, existingTab.id)
+    } else {
+      createTab(session.id, 'diff', path)
+    }
   }
 
   return (
@@ -38,10 +48,7 @@ export function RightSidebar({ session }: RightSidebarProps) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => {
-                  setActiveRightTab(id)
-                  if (id !== 'diff') setSelectedDiffFile(null)
-                }}
+                onClick={() => setActiveRightTab(id)}
                 className={cn(
                   'rounded',
                   activeRightTab === id
@@ -67,7 +74,6 @@ export function RightSidebar({ session }: RightSidebarProps) {
             <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'diff' && 'hidden')}>
               <DiffFileList
                 session={session}
-                selectedFile={selectedDiffFile}
                 onSelectFile={handleSelectFile}
               />
             </div>

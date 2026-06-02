@@ -3,13 +3,14 @@ import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 
 interface TerminalEntry {
+  terminalId: string
   sessionId: string
   pty: pty.IPty
   buffer: string[]
   status: 'running' | 'exited'
   /** Temporary buffer for data that arrives while PTY is resizing */
   resizeBuffer: string[]
-  /** Whether a resize is currently in-flight for this session */
+  /** Whether a resize is currently in-flight for this terminal */
   resizing: boolean
 }
 
@@ -18,8 +19,8 @@ export class TerminalMultiplexer extends EventEmitter {
   private readonly pendingResize = new Map<string, { cols: number; rows: number }>()
   private readonly BUFFER_LIMIT = 5000
 
-  createTerminal(sessionId: string, cwd: string): void {
-    if (this.terminals.has(sessionId)) return
+  createTerminal(terminalId: string, sessionId: string, cwd: string): void {
+    if (this.terminals.has(terminalId)) return
 
     const isWindows = process.platform === 'win32'
     // Prefer PowerShell 7+ (pwsh.exe); fall back to built-in Windows PowerShell 5.x
@@ -29,10 +30,10 @@ export class TerminalMultiplexer extends EventEmitter {
       : (process.env.SHELL ?? 'bash')
     const args = isWindows ? ['-NoLogo'] : ['--login']
 
-    const pending = this.pendingResize.get(sessionId)
+    const pending = this.pendingResize.get(terminalId)
     const cols = pending?.cols ?? 80
     const rows = pending?.rows ?? 24
-    this.pendingResize.delete(sessionId)
+    this.pendingResize.delete(terminalId)
 
     const proc = pty.spawn(shell, args, {
       name: 'xterm-256color',
@@ -49,35 +50,35 @@ export class TerminalMultiplexer extends EventEmitter {
       } as Record<string, string>,
     })
 
-    const entry: TerminalEntry = { sessionId, pty: proc, buffer: [], status: 'running', resizeBuffer: [], resizing: false }
+    const entry: TerminalEntry = { terminalId, sessionId, pty: proc, buffer: [], status: 'running', resizeBuffer: [], resizing: false }
 
     proc.onData((data: string) => {
       this.appendBuffer(entry, data)
       if (entry.resizing) {
         entry.resizeBuffer.push(data)
       } else {
-        this.emit('terminal:data', { sessionId, data })
+        this.emit('terminal:data', { sessionId, terminalId, data })
       }
     })
 
     proc.onExit(({ exitCode }) => {
       entry.status = 'exited'
-      this.emit('terminal:exit', { sessionId, exitCode })
+      this.emit('terminal:exit', { sessionId, terminalId, exitCode })
     })
 
-    this.terminals.set(sessionId, entry)
-    this.emit('terminal:ready', { sessionId })
+    this.terminals.set(terminalId, entry)
+    this.emit('terminal:ready', { sessionId, terminalId })
   }
 
-  sendToTerminal(sessionId: string, data: string): void {
-    const entry = this.terminals.get(sessionId)
+  sendToTerminal(terminalId: string, data: string): void {
+    const entry = this.terminals.get(terminalId)
     if (entry?.status === 'running') {
       entry.pty.write(data)
     }
   }
 
-  resizeTerminal(sessionId: string, cols: number, rows: number): void {
-    const entry = this.terminals.get(sessionId)
+  resizeTerminal(terminalId: string, cols: number, rows: number): void {
+    const entry = this.terminals.get(terminalId)
     if (entry?.status === 'running') {
       entry.resizing = true
       entry.pty.resize(cols, rows)
@@ -85,38 +86,46 @@ export class TerminalMultiplexer extends EventEmitter {
         entry.resizing = false
         const buffered = entry.resizeBuffer.splice(0)
         if (buffered.length > 0) {
-          this.emit('terminal:data', { sessionId, data: buffered.join('') })
+          this.emit('terminal:data', { sessionId: entry.sessionId, terminalId, data: buffered.join('') })
         }
-        this.emit('terminal:resized', { sessionId })
+        this.emit('terminal:resized', { sessionId: entry.sessionId, terminalId })
       })
     } else {
-      this.pendingResize.set(sessionId, { cols, rows })
+      this.pendingResize.set(terminalId, { cols, rows })
     }
   }
 
-  broadcastToAll(data: string, sessionIds?: string[]): void {
-    const targets = sessionIds ?? Array.from(this.terminals.keys())
+  broadcastToAll(data: string, terminalIds?: string[]): void {
+    const targets = terminalIds ?? Array.from(this.terminals.keys())
     for (const id of targets) this.sendToTerminal(id, data)
   }
 
-  getBuffer(sessionId: string): string[] {
-    return this.terminals.get(sessionId)?.buffer.slice() ?? []
+  getBuffer(terminalId: string): string[] {
+    return this.terminals.get(terminalId)?.buffer.slice() ?? []
   }
 
-  killTerminal(sessionId: string): void {
-    const entry = this.terminals.get(sessionId)
+  killTerminal(terminalId: string): void {
+    const entry = this.terminals.get(terminalId)
     if (entry) {
       if (entry.status === 'running') {
         entry.pty.kill()
         entry.status = 'exited'
       }
-      this.terminals.delete(sessionId)
+      this.terminals.delete(terminalId)
     }
-    this.pendingResize.delete(sessionId)
+    this.pendingResize.delete(terminalId)
   }
 
-  hasTerminal(sessionId: string): boolean {
-    return this.terminals.has(sessionId)
+  hasTerminal(terminalId: string): boolean {
+    return this.terminals.has(terminalId)
+  }
+
+  getTerminalIdsBySession(sessionId: string): string[] {
+    const result: string[] = []
+    for (const [terminalId, entry] of this.terminals) {
+      if (entry.sessionId === sessionId) result.push(terminalId)
+    }
+    return result
   }
 
   private appendBuffer(entry: TerminalEntry, data: string): void {

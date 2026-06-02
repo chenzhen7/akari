@@ -13,6 +13,7 @@ import type {
   KanbanColumn,
   ServerMessage,
   SessionStatus,
+  SessionTab,
 } from '@akari/shared-types'
 import { WorktreeManager } from './worktree-manager.js'
 import { TerminalMultiplexer } from './terminal-mux.js'
@@ -53,6 +54,8 @@ interface DbRow {
   parent_session_id: string | null
   child_session_ids: string | null
   last_ai_message: string
+  tabs: string
+  active_tab_id: string | null
 }
 
 const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
@@ -136,6 +139,8 @@ export class SessionManager {
       collaborationRole: 'standalone' as CollaborationRole,
       parentSessionId: params.parentSessionId,
       childSessionIds: [],
+      tabs: [],
+      activeTabId: null,
     }
 
     this.insertRow(session)
@@ -182,12 +187,16 @@ export class SessionManager {
     return rows.map(rowToSession)
   }
 
-  sendToTerminal(sessionId: string, data: string): void {
-    this.terminalMux.sendToTerminal(sessionId, data)
+  sendToTerminal(terminalId: string, data: string): void {
+    this.terminalMux.sendToTerminal(terminalId, data)
   }
 
-  resizeTerminal(sessionId: string, cols: number, rows: number): void {
-    this.terminalMux.resizeTerminal(sessionId, cols, rows)
+  resizeTerminal(terminalId: string, cols: number, rows: number): void {
+    this.terminalMux.resizeTerminal(terminalId, cols, rows)
+  }
+
+  getTerminalBuffer(terminalId: string): string[] {
+    return this.terminalMux.getBuffer(terminalId)
   }
 
   /** Expose db for CanvasEdgeStore — only used within the same process */
@@ -209,14 +218,92 @@ export class SessionManager {
     const targets = sessionIds ? active.filter(s => sessionIds.includes(s.id)) : active
     for (const s of targets) {
       const data = `\r\n📢 Broadcast: ${message}\r\n`
-      this.terminalMux.sendToTerminal(s.id, `${message}\n`)
-      this.broadcast({ event: 'terminal:data', payload: { sessionId: s.id, data } })
+      const terminalTab = s.tabs.find(t => t.type === 'terminal')
+      if (terminalTab?.terminalId) {
+        this.terminalMux.sendToTerminal(terminalTab.terminalId, `${message}\n`)
+        this.broadcast({ event: 'terminal:data', payload: { sessionId: s.id, terminalId: terminalTab.terminalId, data } })
+      }
     }
     return targets.map(s => s.id)
   }
 
-  getTerminalBuffer(sessionId: string): string[] {
-    return this.terminalMux.getBuffer(sessionId)
+  // ─── Tab management ───────────────────────────────────────────────────────
+
+  createTab(sessionId: string, type: 'terminal' | 'diff', filePath?: string): SessionTab {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+
+    const tabId = nanoid(6)
+    let terminalId: string | undefined
+    let label: string
+
+    if (type === 'terminal') {
+      terminalId = nanoid(8)
+      const count = session.tabs.filter(t => t.type === 'terminal').length + 1
+      label = `Terminal ${count}`
+    } else {
+      label = filePath ?? 'Diff'
+    }
+
+    const tab: SessionTab = { id: tabId, type, label, filePath, terminalId }
+    const updatedTabs = [...session.tabs, tab]
+    const activeTabId = tabId
+
+    this.db
+      .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ? WHERE id = ?')
+      .run(JSON.stringify(updatedTabs), activeTabId, sessionId)
+
+    if (type === 'terminal' && terminalId) {
+      const worktreePath = this.worktreeManager.getWorktreePath(sessionId)
+      this.terminalMux.createTerminal(terminalId, sessionId, worktreePath)
+    }
+
+    this.broadcast({ event: 'tab:created', payload: { sessionId, tab } })
+    this.broadcast({ event: 'tab:activated', payload: { sessionId, tabId } })
+
+    return tab
+  }
+
+  closeTab(sessionId: string, tabId: string): void {
+    const session = this.getSession(sessionId)
+    if (!session) return
+
+    const tab = session.tabs.find(t => t.id === tabId)
+    if (!tab) return
+
+    const updatedTabs = session.tabs.filter(t => t.id !== tabId)
+    let activeTabId = session.activeTabId
+    if (activeTabId === tabId) {
+      activeTabId = updatedTabs.length > 0 ? updatedTabs[updatedTabs.length - 1].id : null
+    }
+
+    this.db
+      .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ? WHERE id = ?')
+      .run(JSON.stringify(updatedTabs), activeTabId, sessionId)
+
+    if (tab.type === 'terminal' && tab.terminalId) {
+      this.terminalMux.killTerminal(tab.terminalId)
+    }
+
+    this.broadcast({ event: 'tab:closed', payload: { sessionId, tabId } })
+    if (activeTabId && activeTabId !== session.activeTabId) {
+      this.broadcast({ event: 'tab:activated', payload: { sessionId, tabId: activeTabId } })
+    }
+  }
+
+  activateTab(sessionId: string, tabId: string): void {
+    const session = this.getSession(sessionId)
+    if (!session || !session.tabs.find(t => t.id === tabId)) return
+
+    this.db
+      .prepare('UPDATE sessions SET active_tab_id = ? WHERE id = ?')
+      .run(tabId, sessionId)
+
+    this.broadcast({ event: 'tab:activated', payload: { sessionId, tabId } })
+  }
+
+  getTabs(sessionId: string): SessionTab[] {
+    return this.getSession(sessionId)?.tabs ?? []
   }
 
   async getCurrentDiff(sessionId: string): Promise<GitDiff> {
@@ -251,11 +338,17 @@ export class SessionManager {
       // Windows PTY 需要 CRLF 才能识别命令终止符；单独 LF 会被当作行继续符
       const eol = process.platform === 'win32' ? '\r\n' : '\n'
       const key = approvalOption ?? '1'
-      this.terminalMux.sendToTerminal(sessionId, `${key}${eol}`)
+      const terminalTab = session.tabs.find(t => t.type === 'terminal')
+      if (terminalTab?.terminalId) {
+        this.terminalMux.sendToTerminal(terminalTab.terminalId, `${key}${eol}`)
+      }
     } else {
       this.updateStatus(sessionId, 'paused')
       const eol = process.platform === 'win32' ? '\r\n' : '\n'
-      this.terminalMux.sendToTerminal(sessionId, `3${eol}`)
+      const terminalTab = session.tabs.find(t => t.type === 'terminal')
+      if (terminalTab?.terminalId) {
+        this.terminalMux.sendToTerminal(terminalTab.terminalId, `3${eol}`)
+      }
     }
   }
 
@@ -285,7 +378,14 @@ export class SessionManager {
   }
 
   archiveSession(sessionId: string): void {
-    this.terminalMux.killTerminal(sessionId)
+    const session = this.getSession(sessionId)
+    if (session) {
+      for (const tab of session.tabs) {
+        if (tab.type === 'terminal' && tab.terminalId) {
+          this.terminalMux.killTerminal(tab.terminalId)
+        }
+      }
+    }
     try {
       this.updateStatus(sessionId, 'archived')
     } catch {
@@ -373,10 +473,39 @@ export class SessionManager {
         continue
       }
 
-      if (!this.terminalMux.hasTerminal(session.id)) {
-        this.terminalMux.createTerminal(session.id, worktreePath)
-        this.pushTerminalDisplay(session.id, `\r\n\x1b[33m> [Server restarted — terminal restored]\x1b[0m\r\n`)
+      // Restore tabs: regenerate terminalIds for terminal tabs and recreate PTYs
+      let tabs = session.tabs
+      let activeTabId = session.activeTabId
+      if (tabs.length === 0) {
+        // Legacy session without tabs: create a default terminal tab
+        const terminalId = nanoid(8)
+        const tab: SessionTab = { id: nanoid(6), type: 'terminal', label: 'Terminal 1', terminalId }
+        tabs = [tab]
+        activeTabId = tab.id
+        this.terminalMux.createTerminal(terminalId, session.id, worktreePath)
+      } else {
+        const restoredTabs: SessionTab[] = []
+        for (const tab of tabs) {
+          if (tab.type === 'terminal') {
+            const terminalId = nanoid(8)
+            this.terminalMux.createTerminal(terminalId, session.id, worktreePath)
+            restoredTabs.push({ ...tab, terminalId })
+          } else {
+            restoredTabs.push(tab)
+          }
+        }
+        tabs = restoredTabs
+        // Reset active tab if it no longer exists
+        if (activeTabId && !tabs.find(t => t.id === activeTabId)) {
+          activeTabId = tabs.length > 0 ? tabs[0].id : null
+        }
       }
+      this.db
+        .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ? WHERE id = ?')
+        .run(JSON.stringify(tabs), activeTabId, session.id)
+      this.broadcast({ event: 'tabs:sync', payload: { sessionId: session.id, tabs, activeTabId } })
+
+      this.pushTerminalDisplay(session.id, `\r\n\x1b[33m> [Server restarted — terminal restored]\x1b[0m\r\n`)
 
       this.worktreeManager.watchDiff(session.id, session.baseBranch, async diff => {
         this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, session.id)
@@ -393,7 +522,13 @@ export class SessionManager {
 
   async deleteSession(sessionId: string): Promise<void> {
     const session = this.getSession(sessionId)
-    this.terminalMux.killTerminal(sessionId)
+    if (session) {
+      for (const tab of session.tabs) {
+        if (tab.type === 'terminal' && tab.terminalId) {
+          this.terminalMux.killTerminal(tab.terminalId)
+        }
+      }
+    }
     await this.worktreeManager.removeWorktree(sessionId, session?.branchName).catch(() => { })
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId)
   }
@@ -416,7 +551,14 @@ export class SessionManager {
       this.pushTerminalDisplay(id, `> Branch: ${branchName}\r\n`)
       this.pushTerminalDisplay(id, `> Worktree: ${worktreePath}\r\n`)
 
-      this.terminalMux.createTerminal(id, worktreePath)
+      const terminalId = nanoid(8)
+      this.terminalMux.createTerminal(terminalId, id, worktreePath)
+
+      const tab: SessionTab = { id: nanoid(6), type: 'terminal', label: 'Terminal 1', terminalId }
+      this.db
+        .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ?, terminal_id = ? WHERE id = ?')
+        .run(JSON.stringify([tab]), tab.id, terminalId, id)
+
       this.pushTerminalDisplay(id, `> Terminal ready (agent: ${session.agentType})\r\n`)
 
       const adapter = createAgentAdapter(session.agentType)
@@ -428,8 +570,8 @@ export class SessionManager {
           cumulativeDelay += delayMs
           const delay = cumulativeDelay
           setTimeout(() => {
-            if (this.terminalMux.hasTerminal(id)) {
-              this.terminalMux.sendToTerminal(id, cmd)
+            if (this.terminalMux.hasTerminal(terminalId)) {
+              this.terminalMux.sendToTerminal(terminalId, cmd)
             }
           }, delay)
         }
@@ -461,43 +603,52 @@ export class SessionManager {
   private wireEvents(): void {
     this.terminalMux.on(
       'terminal:data',
-      ({ sessionId, data }: { sessionId: string; data: string }) => {
-        this.broadcast({ event: 'terminal:data', payload: { sessionId, data } })
+      ({ sessionId, terminalId, data }: { sessionId: string; terminalId: string; data: string }) => {
+        this.broadcast({ event: 'terminal:data', payload: { sessionId, terminalId, data } })
       },
     )
 
     this.terminalMux.on(
       'terminal:ready',
-      ({ sessionId }: { sessionId: string }) => {
-        this.broadcast({ event: 'terminal:ready', payload: { sessionId } })
+      ({ sessionId, terminalId }: { sessionId: string; terminalId: string }) => {
+        this.broadcast({ event: 'terminal:ready', payload: { sessionId, terminalId } })
       },
     )
 
     this.terminalMux.on(
       'terminal:exit',
-      ({ sessionId, exitCode }: { sessionId: string; exitCode: number }) => {
+      ({ sessionId, terminalId, exitCode }: { sessionId: string; terminalId: string; exitCode: number }) => {
         const session = this.getSession(sessionId)
         if (!session || !['running', 'paused'].includes(session.status)) return
-        const status: SessionStatus = exitCode === 0 ? 'completed' : 'failed'
-        try {
-          this.updateStatus(sessionId, status)
-        } catch {
-          // ignore
+        // Only update status if the exited terminal is the last one or the active one
+        const remaining = session.tabs.filter(t => t.type === 'terminal' && t.terminalId && t.terminalId !== terminalId)
+        if (remaining.length === 0) {
+          const status: SessionStatus = exitCode === 0 ? 'completed' : 'failed'
+          try {
+            this.updateStatus(sessionId, status)
+          } catch {
+            // ignore
+          }
         }
       },
     )
 
     this.terminalMux.on(
       'terminal:resized',
-      ({ sessionId }: { sessionId: string }) => {
-        this.broadcast({ event: 'terminal:resized', payload: { sessionId } })
+      ({ sessionId, terminalId }: { sessionId: string; terminalId: string }) => {
+        this.broadcast({ event: 'terminal:resized', payload: { sessionId, terminalId } })
       },
     )
 
   }
 
   private pushTerminalDisplay(sessionId: string, data: string): void {
-    this.broadcast({ event: 'terminal:data', payload: { sessionId, data } })
+    const session = this.getSession(sessionId)
+    const activeTab = session?.tabs.find(t => t.id === session.activeTabId)
+    const terminalId = activeTab?.type === 'terminal' ? activeTab.terminalId : session?.tabs.find(t => t.type === 'terminal')?.terminalId
+    if (terminalId) {
+      this.broadcast({ event: 'terminal:data', payload: { sessionId, terminalId, data } })
+    }
   }
 
   private initDb(): void {
@@ -525,14 +676,13 @@ export class SessionManager {
         collaboration_role  TEXT NOT NULL DEFAULT 'standalone',
         parent_session_id   TEXT,
         child_session_ids   TEXT NOT NULL DEFAULT '[]',
-        last_ai_message    TEXT NOT NULL DEFAULT ''
+        last_ai_message    TEXT NOT NULL DEFAULT '',
+        tabs               TEXT NOT NULL DEFAULT '[]',
+        active_tab_id      TEXT
       )
     `)
 
-    // Migration: add last_ai_message column if it doesn't exist
-    this.db.exec(`
-      PRAGMA table_info(sessions);
-    `)
+    // Migration: add columns if they don't exist
     const cols: string[] = this.db
       .prepare('PRAGMA table_info(sessions)')
       .all()
@@ -540,17 +690,23 @@ export class SessionManager {
     if (!cols.includes('last_ai_message')) {
       this.db.exec('ALTER TABLE sessions ADD COLUMN last_ai_message TEXT NOT NULL DEFAULT ""')
     }
+    if (!cols.includes('tabs')) {
+      this.db.exec('ALTER TABLE sessions ADD COLUMN tabs TEXT NOT NULL DEFAULT "[]"')
+    }
+    if (!cols.includes('active_tab_id')) {
+      this.db.exec('ALTER TABLE sessions ADD COLUMN active_tab_id TEXT')
+    }
   }
 
   private insertRow(s: AgentSession): void {
     this.db
       .prepare(
-        `        INSERT INTO sessions (
+        `INSERT INTO sessions (
           id, name, task, status, agent_type, worktree_path, branch_name, base_branch,
           canvas_x, canvas_y, canvas_width, canvas_height,
           kanban_column, terminal_id, progress, diff_summary, last_ai_message, created_at, tags, pending_approval,
-          collaboration_role, parent_session_id, child_session_ids
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          collaboration_role, parent_session_id, child_session_ids, tabs, active_tab_id
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         s.id,
@@ -576,6 +732,8 @@ export class SessionManager {
         s.collaborationRole,
         s.parentSessionId ?? null,
         JSON.stringify(s.childSessionIds),
+        JSON.stringify(s.tabs),
+        s.activeTabId,
       )
   }
 }
@@ -620,6 +778,8 @@ function rowToSession(r: DbRow): AgentSession {
     collaborationRole: (r.collaboration_role ?? 'standalone') as CollaborationRole,
     parentSessionId: r.parent_session_id ?? undefined,
     childSessionIds: JSON.parse(r.child_session_ids ?? '[]') as string[],
+    tabs: JSON.parse(r.tabs ?? '[]') as SessionTab[],
+    activeTabId: r.active_tab_id ?? null,
   }
 }
 

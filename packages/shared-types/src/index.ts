@@ -60,6 +60,14 @@ export interface ApprovalRequest {
   options?: ApprovalOption[]
 }
 
+export interface SessionTab {
+  id: string
+  type: 'terminal' | 'diff'
+  label: string
+  filePath?: string
+  terminalId?: string
+}
+
 export interface AgentSession {
   id: string
   name: string
@@ -91,6 +99,9 @@ export interface AgentSession {
   collaborationRole: CollaborationRole
   parentSessionId?: string
   childSessionIds: string[]
+
+  tabs: SessionTab[]
+  activeTabId: string | null
 }
 
 export interface GitCommit {
@@ -121,21 +132,29 @@ export type ServerMessage =
   | { event: 'session:created'; payload: AgentSession }
   | { event: 'session:updated'; payload: AgentSession }
   | { event: 'session:status'; payload: { id: string; status: SessionStatus; progress: number } }
-  | { event: 'terminal:data'; payload: { sessionId: string; data: string } }
-  | { event: 'terminal:ready'; payload: { sessionId: string } }
-  | { event: 'terminal:resized'; payload: { sessionId: string } }
+  | { event: 'terminal:data'; payload: { sessionId: string; terminalId: string; data: string } }
+  | { event: 'terminal:ready'; payload: { sessionId: string; terminalId: string } }
+  | { event: 'terminal:resized'; payload: { sessionId: string; terminalId: string } }
   | { event: 'diff:update'; payload: { sessionId: string; diff: GitDiff } }
   | { event: 'approval:required'; payload: { sessionId: string; request: ApprovalRequest } }
   | { event: 'sessions:list'; payload: AgentSession[] }
   | { event: 'git:log-updated'; payload: { sessionId: string } & GitLogResponse }
   | { event: 'session:lastMessage'; payload: { id: string; lastAiMessage: string } }
   | { event: 'canvas:edges'; payload: CanvasEdge[] }
+  | { event: 'tab:created'; payload: { sessionId: string; tab: SessionTab } }
+  | { event: 'tab:closed'; payload: { sessionId: string; tabId: string } }
+  | { event: 'tab:activated'; payload: { sessionId: string; tabId: string } }
+  | { event: 'tabs:sync'; payload: { sessionId: string; tabs: SessionTab[]; activeTabId: string | null } }
 
 export type ClientMessage =
-  | { event: 'terminal:input'; payload: { sessionId: string; data: string } }
-  | { event: 'terminal:resize'; payload: { sessionId: string; cols: number; rows: number } }
+  | { event: 'terminal:input'; payload: { sessionId: string; terminalId: string; data: string } }
+  | { event: 'terminal:resize'; payload: { sessionId: string; terminalId: string; cols: number; rows: number } }
   | { event: 'approval:decision'; payload: { sessionId: string; decision: 'approved' | 'rejected'; comment?: string } }
   | { event: 'broadcast:send'; payload: { message: string; targets?: string[] } }
+  | { event: 'tab:create'; payload: { sessionId: string; type: 'terminal' | 'diff'; filePath?: string } }
+  | { event: 'tab:close'; payload: { sessionId: string; tabId: string } }
+  | { event: 'tab:activate'; payload: { sessionId: string; tabId: string } }
+  | { event: 'terminal:create'; payload: { sessionId: string } }
 
 // ─── Phase 8: HTTP Hook Event Types ──────────────────────────────────────────
 

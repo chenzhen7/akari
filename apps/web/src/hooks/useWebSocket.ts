@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { useSessionStore } from '@/stores/session-store'
+import { useSessionStore, setWebSocket } from '@/stores/session-store'
 import type { ServerMessage, ClientMessage } from '@akari/shared-types'
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:3001/ws'
@@ -28,6 +28,7 @@ export function useWebSocket() {
     ws.onopen = () => {
       attempt = 0
       setConnStatus('connected')
+      setWebSocket(ws)
       if (reconnectTimer) {
         clearTimeout(reconnectTimer)
         reconnectTimer = null

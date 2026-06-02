@@ -125,12 +125,14 @@ fastify.get<{ Params: { id: string }; Querystring: { file?: string } }>(
   },
 )
 
-fastify.get<{ Params: { id: string } }>(
+fastify.get<{ Params: { id: string }; Querystring: { terminalId?: string } }>(
   '/sessions/:id/terminal-buffer',
   async (request, reply) => {
     const { id } = request.params
+    const { terminalId } = request.query
     if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-    return { buffer: sessionManager.getTerminalBuffer(id) }
+    if (!terminalId) return reply.status(400).send({ error: 'terminalId query param is required' })
+    return { buffer: sessionManager.getTerminalBuffer(terminalId) }
   },
 )
 
@@ -283,6 +285,53 @@ fastify.post<{ Params: { id: string } }>(
   },
 )
 
+// ─── Tab endpoints ────────────────────────────────────────────────────────────
+
+fastify.get<{ Params: { id: string } }>(
+  '/sessions/:id/tabs',
+  async (request, reply) => {
+    const { id } = request.params
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    return sessionManager.getTabs(id)
+  },
+)
+
+fastify.post<{ Params: { id: string }; Body: { type: 'terminal' | 'diff'; filePath?: string } }>(
+  '/sessions/:id/tabs',
+  async (request, reply) => {
+    const { id } = request.params
+    const { type, filePath } = request.body
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    try {
+      const tab = sessionManager.createTab(id, type, filePath)
+      return reply.status(201).send(tab)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(422).send({ error: msg })
+    }
+  },
+)
+
+fastify.delete<{ Params: { id: string; tabId: string } }>(
+  '/sessions/:id/tabs/:tabId',
+  async (request, reply) => {
+    const { id, tabId } = request.params
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    sessionManager.closeTab(id, tabId)
+    return { ok: true }
+  },
+)
+
+fastify.patch<{ Params: { id: string; tabId: string } }>(
+  '/sessions/:id/tabs/:tabId/activate',
+  async (request, reply) => {
+    const { id, tabId } = request.params
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    sessionManager.activateTab(id, tabId)
+    return { ok: true }
+  },
+)
+
 // ─── Canvas Edge endpoints ────────────────────────────────────────────────────
 
 fastify.get('/canvas/edges', async () => canvasEdgeStore.getAllEdges())
@@ -359,13 +408,13 @@ fastify.get('/ws', { websocket: true }, socket => {
 function handleClientMessage(msg: ClientMessage): void {
   switch (msg.event) {
     case 'terminal:input': {
-      const { sessionId, data } = msg.payload
-      sessionManager.sendToTerminal(sessionId, data)
+      const { terminalId, data } = msg.payload
+      sessionManager.sendToTerminal(terminalId, data)
       break
     }
     case 'terminal:resize': {
-      const { sessionId, cols, rows } = msg.payload
-      sessionManager.resizeTerminal(sessionId, cols, rows)
+      const { terminalId, cols, rows } = msg.payload
+      sessionManager.resizeTerminal(terminalId, cols, rows)
       break
     }
     case 'approval:decision': {
@@ -376,6 +425,34 @@ function handleClientMessage(msg: ClientMessage): void {
     case 'broadcast:send': {
       const { message, targets } = msg.payload
       sessionManager.broadcastMessage_legacy(message, targets)
+      break
+    }
+    case 'tab:create': {
+      const { sessionId, type, filePath } = msg.payload
+      try {
+        sessionManager.createTab(sessionId, type, filePath)
+      } catch (err) {
+        fastify.log.warn({ err, sessionId }, 'tab:create failed')
+      }
+      break
+    }
+    case 'tab:close': {
+      const { sessionId, tabId } = msg.payload
+      sessionManager.closeTab(sessionId, tabId)
+      break
+    }
+    case 'tab:activate': {
+      const { sessionId, tabId } = msg.payload
+      sessionManager.activateTab(sessionId, tabId)
+      break
+    }
+    case 'terminal:create': {
+      const { sessionId } = msg.payload
+      try {
+        sessionManager.createTab(sessionId, 'terminal')
+      } catch (err) {
+        fastify.log.warn({ err, sessionId }, 'terminal:create failed')
+      }
       break
     }
   }
