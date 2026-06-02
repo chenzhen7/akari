@@ -141,7 +141,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
     : null
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-card">
+    <div className="flex h-full flex-col overflow-hidden bg-panel">
       {/* Toolbar */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
         <select
@@ -167,14 +167,6 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
           <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} />
           刷新
         </Button>
-      </div>
-
-      {/* Table header */}
-      <div
-        className="flex shrink-0 items-center border-b border-border bg-card text-[11px] font-medium text-muted-foreground select-none"
-        style={{ height: 26 }}
-      >
-        <div className="px-2">提交信息</div>
       </div>
 
       {/* Graph + rows (scrollable) */}
@@ -295,7 +287,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       {/* Commit detail panel */}
       <div
         className={cn(
-          'shrink-0 overflow-hidden border-t border-border bg-card transition-all duration-150',
+          'shrink-0 overflow-hidden border-t border-border bg-panel transition-all duration-150',
           selectedCommit ? 'h-[118px]' : 'h-0',
         )}
       >
