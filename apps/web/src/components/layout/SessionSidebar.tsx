@@ -84,6 +84,8 @@ function SessionItem({ session, isActive }: { session: AgentSession; isActive: b
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground min-w-0">
             <GitBranch className="h-2.5 w-2.5 shrink-0" />
             <span className="truncate">{session.branchName}</span>
+            <span className="opacity-50 shrink-0">→</span>
+            <span className="truncate">{session.baseBranch}</span>
           </div>
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
             {!isTerminal && (
