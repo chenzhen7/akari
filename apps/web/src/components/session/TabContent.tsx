@@ -1,5 +1,6 @@
 import { TerminalPanel } from './TerminalPanel'
 import { DiffViewer } from '@/components/diff/DiffViewer'
+import { FileEditor } from '@/components/editor/FileEditor'
 import type { AgentSession } from '@/types'
 import type { ClientMessage } from '@akari/shared-types'
 
@@ -33,6 +34,15 @@ export function TabContent({ session, send }: TabContentProps) {
   if (activeTab.type === 'diff') {
     return (
       <DiffViewer
+        session={session}
+        filePath={activeTab.filePath!}
+      />
+    )
+  }
+
+  if (activeTab.type === 'file') {
+    return (
+      <FileEditor
         session={session}
         filePath={activeTab.filePath!}
       />

@@ -4,7 +4,10 @@
       "Bash(npx shadcn *)",
       "Bash(pnpm add *)",
       "Bash(pnpm typecheck *)",
-      "Bash(pnpm *)"
+      "Bash(pnpm *)",
+      "Bash(curl -s \"http://localhost:3001/sessions/gKwBreGq/files?path=\")",
+      "Bash(curl -s \"http://localhost:3001/sessions/gKwBreGq/file-content?path=package.json\")",
+      "Bash(curl *)"
     ]
   }
 }

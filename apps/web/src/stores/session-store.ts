@@ -19,8 +19,8 @@ interface SessionStore {
   pendingOps: Set<string>
   /** 存储右键新建会话时的画布位置 */
   pendingCreatePosition: { x: number; y: number } | null
-  /** 右侧面板当前 Tab（git-graph | diff | info） */
-  activeRightTab: 'git-graph' | 'diff' | 'info'
+  /** 右侧面板当前 Tab（git-graph | diff | info | explorer） */
+  activeRightTab: 'git-graph' | 'diff' | 'info' | 'explorer'
   /** 全局视图模式：null 表示显示会话标签，canvas/kanban 表示显示全局视图 */
   globalViewMode: 'canvas' | 'kanban' | null
   /** 当前选中的会话 ID（侧边栏高亮 + 中间区域显示该会话的标签栏） */
@@ -49,8 +49,8 @@ interface SessionStore {
   clearTerminal: (id: string) => void
   setGitLog: (sessionId: string, log: GitLogResponse) => void
   setConnectionStatus: (status: ConnectionStatus) => void
-  setActiveRightTab: (tab: 'git-graph' | 'diff' | 'info') => void
-  createTab: (sessionId: string, type: 'terminal' | 'claude' | 'diff', filePath?: string) => void
+  setActiveRightTab: (tab: 'git-graph' | 'diff' | 'info' | 'explorer') => void
+  createTab: (sessionId: string, type: 'terminal' | 'claude' | 'diff' | 'file', filePath?: string) => void
   closeTab: (sessionId: string, tabId: string) => void
   activateTab: (sessionId: string, tabId: string) => void
   reorderTabs: (sessionId: string, orderedTabIds: string[]) => void
@@ -472,11 +472,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         break
       case 'tab:closed':
         set(state => ({
-          sessions: state.sessions.map(s =>
-            s.id === msg.payload.sessionId
-              ? { ...s, tabs: s.tabs.filter(t => t.id !== msg.payload.tabId) }
-              : s
-          ),
+          sessions: state.sessions.map(s => {
+            if (s.id !== msg.payload.sessionId) return s
+            const updatedTabs = s.tabs.filter(t => t.id !== msg.payload.tabId)
+            let activeTabId = s.activeTabId
+            if (activeTabId === msg.payload.tabId) {
+              activeTabId = updatedTabs.length > 0 ? updatedTabs[updatedTabs.length - 1].id : null
+            }
+            return { ...s, tabs: updatedTabs, activeTabId }
+          }),
         }))
         break
       case 'tab:activated':

@@ -7,6 +7,7 @@ import type {
   AgentType,
   ApprovalRequest,
   CollaborationRole,
+  FileNode,
   GitBranch,
   GitDiff,
   GitLogResponse,
@@ -229,7 +230,7 @@ export class SessionManager {
 
   // ─── Tab management ───────────────────────────────────────────────────────
 
-  createTab(sessionId: string, type: 'terminal' | 'claude' | 'diff', filePath?: string): SessionTab {
+  createTab(sessionId: string, type: 'terminal' | 'claude' | 'diff' | 'file', filePath?: string): SessionTab {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
 
@@ -246,7 +247,7 @@ export class SessionManager {
         label = `Terminal ${count}`
       }
     } else {
-      label = filePath ?? 'Diff'
+      label = filePath ?? (type === 'file' ? 'File' : 'Diff')
     }
 
     const tab: SessionTab = { id: tabId, type, label, filePath, terminalId }
@@ -475,6 +476,24 @@ export class SessionManager {
       session.baseBranch,
       filePath,
     )
+  }
+
+  async listFiles(sessionId: string, relativePath: string): Promise<FileNode[]> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    return this.worktreeManager.listFiles(sessionId, relativePath)
+  }
+
+  async readFileContent(sessionId: string, filePath: string): Promise<string> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    return this.worktreeManager.readFileContent(sessionId, filePath)
+  }
+
+  async writeFileContent(sessionId: string, filePath: string, content: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.worktreeManager.writeFileContent(sessionId, filePath, content)
   }
 
   async restoreSessions(): Promise<void> {

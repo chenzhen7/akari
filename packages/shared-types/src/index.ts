@@ -36,6 +36,12 @@ export interface DiffFile {
   deletions: number
 }
 
+export interface FileNode {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+}
+
 export interface GitDiff {
   stat: string
   fullDiff: string
@@ -62,7 +68,7 @@ export interface ApprovalRequest {
 
 export interface SessionTab {
   id: string
-  type: 'terminal' | 'claude' | 'diff'
+  type: 'terminal' | 'claude' | 'diff' | 'file'
   label: string
   filePath?: string
   terminalId?: string
@@ -151,7 +157,7 @@ export type ClientMessage =
   | { event: 'terminal:resize'; payload: { sessionId: string; terminalId: string; cols: number; rows: number } }
   | { event: 'approval:decision'; payload: { sessionId: string; decision: 'approved' | 'rejected'; comment?: string } }
   | { event: 'broadcast:send'; payload: { message: string; targets?: string[] } }
-  | { event: 'tab:create'; payload: { sessionId: string; type: 'terminal' | 'claude' | 'diff'; filePath?: string } }
+  | { event: 'tab:create'; payload: { sessionId: string; type: 'terminal' | 'claude' | 'diff' | 'file'; filePath?: string } }
   | { event: 'tab:close'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:activate'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:reorder'; payload: { sessionId: string; orderedTabIds: string[] } }

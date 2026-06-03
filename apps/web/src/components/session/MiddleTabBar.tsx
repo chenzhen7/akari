@@ -1,4 +1,4 @@
-import { FileCode, Plus, X, Terminal } from 'lucide-react'
+import { FileCode, FileText, Plus, X, Terminal } from 'lucide-react'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { cn } from '@/lib/utils'
 import type { AgentSession } from '@/types'
@@ -50,7 +50,13 @@ function SortableTab({
     zIndex: isDragging ? 10 : undefined,
   }
 
-  const Icon = tab.type === 'diff' ? FileCode : tab.type === 'claude' ? ClaudeIcon : Terminal
+  const Icon = tab.type === 'diff'
+    ? FileCode
+    : tab.type === 'file'
+      ? FileText
+      : tab.type === 'claude'
+        ? ClaudeIcon
+        : Terminal
 
   return (
     <button
@@ -146,7 +152,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
           items={tabs.map(t => t.id)}
           strategy={horizontalListSortingStrategy}
         >
-          <div className="flex h-full flex-1 items-center overflow-x-auto scrollbar-hide">
+          <div className="flex h-full flex-1 items-center overflow-x-auto no-scrollbar">
             {tabs.map(tab => (
               <SortableTab
                 key={tab.id}

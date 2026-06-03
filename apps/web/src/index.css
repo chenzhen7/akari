@@ -170,3 +170,12 @@
   scrollbar-width: thin;
   scrollbar-color: oklch(0.556 0 0 / 25%) transparent;
 }
+
+/* Utility: completely hide scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

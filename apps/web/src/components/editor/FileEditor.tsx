@@ -1,0 +1,170 @@
+import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react'
+import { Loader2 } from 'lucide-react'
+import type { AgentSession } from '@akari/shared-types'
+import type { editor } from 'monaco-editor'
+import { API_BASE } from '@/stores/session-store'
+
+const MonacoEditor = lazy(() =>
+  import('@monaco-editor/react').then(m => ({ default: m.Editor }))
+)
+
+const EXT_LANG: Record<string, string> = {
+  ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+  py: 'python', rs: 'rust', go: 'go', java: 'java', cs: 'csharp',
+  css: 'css', scss: 'scss', html: 'html', json: 'json', md: 'markdown',
+  yaml: 'yaml', yml: 'yaml', toml: 'toml', sh: 'shell', bash: 'shell',
+  txt: 'plaintext', vue: 'html', svelte: 'html',
+}
+
+function detectLanguage(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
+  return EXT_LANG[ext] ?? 'plaintext'
+}
+
+const AUTO_SAVE_DELAY = 800
+
+interface FileEditorProps {
+  session: AgentSession
+  filePath: string
+}
+
+export function FileEditor({ session, filePath }: FileEditorProps) {
+  const sessionId = session.id
+  const [content, setContent] = useState<string>('')
+  const [originalContent, setOriginalContent] = useState<string>('')
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isDirty = content !== originalContent
+
+  useEffect(() => {
+    if (!filePath || !sessionId) return
+    setLoading(true)
+    setError(null)
+    setContent('')
+    setOriginalContent('')
+
+    fetch(`${API_BASE}/sessions/${sessionId}/file-content?path=${encodeURIComponent(filePath)}`)
+      .then(r => r.ok ? r.json() as Promise<{ content: string }> : Promise.reject(r.statusText))
+      .then(data => {
+        setContent(data.content)
+        setOriginalContent(data.content)
+      })
+      .catch((e: unknown) => setError(String(e)))
+      .finally(() => setLoading(false))
+  }, [filePath, sessionId])
+
+  // Cleanup auto-save timer on unmount or filePath change
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current)
+        autoSaveTimer.current = null
+      }
+    }
+  }, [])
+
+  const doSave = useCallback(async () => {
+    if (!isDirty || saving) return
+    setSaving(true)
+    try {
+      const res = await fetch(`${API_BASE}/sessions/${sessionId}/file-content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath, content }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error ?? `HTTP ${res.status}`)
+      }
+      setOriginalContent(content)
+    } catch (err) {
+      console.error('[FileEditor] auto-save failed:', err)
+    } finally {
+      setSaving(false)
+    }
+  }, [content, filePath, isDirty, saving, sessionId])
+
+  // Auto-save on content change (debounced)
+  const saveRef = useRef(doSave)
+  saveRef.current = doSave
+
+  useEffect(() => {
+    if (!isDirty || loading || error) return
+
+    if (autoSaveTimer.current) {
+      clearTimeout(autoSaveTimer.current)
+    }
+    autoSaveTimer.current = setTimeout(() => {
+      saveRef.current()
+    }, AUTO_SAVE_DELAY)
+
+    return () => {
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current)
+      }
+    }
+  }, [content, isDirty, loading, error])
+
+  const handleEditorMount = useCallback((_editor: editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
+    _editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
+      () => {
+        doSave()
+      }
+    )
+  }, [doSave])
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden bg-card">
+      {/* Toolbar */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/30 px-3 py-1.5">
+        <span className="truncate text-[11px] text-muted-foreground font-mono">{filePath}</span>
+      </div>
+
+      {/* Monaco Editor */}
+      <div className="relative min-w-0 flex-1 overflow-hidden">
+        {loading && (
+          <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            加载文件内容...
+          </div>
+        )}
+        {error && !loading && (
+          <div className="flex h-full items-center justify-center p-4 text-sm text-red-400">
+            加载失败: {error}
+          </div>
+        )}
+        {!loading && !error && (
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                加载编辑器...
+              </div>
+            }
+          >
+            <MonacoEditor
+              height="100%"
+              language={detectLanguage(filePath)}
+              value={content}
+              theme="vs-dark"
+              onChange={(value) => setContent(value ?? '')}
+              onMount={handleEditorMount}
+              options={{
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                fontSize: 13,
+                lineNumbers: 'on',
+                padding: { top: 8, bottom: 8 },
+                wordWrap: 'on',
+                automaticLayout: true,
+              }}
+            />
+          </Suspense>
+        )}
+      </div>
+    </div>
+  )
+}

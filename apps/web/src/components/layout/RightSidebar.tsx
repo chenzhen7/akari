@@ -1,16 +1,18 @@
-import { GitBranch, FileCode, Info } from 'lucide-react'
+import { GitBranch, FileCode, Info, FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
 import { GitGraphPanel } from '@/components/git/GitGraphPanel'
 import { DiffFileList } from '@/components/diff/DiffFileList'
 import { SessionInfoPanel } from '@/components/session/SessionInfoPanel'
+import { ExplorerPanel } from '@/components/explorer/ExplorerPanel'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
-const TABS: { id: 'git-graph' | 'diff' | 'info'; label: string; icon: React.ElementType }[] = [
+const TABS: { id: 'git-graph' | 'diff' | 'info' | 'explorer'; label: string; icon: React.ElementType }[] = [
   { id: 'git-graph', label: 'Git Graph', icon: GitBranch },
   { id: 'diff', label: '变更', icon: FileCode },
+  { id: 'explorer', label: '文件', icon: FolderTree },
   { id: 'info', label: '信息', icon: Info },
 ]
 
@@ -35,6 +37,19 @@ export function RightSidebar({ session }: RightSidebarProps) {
       activateTab(session.id, existingTab.id)
     } else {
       createTab(session.id, 'diff', path)
+    }
+  }
+
+  const handleOpenFile = (path: string) => {
+    if (!session) return
+    // Select the session first
+    selectSession(session.id)
+    // Check if a file tab for this file already exists
+    const existingTab = session.tabs.find(t => t.type === 'file' && t.filePath === path)
+    if (existingTab) {
+      activateTab(session.id, existingTab.id)
+    } else {
+      createTab(session.id, 'file', path)
     }
   }
 
@@ -76,6 +91,9 @@ export function RightSidebar({ session }: RightSidebarProps) {
                 session={session}
                 onSelectFile={handleSelectFile}
               />
+            </div>
+            <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'explorer' && 'hidden')}>
+              <ExplorerPanel session={session} onOpenFile={handleOpenFile} />
             </div>
             <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'info' && 'hidden')}>
               <SessionInfoPanel session={session} />

@@ -125,6 +125,51 @@ fastify.get<{ Params: { id: string }; Querystring: { file?: string } }>(
   },
 )
 
+fastify.get<{ Params: { id: string }; Querystring: { path?: string } }>(
+  '/sessions/:id/files',
+  async (request, reply) => {
+    const { id } = request.params
+    const { path: relativePath } = request.query
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    const files = await sessionManager.listFiles(id, relativePath ?? '')
+    return files
+  },
+)
+
+fastify.get<{ Params: { id: string }; Querystring: { path?: string } }>(
+  '/sessions/:id/file-content',
+  async (request, reply) => {
+    const { id } = request.params
+    const { path: filePath } = request.query
+    if (!filePath) return reply.status(400).send({ error: 'path query param is required' })
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    try {
+      const content = await sessionManager.readFileContent(id, filePath)
+      return { content }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(404).send({ error: msg })
+    }
+  },
+)
+
+fastify.post<{ Params: { id: string }; Body: { path: string; content: string } }>(
+  '/sessions/:id/file-content',
+  async (request, reply) => {
+    const { id } = request.params
+    const { path: filePath, content } = request.body
+    if (!filePath || content === undefined) return reply.status(400).send({ error: 'path and content are required' })
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    try {
+      await sessionManager.writeFileContent(id, filePath, content)
+      return { ok: true }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(422).send({ error: msg })
+    }
+  },
+)
+
 fastify.get<{ Params: { id: string }; Querystring: { terminalId?: string } }>(
   '/sessions/:id/terminal-buffer',
   async (request, reply) => {

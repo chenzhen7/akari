@@ -1,8 +1,8 @@
 import { execa } from 'execa'
 import { watch, type FSWatcher } from 'chokidar'
-import { mkdir, symlink, rm, access, constants, readFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
-import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse } from '@akari/shared-types'
+import { mkdir, symlink, rm, access, constants, readFile, readdir, writeFile } from 'node:fs/promises'
+import { join, resolve, dirname } from 'node:path'
+import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileNode } from '@akari/shared-types'
 
 export class WorktreeManager {
   private readonly baseRepoPath: string
@@ -269,6 +269,54 @@ export class WorktreeManager {
     } else {
       await this.git(['checkout', branch], cwd)
     }
+  }
+
+  async listFiles(sessionId: string, relativePath: string): Promise<FileNode[]> {
+    const worktreePath = this.getWorktreePath(sessionId)
+    const targetPath = join(worktreePath, relativePath)
+
+    const entries = await readdir(targetPath, { withFileTypes: true })
+    const filtered = entries.filter(entry => {
+      if (entry.name === 'node_modules') return false
+      if (entry.name === '.git') return false
+      if (entry.name === '.agent-worktrees') return false
+      return true
+    })
+
+    const nodes: FileNode[] = filtered.map(entry => ({
+      name: entry.name,
+      path: join(relativePath, entry.name).replace(/\\/g, '/'),
+      type: entry.isDirectory() ? 'directory' : 'file',
+    }))
+
+    // Sort: directories first, then files, both alphabetically
+    nodes.sort((a, b) => {
+      if (a.type === b.type) return a.name.localeCompare(b.name)
+      return a.type === 'directory' ? -1 : 1
+    })
+
+    return nodes
+  }
+
+  async readFileContent(sessionId: string, filePath: string): Promise<string> {
+    const worktreePath = this.getWorktreePath(sessionId)
+    const fullPath = join(worktreePath, filePath)
+
+    const stats = await access(fullPath, constants.F_OK)
+      .then(() => true)
+      .catch(() => false)
+    if (!stats) throw new Error(`File not found: ${filePath}`)
+
+    const content = await readFile(fullPath, 'utf8')
+    return content
+  }
+
+  async writeFileContent(sessionId: string, filePath: string, content: string): Promise<void> {
+    const worktreePath = this.getWorktreePath(sessionId)
+    const fullPath = join(worktreePath, filePath)
+
+    await mkdir(dirname(fullPath), { recursive: true })
+    await writeFile(fullPath, content, 'utf8')
   }
 
   getWorktreePath(sessionId: string): string {
