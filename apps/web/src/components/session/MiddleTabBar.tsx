@@ -66,7 +66,7 @@ function SortableTab({
       {...listeners}
       onClick={onActivate}
       className={cn(
-        'group relative flex h-full shrink-0 items-center gap-1.5 px-2.5 text-xs transition-colors select-none',
+        'group relative flex h-full shrink-0 items-center gap-1.5 px-2.5 text-xs transition-colors select-none focus:outline-none',
         isActive
           ? 'bg-[#1e1e1e] text-foreground'
           : 'text-muted-foreground hover:bg-muted/50',
