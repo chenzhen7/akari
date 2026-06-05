@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { AgentSession } from '@akari/shared-types'
+import type { AgentSession, FileDiffLine } from '@akari/shared-types'
 import type { editor } from 'monaco-editor'
 import { API_BASE } from '@/stores/session-store'
 
@@ -35,8 +35,52 @@ export function FileEditor({ session, filePath }: FileEditorProps) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [diffLines, setDiffLines] = useState<FileDiffLine[] | null>(null)
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const monacoRef = useRef<typeof import('monaco-editor') | null>(null)
+  const decorationsRef = useRef<ReturnType<editor.IStandaloneCodeEditor['createDecorationsCollection']> | null>(null)
   const isDirty = content !== originalContent
+
+  // Fetch diff lines helper
+  const fetchDiffLines = useCallback(async () => {
+    if (!filePath || !sessionId) return
+    try {
+      const res = await fetch(`${API_BASE}/sessions/${sessionId}/diff-lines?path=${encodeURIComponent(filePath)}`)
+      if (!res.ok) return
+      const data = await res.json() as { lines: FileDiffLine[] }
+      setDiffLines(data.lines)
+    } catch (err) {
+      console.error('[FileEditor] fetch diff lines failed:', err)
+    }
+  }, [filePath, sessionId])
+
+  // Apply decorations to Monaco editor
+  const applyDiffDecorations = useCallback((editor: editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor'), lines: FileDiffLine[]) => {
+    decorationsRef.current?.clear()
+
+    const decorationOptions = lines.map(line => {
+      const className =
+        line.type === 'added' ? 'margin-line-added'
+        : line.type === 'modified' ? 'margin-line-modified'
+        : 'margin-line-removed'
+      return {
+        range: new monaco.Range(line.lineNumber, 1, line.lineNumber, 1),
+        options: {
+          isWholeLine: true,
+          marginClassName: className,
+          overviewRuler: {
+            color: line.type === 'added' ? 'rgba(46,160,67,0.8)'
+              : line.type === 'modified' ? 'rgba(47,129,247,0.8)'
+              : 'rgba(248,81,73,0.8)',
+            position: monaco.editor.OverviewRulerLane.Left,
+          },
+        },
+      }
+    })
+
+    decorationsRef.current = editor.createDecorationsCollection(decorationOptions)
+  }, [])
 
   useEffect(() => {
     if (!filePath || !sessionId) return
@@ -44,6 +88,8 @@ export function FileEditor({ session, filePath }: FileEditorProps) {
     setError(null)
     setContent('')
     setOriginalContent('')
+    setDiffLines(null)
+    decorationsRef.current?.clear()
 
     fetch(`${API_BASE}/sessions/${sessionId}/file-content?path=${encodeURIComponent(filePath)}`)
       .then(r => r.ok ? r.json() as Promise<{ content: string }> : Promise.reject(r.statusText))
@@ -53,15 +99,28 @@ export function FileEditor({ session, filePath }: FileEditorProps) {
       })
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setLoading(false))
-  }, [filePath, sessionId])
 
-  // Cleanup auto-save timer on unmount or filePath change
+    // Also fetch diff lines in parallel
+    void fetchDiffLines()
+  }, [filePath, sessionId, fetchDiffLines])
+
+  // Apply diff decorations when diffLines changes and editor is ready
+  useEffect(() => {
+    if (editorRef.current && monacoRef.current && diffLines && diffLines.length > 0) {
+      applyDiffDecorations(editorRef.current, monacoRef.current, diffLines)
+    }
+  }, [diffLines, applyDiffDecorations])
+
+  // Cleanup on unmount or filePath change
   useEffect(() => {
     return () => {
       if (autoSaveTimer.current) {
         clearTimeout(autoSaveTimer.current)
         autoSaveTimer.current = null
       }
+      decorationsRef.current?.clear()
+      editorRef.current = null
+      monacoRef.current = null
     }
   }, [])
 
@@ -79,12 +138,14 @@ export function FileEditor({ session, filePath }: FileEditorProps) {
         throw new Error(body?.error ?? `HTTP ${res.status}`)
       }
       setOriginalContent(content)
+      // Refresh diff gutter after save
+      await fetchDiffLines()
     } catch (err) {
       console.error('[FileEditor] auto-save failed:', err)
     } finally {
       setSaving(false)
     }
-  }, [content, filePath, isDirty, saving, sessionId])
+  }, [content, filePath, isDirty, saving, sessionId, fetchDiffLines])
 
   // Auto-save on content change (debounced)
   const saveRef = useRef(doSave)
@@ -108,13 +169,19 @@ export function FileEditor({ session, filePath }: FileEditorProps) {
   }, [content, isDirty, loading, error])
 
   const handleEditorMount = useCallback((_editor: editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
+    editorRef.current = _editor
+    monacoRef.current = monaco
     _editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
       () => {
         doSave()
       }
     )
-  }, [doSave])
+    // Apply initial diff decorations if already loaded
+    if (diffLines && diffLines.length > 0) {
+      applyDiffDecorations(_editor, monaco, diffLines)
+    }
+  }, [doSave, diffLines, applyDiffDecorations])
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-card">

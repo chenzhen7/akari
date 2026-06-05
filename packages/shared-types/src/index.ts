@@ -36,6 +36,11 @@ export interface DiffFile {
   deletions: number
 }
 
+export interface FileDiffLine {
+  type: 'added' | 'removed' | 'modified'
+  lineNumber: number
+}
+
 export interface FileNode {
   name: string
   path: string

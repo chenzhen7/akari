@@ -2,7 +2,7 @@ import { execa } from 'execa'
 import { watch, type FSWatcher } from 'chokidar'
 import { mkdir, symlink, rm, access, constants, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join, resolve, dirname } from 'node:path'
-import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileNode } from '@akari/shared-types'
+import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileNode, FileDiffLine } from '@akari/shared-types'
 
 export class WorktreeManager {
   private readonly baseRepoPath: string
@@ -127,6 +127,35 @@ export class WorktreeManager {
       .catch(() => '')
     const modified = await readFile(join(worktreePath, filePath), 'utf8').catch(() => '')
     return { original, modified }
+  }
+
+  async getFileDiffLines(worktreePath: string, baseBranch: string, filePath: string): Promise<FileDiffLine[]> {
+    const mergeBase = await execa('git', ['merge-base', 'HEAD', baseBranch], { cwd: worktreePath })
+      .then(r => r.stdout.trim())
+      .catch(() => '')
+    const baseRef = mergeBase || baseBranch
+
+    // For untracked (new) files, use git diff --no-index against /dev/null
+    const isUntracked = await execa('git', ['ls-files', '--others', '--exclude-standard'], { cwd: worktreePath })
+      .then(r => r.stdout.split('\n').includes(filePath))
+      .catch(() => false)
+
+    let diffOutput: string
+    if (isUntracked) {
+      diffOutput = await execa('git', ['diff', '--no-index', '--unified=0', '--', '/dev/null', filePath], { cwd: worktreePath })
+        .then(r => r.stdout)
+        .catch((e: unknown) => {
+          const err = e as { exitCode?: number; stdout?: string }
+          return err.exitCode === 1 ? (err.stdout ?? '') : ''
+        })
+    } else {
+      diffOutput = await execa('git', ['diff', '--unified=0', baseRef, '--', filePath], { cwd: worktreePath })
+        .then(r => r.stdout)
+        .catch(() => '')
+    }
+
+    if (!diffOutput) return []
+    return parseDiffLines(diffOutput)
   }
 
   watchDiff(sessionId: string, baseBranch: string, callback: (diff: GitDiff) => void): FSWatcher {
@@ -380,4 +409,88 @@ function parseStat(stat: string): { additions: number; deletions: number; files:
     additions: parseInt(stat.match(/(\d+) insertion/)?.[1] ?? '0'),
     deletions: parseInt(stat.match(/(\d+) deletion/)?.[1] ?? '0'),
   }
+}
+
+function parseDiffLines(diffOutput: string): FileDiffLine[] {
+  const lines: FileDiffLine[] = []
+  const diffLines = diffOutput.split('\n')
+  let i = 0
+
+  while (i < diffLines.length) {
+    const line = diffLines[i]
+    if (!line.startsWith('@@')) {
+      i++
+      continue
+    }
+
+    // Parse hunk header: @@ -oldStart,oldCount +newStart,newCount @@
+    const match = line.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/)
+    if (!match) {
+      i++
+      continue
+    }
+
+    const oldStart = parseInt(match[1]!)
+    const oldCount = parseInt(match[2] ?? '1')
+    const newStart = parseInt(match[3]!)
+    const newCount = parseInt(match[4] ?? '1')
+
+    let oldLine = oldStart
+    let newLine = newStart
+    i++
+
+    // Collect all lines in this hunk
+    const hunkMinusLines: number[] = [] // old line numbers that were deleted
+    const hunkPlusLines: number[] = []  // new line numbers that were added
+
+    while (i < diffLines.length && !diffLines[i]!.startsWith('@@') && !diffLines[i]!.startsWith('diff --git')) {
+      const dline = diffLines[i]!
+      if (dline.startsWith(' ')) {
+        oldLine++
+        newLine++
+      } else if (dline.startsWith('+')) {
+        hunkPlusLines.push(newLine)
+        newLine++
+      } else if (dline.startsWith('-')) {
+        hunkMinusLines.push(oldLine)
+        oldLine++
+      }
+      i++
+    }
+
+    // Determine types
+    if (hunkMinusLines.length > 0 && hunkPlusLines.length > 0) {
+      // Mixed: some are modifications, remaining are pure additions/deletions
+      const pairCount = Math.min(hunkMinusLines.length, hunkPlusLines.length)
+      for (let j = 0; j < pairCount; j++) {
+        lines.push({ type: 'modified', lineNumber: hunkPlusLines[j]! })
+      }
+      for (let j = pairCount; j < hunkPlusLines.length; j++) {
+        lines.push({ type: 'added', lineNumber: hunkPlusLines[j]! })
+      }
+      // Remaining deletions → mark removed at the position of first plus line (or newStart if no plus)
+      if (hunkPlusLines.length > 0) {
+        for (let j = pairCount; j < hunkMinusLines.length; j++) {
+          lines.push({ type: 'removed', lineNumber: hunkPlusLines[0]! })
+        }
+      } else {
+        // Pure deletion hunk → mark removed at newStart
+        for (let j = 0; j < hunkMinusLines.length; j++) {
+          lines.push({ type: 'removed', lineNumber: newStart })
+        }
+      }
+    } else if (hunkPlusLines.length > 0) {
+      // Pure additions
+      for (const ln of hunkPlusLines) {
+        lines.push({ type: 'added', lineNumber: ln })
+      }
+    } else if (hunkMinusLines.length > 0) {
+      // Pure deletions
+      for (let j = 0; j < hunkMinusLines.length; j++) {
+        lines.push({ type: 'removed', lineNumber: newStart })
+      }
+    }
+  }
+
+  return lines
 }

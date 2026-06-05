@@ -478,6 +478,16 @@ export class SessionManager {
     )
   }
 
+  async getFileDiffLines(sessionId: string, filePath: string): Promise<import('@akari/shared-types').FileDiffLine[]> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    return this.worktreeManager.getFileDiffLines(
+      this.worktreeManager.getWorktreePath(sessionId),
+      session.baseBranch,
+      filePath,
+    )
+  }
+
   async listFiles(sessionId: string, relativePath: string): Promise<FileNode[]> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)

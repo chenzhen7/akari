@@ -126,6 +126,18 @@ fastify.get<{ Params: { id: string }; Querystring: { file?: string } }>(
 )
 
 fastify.get<{ Params: { id: string }; Querystring: { path?: string } }>(
+  '/sessions/:id/diff-lines',
+  async (request, reply) => {
+    const { id } = request.params
+    const { path: filePath } = request.query
+    if (!filePath) return reply.status(400).send({ error: 'path query param is required' })
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    const lines = await sessionManager.getFileDiffLines(id, filePath)
+    return { lines }
+  },
+)
+
+fastify.get<{ Params: { id: string }; Querystring: { path?: string } }>(
   '/sessions/:id/files',
   async (request, reply) => {
     const { id } = request.params

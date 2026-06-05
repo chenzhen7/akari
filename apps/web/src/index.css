@@ -179,3 +179,34 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Diff gutter styles for Monaco Editor — placed between line numbers and collapse button */
+.monaco-editor .margin-line-added::after {
+  content: '';
+  position: absolute;
+  right: 20px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: rgba(46, 160, 67, 0.8);
+}
+
+.monaco-editor .margin-line-modified::after {
+  content: '';
+  position: absolute;
+  right: 20px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: rgba(47, 129, 247, 0.8);
+}
+
+.monaco-editor .margin-line-removed::after {
+  content: '\25B6';
+  position: absolute;
+  right: 20px;
+  top: calc(100% - 4px);
+  color: rgba(248, 81, 73, 0.9);
+  font-size: 8px;
+  line-height: 1;
+}
