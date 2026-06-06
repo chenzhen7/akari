@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { AgentSession } from '@akari/shared-types'
+import { useTheme } from '@/components/theme-provider'
 
 const MonacoDiffEditor = lazy(() =>
   import('@monaco-editor/react').then(m => ({ default: m.DiffEditor }))
@@ -29,6 +30,8 @@ export function DiffViewer({ session, filePath }: DiffViewerProps) {
   const [content, setContent] = useState<{ original: string; modified: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { theme: appTheme } = useTheme()
+  const monacoTheme = appTheme === 'dark' ? 'vs-dark' : 'light'
 
   useEffect(() => {
     if (!filePath || !sessionId) return
@@ -85,7 +88,7 @@ export function DiffViewer({ session, filePath }: DiffViewerProps) {
               language={detectLanguage(filePath)}
               original={content.original}
               modified={content.modified}
-              theme="vs-dark"
+              theme={monacoTheme}
               options={{
                 readOnly: true,
                 renderSideBySide: true,

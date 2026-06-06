@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useSessionStore } from '@/stores/session-store'
+import { useTheme } from '@/components/theme-provider'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -23,12 +24,72 @@ interface TerminalEntry {
   unsubscribeResized: () => void
 }
 
+const DARK_THEME = {
+  background: '#1e1e1e',
+  foreground: '#d4d4d4',
+  cursor: '#aeafad',
+  selectionBackground: '#264f78',
+  black: '#000000',
+  red: '#cd3131',
+  green: '#0dbc79',
+  yellow: '#e5e510',
+  blue: '#2472c8',
+  magenta: '#bc3fbc',
+  cyan: '#11a8cd',
+  white: '#e5e5e5',
+  brightBlack: '#666666',
+  brightRed: '#f14c4c',
+  brightGreen: '#23d18b',
+  brightYellow: '#f5f543',
+  brightBlue: '#3b8eea',
+  brightMagenta: '#d670d6',
+  brightCyan: '#29b8db',
+  brightWhite: '#ffffff',
+}
+
+const LIGHT_THEME = {
+  background: '#fafafa',
+  foreground: '#333333',
+  cursor: '#333333',
+  selectionBackground: '#add6ff',
+  black: '#000000',
+  red: '#cd3131',
+  green: '#008000',
+  yellow: '#795e26',
+  blue: '#0070c1',
+  magenta: '#af00db',
+  cyan: '#098658',
+  white: '#e5e5e5',
+  brightBlack: '#666666',
+  brightRed: '#cd3131',
+  brightGreen: '#008000',
+  brightYellow: '#795e26',
+  brightBlue: '#0070c1',
+  brightMagenta: '#af00db',
+  brightCyan: '#098658',
+  brightWhite: '#000000',
+}
+
 /** Module-level registry: keeps Terminal instances alive across tab switches. */
 const terminalInstances = new Map<string, TerminalEntry>()
+
+function getXtermTheme(isDark: boolean) {
+  return isDark ? DARK_THEME : LIGHT_THEME
+}
+
+function updateTerminalTheme(terminalId: string, isDark: boolean) {
+  const entry = terminalInstances.get(terminalId)
+  if (!entry) return
+  try {
+    entry.term.options.theme = getXtermTheme(isDark)
+  } catch { /* ignore if disposed */ }
+}
 
 export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalReadyTick = useSessionStore(s => s.terminalReadyTick[terminalId] ?? 0)
+  const { theme: appTheme } = useTheme()
+  const isDark = appTheme === 'dark'
 
   /* ─── Mount / unmount ─────────────────────────────────────────────────── */
 
@@ -51,7 +112,7 @@ export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProp
       })
     } else {
       // First mount: create a fresh terminal
-      createTerminal(sessionId, terminalId, container, send)
+      createTerminal(sessionId, terminalId, container, send, isDark)
     }
 
     return () => {
@@ -63,6 +124,12 @@ export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProp
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminalId])
+
+  /* ─── Theme change ────────────────────────────────────────────────────── */
+
+  useEffect(() => {
+    updateTerminalTheme(terminalId, isDark)
+  }, [isDark, terminalId])
 
   /* ─── Terminal:ready from server ──────────────────────────────────────── */
 
@@ -111,7 +178,7 @@ export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProp
   }, [terminalId, sessionId, send])
 
   return (
-    <div className="h-full p-2" style={{ background: '#1e1e1e' }}>
+    <div className="h-full p-2" style={{ background: isDark ? DARK_THEME.background : LIGHT_THEME.background }}>
       <div ref={containerRef} className="h-full overflow-hidden" />
     </div>
   )
@@ -124,6 +191,7 @@ function createTerminal(
   terminalId: string,
   container: HTMLDivElement,
   send: (msg: ClientMessage) => void,
+  isDark: boolean,
 ): void {
   const term = new Terminal({
     cursorBlink: true,
@@ -131,28 +199,7 @@ function createTerminal(
     fontSize: 12,
     lineHeight: 1.4,
     scrollback: 5000,
-    theme: {
-      background: '#1e1e1e',
-      foreground: '#d4d4d4',
-      cursor: '#aeafad',
-      selectionBackground: '#264f78',
-      black: '#000000',
-      red: '#cd3131',
-      green: '#0dbc79',
-      yellow: '#e5e510',
-      blue: '#2472c8',
-      magenta: '#bc3fbc',
-      cyan: '#11a8cd',
-      white: '#e5e5e5',
-      brightBlack: '#666666',
-      brightRed: '#f14c4c',
-      brightGreen: '#23d18b',
-      brightYellow: '#f5f543',
-      brightBlue: '#3b8eea',
-      brightMagenta: '#d670d6',
-      brightCyan: '#29b8db',
-      brightWhite: '#ffffff',
-    },
+    theme: getXtermTheme(isDark),
   })
 
   const fitAddon = new FitAddon()

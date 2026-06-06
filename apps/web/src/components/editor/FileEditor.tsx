@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import type { AgentSession, FileDiffLine } from '@akari/shared-types'
 import type { editor } from 'monaco-editor'
 import { API_BASE } from '@/stores/session-store'
+import { useTheme } from '@/components/theme-provider'
 
 const MonacoEditor = lazy(() =>
   import('@monaco-editor/react').then(m => ({ default: m.Editor }))
@@ -41,6 +42,8 @@ export function FileEditor({ session, filePath }: FileEditorProps) {
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null)
   const decorationsRef = useRef<ReturnType<editor.IStandaloneCodeEditor['createDecorationsCollection']> | null>(null)
   const isDirty = content !== originalContent
+  const { theme: appTheme } = useTheme()
+  const monacoTheme = appTheme === 'dark' ? 'vs-dark' : 'light'
 
   // Fetch diff lines helper
   const fetchDiffLines = useCallback(async () => {
@@ -216,7 +219,7 @@ export function FileEditor({ session, filePath }: FileEditorProps) {
               height="100%"
               language={detectLanguage(filePath)}
               value={content}
-              theme="vs-dark"
+              theme={monacoTheme}
               onChange={(value) => setContent(value ?? '')}
               onMount={handleEditorMount}
               options={{
