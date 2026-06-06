@@ -1,33 +1,18 @@
 import { useSessionStore } from '@/stores/session-store'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorkspaceSelector } from '@/components/workspace/WorkspaceSelector'
+import { useTheme } from '@/components/theme-provider'
 import {
   LayoutGrid,
   Columns3,
   Radio,
-  Circle,
-  RefreshCw,
   PanelLeft,
   PanelRight,
+  Sun,
+  Moon,
 } from 'lucide-react'
-import { useWebSocket } from '@/hooks/useWebSocket'
-
-const connColors: Record<string, string> = {
-  connected: 'fill-green-500 text-green-500',
-  connecting: 'fill-amber-400 text-amber-400 animate-pulse',
-  disconnected: 'fill-orange-500 text-orange-500',
-  failed: 'fill-red-500 text-red-500',
-}
-
-const connLabels: Record<string, string> = {
-  connected: '已连接',
-  connecting: '连接中…',
-  disconnected: '已断线，重连中',
-  failed: '连接失败',
-}
 
 interface TopNavProps {
   leftCollapsed: boolean
@@ -47,12 +32,9 @@ export function TopNav({
     setGlobalViewMode,
     toggleCommandCenter,
     sessions,
-    connectionStatus,
-    disconnectedAt,
   } = useSessionStore()
-  const { reconnect } = useWebSocket()
+  const { theme, setTheme } = useTheme()
 
-  const runningCount = sessions.filter(s => s.status === 'running').length
   const waitingCount = sessions.filter(s => s.status === 'waiting').length
 
   return (
@@ -110,45 +92,26 @@ export function TopNav({
       </div>
 
 
-      {/* Right: stats + connection + actions */}
+      {/* Right: actions */}
       <div className="ml-auto flex items-center gap-1.5">
-        {/* Session status counters */}
-        <Badge variant="outline" className="h-6 gap-1 px-2 text-xs font-normal">
-          <Circle className="h-2 w-2 fill-green-500 text-green-500" />
-          {runningCount}
-        </Badge>
-        <Badge variant="outline" className="h-6 gap-1 px-2 text-xs font-normal">
-          <Circle className="h-2 w-2 fill-amber-500 text-amber-500" />
-          {waitingCount}
-        </Badge>
-
-
-        {/* WebSocket 连接状态 */}
+        {/* Theme toggle */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="xs"
               className="h-7 w-7 p-0"
-              onClick={connectionStatus === 'failed' ? reconnect : undefined}
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
-              {connectionStatus === 'failed' ? (
-                <RefreshCw className="h-3.5 w-3.5 text-red-500" />
+              {theme === 'dark' ? (
+                <Sun className="h-3.5 w-3.5" />
               ) : (
-                <Circle className={`h-2.5 w-2.5 ${connColors[connectionStatus] ?? ''}`} />
+                <Moon className="h-3.5 w-3.5" />
               )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            <p>{connLabels[connectionStatus] ?? connectionStatus}</p>
-            {disconnectedAt && connectionStatus === 'disconnected' && (
-              <p className="text-muted-foreground">
-                断线 {Math.round((Date.now() - disconnectedAt) / 1000)}s
-              </p>
-            )}
-            {connectionStatus === 'failed' && (
-              <p className="text-muted-foreground">点击手动重连</p>
-            )}
+          <TooltipContent side="bottom">
+            {theme === 'dark' ? '切换浅色模式' : '切换深色模式'}
           </TooltipContent>
         </Tooltip>
 

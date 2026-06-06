@@ -149,7 +149,7 @@ export function AppShell() {
           />
 
           {/* Middle */}
-          <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl bg-[#1e1e1e]" style={{ width: middleWidth }}>
+          <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl bg-background" style={{ width: middleWidth }}>
             {globalViewMode === 'canvas' ? (
               <CanvasView />
             ) : globalViewMode === 'kanban' ? (
