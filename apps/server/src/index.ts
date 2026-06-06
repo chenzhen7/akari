@@ -1,10 +1,12 @@
 import Fastify from 'fastify'
 import fastifyCors from '@fastify/cors'
 import fastifyWebsocket from '@fastify/websocket'
+import Database from 'better-sqlite3'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import type { AgentType, ClientMessage, HookEvent, ServerMessage, SessionStatus } from '@akari/shared-types'
 import { createSessionManager, validateTransition } from './session-manager.js'
+import { WorkspaceManager } from './workspace-manager.js'
 import { CanvasEdgeStore } from './canvas-edge-store.js'
 import { dispatchHookEvent } from './hook-dispatcher.js'
 
@@ -27,11 +29,21 @@ function broadcast(message: ServerMessage): void {
   }
 }
 
+const db = new Database(join(DATA_DIR, 'akari.db'))
+const workspaceManager = new WorkspaceManager(db)
+workspaceManager.ensureDefaultWorkspace(REPO_ROOT)
+
+const currentWorkspace = workspaceManager.getCurrentWorkspace()!
+
 const sessionManager = await createSessionManager({
-  repoPath: REPO_ROOT,
-  dbPath: join(DATA_DIR, 'akari.db'),
+  repoPath: currentWorkspace.path,
+  db,
   broadcast,
+  workspaceId: currentWorkspace.id,
 })
+
+// 迁移旧数据：将无 workspace_id 的 session 关联到默认工作区
+db.prepare("UPDATE sessions SET workspace_id = ? WHERE workspace_id = '' OR workspace_id IS NULL").run(currentWorkspace.id)
 
 const canvasEdgeStore = new CanvasEdgeStore(sessionManager.getDb())
 canvasEdgeStore.initDb()
@@ -342,6 +354,62 @@ fastify.post<{ Params: { id: string } }>(
   },
 )
 
+// ─── Workspace endpoints ──────────────────────────────────────────────────────
+
+fastify.get('/workspaces', async () => workspaceManager.listWorkspaces())
+
+fastify.post<{ Body: { name: string; path: string } }>('/workspaces', async (request, reply) => {
+  const { name, path } = request.body
+  if (!name?.trim() || !path?.trim()) {
+    return reply.status(400).send({ error: 'name and path are required' })
+  }
+  const validation = await workspaceManager.validatePath(path.trim())
+  if (!validation.valid) {
+    return reply.status(400).send({ error: validation.error })
+  }
+  const workspace = workspaceManager.addWorkspace(name.trim(), path.trim())
+  broadcast({ event: 'workspace:list', payload: workspaceManager.listWorkspaces() })
+  return reply.status(201).send(workspace)
+})
+
+fastify.post<{ Params: { id: string } }>('/workspaces/:id/switch', async (request, reply) => {
+  const { id } = request.params
+  const workspace = workspaceManager.switchWorkspace(id)
+  if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
+  sessionManager.setWorkspace(workspace.id, workspace.path)
+  await sessionManager.restoreSessions()
+  broadcast({ event: 'workspace:current', payload: workspace })
+  broadcast({ event: 'sessions:list', payload: sessionManager.listSessions() })
+  broadcast({ event: 'workspace:list', payload: workspaceManager.listWorkspaces() })
+  return { ok: true }
+})
+
+fastify.delete<{ Params: { id: string } }>('/workspaces/:id', async (request, reply) => {
+  const { id } = request.params
+  const deleted = workspaceManager.deleteWorkspace(id)
+  if (!deleted) return reply.status(404).send({ error: 'workspace not found' })
+  broadcast({ event: 'workspace:list', payload: workspaceManager.listWorkspaces() })
+  return { ok: true }
+})
+
+// ─── Filesystem endpoints ─────────────────────────────────────────────────────
+
+fastify.get<{ Querystring: { path?: string } }>('/fs/list', async (request, reply) => {
+  const { path: dirPath } = request.query
+  if (!dirPath) {
+    // Return drives on Windows, root on other platforms
+    const drives = await workspaceManager.listDrives()
+    return {
+      entries: drives.map(d => ({ name: d.name, path: d.path, type: 'directory' as const })),
+      currentPath: '',
+      parentPath: null,
+    }
+  }
+  return workspaceManager.listDirectory(dirPath)
+})
+
+fastify.get('/fs/drives', async () => workspaceManager.listDrives())
+
 // ─── Tab endpoints ────────────────────────────────────────────────────────────
 
 fastify.get<{ Params: { id: string } }>(
@@ -424,6 +492,11 @@ fastify.get('/ws', { websocket: true }, socket => {
   fastify.log.info(`WebSocket client connected (total: ${clients.size})`)
 
   if (socket.readyState === WebSocket.OPEN) {
+    const currentWs = workspaceManager.getCurrentWorkspace()
+    if (currentWs) {
+      socket.send(JSON.stringify({ event: 'workspace:current', payload: currentWs }))
+    }
+    socket.send(JSON.stringify({ event: 'workspace:list', payload: workspaceManager.listWorkspaces() }))
     socket.send(JSON.stringify({ event: 'sessions:list', payload: sessionManager.listSessions() }))
     socket.send(JSON.stringify({ event: 'canvas:edges', payload: canvasEdgeStore.getAllEdges() }))
   }

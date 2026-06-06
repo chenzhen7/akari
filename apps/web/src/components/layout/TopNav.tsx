@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { WorkspaceSelector } from '@/components/workspace/WorkspaceSelector'
 import {
   LayoutGrid,
   Columns3,
@@ -57,12 +58,14 @@ export function TopNav({
   return (
     <header className="flex h-12 shrink-0 items-center gap-0 border-b border-transparent bg-panel px-3">
 
-      {/* Brand */}
+      {/* Brand + Workspace */}
       <div className="flex items-center gap-2 px-1 pr-3">
         <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground font-bold text-xs">
           A
         </div>
         <span className="text-sm font-medium">Akari</span>
+        <div className="h-4 w-px bg-border mx-1" />
+        <WorkspaceSelector />
       </div>
 
       {/* Session sidebar toggle */}

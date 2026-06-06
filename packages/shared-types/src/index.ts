@@ -113,6 +113,7 @@ export interface AgentSession {
 
   tabs: SessionTab[]
   activeTabId: string | null
+  workspaceId: string
 }
 
 export interface GitCommit {
@@ -139,6 +140,27 @@ export interface GitLogResponse {
   head: string
 }
 
+export interface Workspace {
+  id: string
+  name: string
+  path: string
+  isCurrent: boolean
+  createdAt: Date
+  lastOpenedAt: Date
+}
+
+export interface FsEntry {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+}
+
+export interface FsListResponse {
+  entries: FsEntry[]
+  currentPath: string
+  parentPath: string | null
+}
+
 export type ServerMessage =
   | { event: 'session:created'; payload: AgentSession }
   | { event: 'session:updated'; payload: AgentSession }
@@ -156,6 +178,8 @@ export type ServerMessage =
   | { event: 'tab:closed'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:activated'; payload: { sessionId: string; tabId: string } }
   | { event: 'tabs:sync'; payload: { sessionId: string; tabs: SessionTab[]; activeTabId: string | null } }
+  | { event: 'workspace:list'; payload: Workspace[] }
+  | { event: 'workspace:current'; payload: Workspace }
 
 export type ClientMessage =
   | { event: 'terminal:input'; payload: { sessionId: string; terminalId: string; data: string } }

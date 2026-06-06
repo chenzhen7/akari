@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { AgentSession, AgentType, CanvasEdge, GitLogResponse, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
 import type { ConnectionStatus } from '@/hooks/useWebSocket'
 import { terminalBus } from '@/lib/terminalBus'
+import { useWorkspaceStore } from './workspace-store'
 
 interface SessionStore {
   sessions: AgentSession[]
@@ -500,6 +501,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               : s
           ),
         }))
+        break
+      case 'workspace:current':
+        useWorkspaceStore.getState().setCurrentWorkspace(msg.payload)
+        set({
+          sessions: [],
+          openTabs: [],
+          activeTabId: null,
+          activeSessionId: null,
+          globalViewMode: null,
+          gitLogs: {},
+        })
+        break
+      case 'workspace:list':
+        useWorkspaceStore.setState({ workspaces: msg.payload })
         break
     }
   },

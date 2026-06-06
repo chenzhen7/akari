@@ -1,7 +1,6 @@
 import Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
-import { mkdir, access } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { access } from 'node:fs/promises'
 import type {
   AgentSession,
   AgentType,
@@ -57,6 +56,7 @@ interface DbRow {
   last_ai_message: string
   tabs: string
   active_tab_id: string | null
+  workspace_id: string
 }
 
 const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
@@ -91,12 +91,14 @@ export function validateTransition(from: SessionStatus, to: SessionStatus): bool
 
 export class SessionManager {
   private readonly db: Database.Database
-  private readonly worktreeManager: WorktreeManager
+  private worktreeManager: WorktreeManager
   private readonly terminalMux: TerminalMultiplexer
   private readonly broadcast: (msg: ServerMessage) => void
+  private workspaceId: string
 
-  constructor(opts: { repoPath: string; dbPath: string; broadcast: (msg: ServerMessage) => void }) {
-    this.db = new Database(opts.dbPath)
+  constructor(opts: { repoPath: string; db: Database.Database; broadcast: (msg: ServerMessage) => void; workspaceId: string }) {
+    this.db = opts.db
+    this.workspaceId = opts.workspaceId
     this.worktreeManager = new WorktreeManager(opts.repoPath)
     this.terminalMux = new TerminalMultiplexer()
     this.broadcast = opts.broadcast
@@ -142,6 +144,7 @@ export class SessionManager {
       childSessionIds: [],
       tabs: [],
       activeTabId: null,
+      workspaceId: this.workspaceId,
     }
 
     this.insertRow(session)
@@ -183,8 +186,8 @@ export class SessionManager {
 
   listSessions(): AgentSession[] {
     const rows = this.db
-      .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
-      .all() as DbRow[]
+      .prepare('SELECT * FROM sessions WHERE workspace_id = ? ORDER BY created_at DESC')
+      .all(this.workspaceId) as DbRow[]
     return rows.map(rowToSession)
   }
 
@@ -201,6 +204,11 @@ export class SessionManager {
   }
 
   /** Expose db for CanvasEdgeStore — only used within the same process */
+  setWorkspace(workspaceId: string, repoPath: string): void {
+    this.workspaceId = workspaceId
+    this.worktreeManager = new WorktreeManager(repoPath)
+  }
+
   getDb(): Database.Database {
     return this.db
   }
@@ -739,7 +747,8 @@ export class SessionManager {
         child_session_ids   TEXT NOT NULL DEFAULT '[]',
         last_ai_message    TEXT NOT NULL DEFAULT '',
         tabs               TEXT NOT NULL DEFAULT '[]',
-        active_tab_id      TEXT
+        active_tab_id      TEXT,
+        workspace_id       TEXT NOT NULL DEFAULT ''
       )
     `)
 
@@ -757,6 +766,9 @@ export class SessionManager {
     if (!cols.includes('active_tab_id')) {
       this.db.exec('ALTER TABLE sessions ADD COLUMN active_tab_id TEXT')
     }
+    if (!cols.includes('workspace_id')) {
+      this.db.exec('ALTER TABLE sessions ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ""')
+    }
   }
 
   private insertRow(s: AgentSession): void {
@@ -766,8 +778,8 @@ export class SessionManager {
           id, name, task, status, agent_type, worktree_path, branch_name, base_branch,
           canvas_x, canvas_y, canvas_width, canvas_height,
           kanban_column, terminal_id, progress, diff_summary, last_ai_message, created_at, tags, pending_approval,
-          collaboration_role, parent_session_id, child_session_ids, tabs, active_tab_id
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          collaboration_role, parent_session_id, child_session_ids, tabs, active_tab_id, workspace_id
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         s.id,
@@ -795,6 +807,7 @@ export class SessionManager {
         JSON.stringify(s.childSessionIds),
         JSON.stringify(s.tabs),
         s.activeTabId,
+        s.workspaceId,
       )
   }
 }
@@ -841,15 +854,16 @@ function rowToSession(r: DbRow): AgentSession {
     childSessionIds: JSON.parse(r.child_session_ids ?? '[]') as string[],
     tabs: JSON.parse(r.tabs ?? '[]') as SessionTab[],
     activeTabId: r.active_tab_id ?? null,
+    workspaceId: r.workspace_id ?? '',
   }
 }
 
 export async function createSessionManager(opts: {
   repoPath: string
-  dbPath: string
+  db: Database.Database
   broadcast: (msg: ServerMessage) => void
+  workspaceId: string
 }): Promise<SessionManager> {
-  await mkdir(dirname(opts.dbPath), { recursive: true })
   const manager = new SessionManager(opts)
   await manager.restoreSessions()
   return manager
