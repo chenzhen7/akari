@@ -131,15 +131,29 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   goUp: () => {
     const { fileBrowserPath } = get()
     if (!fileBrowserPath) return
-    // Simple parent path logic
+
     const normalized = fileBrowserPath.replace(/\\/g, '/')
-    const lastSlash = normalized.lastIndexOf('/')
-    if (lastSlash <= 0) {
-      // At root level, go to drives
+
+    // Windows drive root (e.g. C:/ or C:) → go to drive list
+    if (/^[A-Za-z]:\/?$/.test(normalized)) {
       get().navigateTo('')
       return
     }
+
+    const lastSlash = normalized.lastIndexOf('/')
+    if (lastSlash <= 0) {
+      get().navigateTo('')
+      return
+    }
+
     const parent = normalized.slice(0, lastSlash)
+    // Parent is a drive root → normalize to trailing slash so the backend
+    // consistently returns currentPath as "C:/" rather than "C:".
+    if (/^[A-Za-z]:$/.test(parent)) {
+      get().navigateTo(parent + '/')
+      return
+    }
+
     get().navigateTo(parent || '/')
   },
 }))

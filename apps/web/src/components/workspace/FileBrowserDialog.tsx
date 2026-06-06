@@ -71,7 +71,7 @@ export function FileBrowserDialog({ open, onOpenChange, onSelect }: FileBrowserD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl h-[500px] flex flex-col p-0 gap-0">
+      <DialogContent className="sm:max-w-2xl h-[500px] flex flex-col p-0 gap-0">
         <DialogHeader className="px-4 py-3 border-b shrink-0">
           <DialogTitle className="text-base">选择工作区文件夹</DialogTitle>
         </DialogHeader>
