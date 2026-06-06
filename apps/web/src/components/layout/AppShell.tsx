@@ -77,12 +77,12 @@ export function AppShell() {
     isDraggingLeft,
     isDraggingRight,
   } = useResizablePanels({
-    initialLeftWidth: 15,
+    initialLeftWidth: 20,
     minLeftWidth: 12,
     maxLeftWidth: 30,
-    initialRightWidth: 25,
-    minRightWidth: 15,
-    maxRightWidth: 40,
+    initialRightWidth: 20,
+    minRightWidth: 12,
+    maxRightWidth: 30,
   })
 
   const session = activeSessionId ? sessions.find(s => s.id === activeSessionId) : undefined

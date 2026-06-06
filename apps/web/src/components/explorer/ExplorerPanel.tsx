@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect } from 'react'
-import { FolderTree } from 'lucide-react'
 import type { AgentSession, FileNode } from '@akari/shared-types'
 import { API_BASE } from '@/stores/session-store'
 import { FileTreeNode } from './FileTreeNode'
@@ -63,12 +62,6 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-border/50 px-3 py-1.5">
-        <FolderTree className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-[11px] font-medium text-muted-foreground">Explorer</span>
-      </div>
-
       {/* Tree */}
       <div className="flex-1 overflow-y-auto py-1">
         {loading && rootNodes.length === 0 && (

@@ -74,7 +74,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   terminalReadyTick: {},
   pendingOps: new Set(),
   pendingCreatePosition: null,
-  activeRightTab: 'git-graph',
+  activeRightTab: 'explorer',
   globalViewMode: null,
   activeSessionId: null,
 
