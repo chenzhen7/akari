@@ -26,3 +26,5 @@ apps/*/dist/
 *.njsproj
 *.sln
 *.sw?
+
+settings.local.json
