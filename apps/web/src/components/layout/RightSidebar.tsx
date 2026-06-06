@@ -10,9 +10,9 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 const TABS: { id: 'git-graph' | 'diff' | 'info' | 'explorer'; label: string; icon: React.ElementType }[] = [
-  { id: 'git-graph', label: 'Git Graph', icon: GitBranch },
-  { id: 'diff', label: '变更', icon: FileCode },
   { id: 'explorer', label: '文件', icon: FolderTree },
+  { id: 'diff', label: '变更', icon: FileCode },
+  { id: 'git-graph', label: 'Git Graph', icon: GitBranch },
   { id: 'info', label: '信息', icon: Info },
 ]
 
@@ -83,8 +83,8 @@ export function RightSidebar({ session }: RightSidebarProps) {
       <div className="relative flex-1 overflow-hidden">
         {session ? (
           <>
-            <div className={cn('absolute inset-0', activeRightTab !== 'git-graph' && 'hidden')}>
-              <GitGraphPanel sessionId={session.id} />
+            <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'explorer' && 'hidden')}>
+              <ExplorerPanel session={session} onOpenFile={handleOpenFile} />
             </div>
             <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'diff' && 'hidden')}>
               <DiffFileList
@@ -92,8 +92,8 @@ export function RightSidebar({ session }: RightSidebarProps) {
                 onSelectFile={handleSelectFile}
               />
             </div>
-            <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'explorer' && 'hidden')}>
-              <ExplorerPanel session={session} onOpenFile={handleOpenFile} />
+            <div className={cn('absolute inset-0', activeRightTab !== 'git-graph' && 'hidden')}>
+              <GitGraphPanel sessionId={session.id} />
             </div>
             <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'info' && 'hidden')}>
               <SessionInfoPanel session={session} />

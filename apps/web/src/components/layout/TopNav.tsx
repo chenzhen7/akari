@@ -60,10 +60,11 @@ export function TopNav({
 
       {/* Brand + Workspace */}
       <div className="flex items-center gap-2 px-1 pr-3">
-        <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground font-bold text-xs">
-          A
-        </div>
-        <span className="text-sm font-medium">Akari</span>
+        <svg viewBox="0 0 512 512" className="h-6 w-6">
+          <rect x="117" y="106" width="62" height="300" rx="8" className="fill-foreground" />
+          <rect x="225" y="106" width="62" height="300" rx="8" className="fill-foreground" />
+          <rect x="333" y="106" width="62" height="300" rx="8" className="fill-foreground" />
+        </svg>
         <div className="h-4 w-px bg-border mx-1" />
         <WorkspaceSelector />
       </div>
