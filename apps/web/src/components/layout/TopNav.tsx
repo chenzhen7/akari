@@ -35,8 +35,6 @@ export function TopNav({
   } = useSessionStore()
   const { theme, setTheme } = useTheme()
 
-  const waitingCount = sessions.filter(s => s.status === 'waiting').length
-
   return (
     <header className="flex h-12 shrink-0 items-center gap-0 border-b border-transparent bg-panel px-3">
 
@@ -124,11 +122,6 @@ export function TopNav({
             >
               <Radio className="h-3.5 w-3.5" />
               指挥中心
-              {waitingCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none">
-                  {waitingCount}
-                </span>
-              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">指挥中心</TooltipContent>

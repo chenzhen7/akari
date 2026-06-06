@@ -11,7 +11,6 @@ interface KanbanCardProps {
 
 const statusColorMap: Record<string, string> = {
   running: 'text-green-500',
-  waiting: 'text-amber-500',
   failed: 'text-red-500',
   completed: 'text-blue-500',
   initializing: 'text-slate-400',
@@ -21,7 +20,6 @@ const statusColorMap: Record<string, string> = {
 
 const statusLabelMap: Record<string, string> = {
   running: '运行中',
-  waiting: '待审批',
   failed: '失败',
   completed: '已完成',
   initializing: '初始化中',

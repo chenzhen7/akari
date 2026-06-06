@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -11,17 +11,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { useSessionStore } from '@/stores/session-store'
 import { cn } from '@/lib/utils'
-import type { ApprovalOption } from '@akari/shared-types'
 import {
   Radio,
   Send,
-  Eye,
   Circle,
   Bot,
   Zap,
   CheckCircle2,
   XCircle,
-  X,
   Archive,
 } from 'lucide-react'
 
@@ -76,12 +73,6 @@ const STATUS_META: Record<string, {
   },
 }
 
-const DEFAULT_APPROVAL_OPTIONS: ApprovalOption[] = [
-  { key: '1', label: 'Yes' },
-  { key: '2', label: 'Yes, and always allow access from this project' },
-  { key: '3', label: 'No' },
-]
-
 function SessionChip({
   id: _id,
   name,
@@ -111,128 +102,6 @@ function SessionChip({
       <Circle className={`h-2 w-2 ${meta.dot}`} />
       <span className="truncate max-w-[80px]">{name}</span>
     </button>
-  )
-}
-
-function ApprovalCard({
-  name,
-  status,
-  pendingApproval,
-  onApprove,
-  onReject,
-  onIgnore,
-  onView,
-  onClose,
-  onCodeRef,
-}: {
-  _sessionId: string
-  name: string
-  status: string
-  pendingApproval?: { command?: string; message?: string; description?: string; options?: ApprovalOption[] }
-  onApprove: (option: string) => void
-  onReject: () => void
-  onIgnore: () => void
-  onView: () => void
-  onClose: () => void
-  onCodeRef: (el: HTMLElement | null) => void
-}) {
-  const meta = STATUS_META[status] ?? STATUS_META['waiting']
-  const options = pendingApproval?.options?.length
-    ? pendingApproval.options
-    : DEFAULT_APPROVAL_OPTIONS
-
-  return (
-    <div
-      className="rounded-lg border border-white/8 w-full overflow-hidden"
-      style={{ background: '#171717' }}
-    >
-      {/* Terminal header bar */}
-      <div
-        className="flex items-center justify-between px-3 py-2 border-b"
-        style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)' }}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <Circle className={`h-2 w-2 shrink-0 ${meta.dot}`} />
-          <span className="truncate text-[11px] font-medium text-white/80 font-mono">
-            {name}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-5 w-5 text-white/30 hover:text-white/70 hover:bg-white/5 shrink-0"
-            onClick={() => { onView(); onClose() }}
-          >
-            <Eye className="h-3 w-3" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-5 w-5 text-white/30 hover:text-white/70 hover:bg-white/5 shrink-0"
-            onClick={() => { onIgnore(); onClose() }}
-          >
-            <X className="h-3 w-3" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Terminal body */}
-      <div className="px-3 py-3 space-y-3">
-        {pendingApproval?.description && (
-          <p className="font-mono text-[11px] text-white/60 leading-relaxed">
-            {pendingApproval.description}
-          </p>
-        )}
-        {pendingApproval?.command && (
-          <code
-            className="block px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre overflow-x-auto rounded"
-            style={{ background: '#0d0d0d', color: '#e2e8f0' }}
-            onMouseEnter={(e) => onCodeRef(e.currentTarget)}
-            onMouseLeave={() => onCodeRef(null)}
-          >
-            {pendingApproval.command}
-          </code>
-        )}
-        {!pendingApproval?.description && !pendingApproval?.command && pendingApproval?.message && (
-          <p className="font-mono text-[11px] text-white/60 leading-relaxed">
-            {pendingApproval.message}
-          </p>
-        )}
-
-        {/* Action buttons */}
-        <div className="flex flex-col gap-1.5 pt-1">
-          {options.map(opt => (
-            <Button
-              key={opt.key}
-              variant="outline"
-              size="sm"
-              className={cn(
-                'h-7 gap-2 text-[11px] font-medium border justify-start',
-                opt.key === '1'
-                  ? 'border-green-800/60 text-green-400 bg-green-950/30 hover:bg-green-900/40 hover:border-green-700'
-                  : opt.key === '2'
-                    ? 'border-blue-800/60 text-blue-400 bg-blue-950/30 hover:bg-blue-900/40 hover:border-blue-700'
-                    : 'border-red-800/60 text-red-400 bg-red-950/30 hover:bg-red-900/40 hover:border-red-700'
-              )}
-              onClick={() => {
-                if (opt.key === '3') {
-                  onReject()
-                } else {
-                  onApprove(opt.key)
-                }
-                onClose()
-              }}
-            >
-              {opt.key === '1' ? <CheckCircle2 className="h-3 w-3 shrink-0" />
-                : opt.key === '2' ? <CheckCircle2 className="h-3 w-3 shrink-0" />
-                  : <XCircle className="h-3 w-3 shrink-0" />}
-              <span className="truncate">{opt.label}</span>
-            </Button>
-          ))}
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -267,9 +136,6 @@ export function CommandCenter() {
     commandCenterOpen,
     toggleCommandCenter,
     sessions,
-    approveSession,
-    rejectSession,
-    ignoreApproval,
     openTab,
     addTerminalLine,
   } = useSessionStore()
@@ -279,19 +145,8 @@ export function CommandCenter() {
     new Set()
   )
   const [broadcasting, setBroadcasting] = useState(false)
-  const hoveredCodeRef = useRef<HTMLElement | null>(null)
-
-  const handleContainerWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    if (e.shiftKey && hoveredCodeRef.current) {
-      e.preventDefault()
-      hoveredCodeRef.current.scrollLeft += e.deltaY
-    }
-  }, [])
-
-  const waitingSessions = sessions.filter(s => s.status === 'waiting')
 
   const runningCount = sessions.filter(s => s.status === 'running').length
-  const waitingCount = waitingSessions.length
   const doneCount = sessions.filter(s => s.status === 'completed').length
   const failedCount = sessions.filter(s => s.status === 'failed').length
 
@@ -356,7 +211,6 @@ export function CommandCenter() {
             scrollbarWidth: 'thin',
             scrollbarColor: 'rgba(255,255,255,0.15) transparent',
           }}
-          onWheel={handleContainerWheel}
         >
           <div className="space-y-6 p-5 min-w-0">
 
@@ -427,47 +281,6 @@ export function CommandCenter() {
 
             <Separator />
 
-            {/* ── 待审批 ── */}
-            <section className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="h-5 w-1 rounded-full bg-amber-500" />
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  待审批
-                </h3>
-                {waitingCount > 0 && (
-                  <Badge variant="outline" className="ml-auto h-5 text-[10px] border-amber-500/40 text-amber-500">
-                    {waitingCount}
-                  </Badge>
-                )}
-              </div>
-              {waitingSessions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-8 gap-2">
-                  <CheckCircle2 className="h-8 w-8 text-muted-foreground/30" />
-                  <p className="text-xs text-muted-foreground">暂无待审批项</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {waitingSessions.map(s => (
-                    <ApprovalCard
-                      key={s.id}
-                      sessionId={s.id}
-                      name={s.name}
-                      status={s.status}
-                      pendingApproval={s.pendingApproval}
-                      onApprove={(option) => approveSession(s.id, option)}
-                      onReject={() => rejectSession(s.id)}
-                      onIgnore={() => ignoreApproval(s.id)}
-                      onView={() => openTab(s.id)}
-                      onClose={toggleCommandCenter}
-                      onCodeRef={(el) => { hoveredCodeRef.current = el }}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <Separator />
-
             {/* ── 全局概览 ── */}
             <section className="space-y-3">
               <div className="flex items-center gap-2">
@@ -478,7 +291,6 @@ export function CommandCenter() {
               </div>
               <div className="grid grid-cols-5 gap-2">
                 <StatCard status="running" count={runningCount} />
-                <StatCard status="waiting" count={waitingCount} />
                 <StatCard status="completed" count={doneCount} />
                 <StatCard status="failed" count={failedCount} />
                 <StatCard status="" count={sessions.length} isAll />

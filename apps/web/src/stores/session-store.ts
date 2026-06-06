@@ -40,9 +40,6 @@ interface SessionStore {
   setGlobalViewMode: (mode: 'canvas' | 'kanban' | null) => void
   toggleCommandCenter: () => void
   toggleCreateDialog: () => void
-  approveSession: (id: string, approvalOption?: string) => void
-  rejectSession: (id: string) => void
-  ignoreApproval: (id: string) => void
   archiveSession: (id: string) => void
   deleteSession: (id: string) => void
   restoreSession: (id: string) => void
@@ -195,42 +192,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   toggleCreateDialog: () =>
     set(state => ({ createDialogOpen: !state.createDialogOpen })),
-
-  approveSession: (id: string, approvalOption?: string) => {
-    fetch(`${API_BASE}/sessions/${id}/approval`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision: 'approved', approvalOption }),
-    }).catch(err => console.error('[approveSession] failed:', err))
-    set(state => ({
-      sessions: state.sessions.map(s =>
-        s.id === id ? { ...s, status: 'running' as SessionStatus } : s
-      ),
-    }))
-  },
-
-  rejectSession: (id: string) => {
-    fetch(`${API_BASE}/sessions/${id}/approval`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision: 'rejected' }),
-    }).catch(err => console.error('[rejectSession] failed:', err))
-    set(state => ({
-      sessions: state.sessions.map(s =>
-        s.id === id ? { ...s, status: 'paused' as SessionStatus } : s
-      ),
-    }))
-  },
-
-  ignoreApproval: (id: string) => {
-    fetch(`${API_BASE}/sessions/${id}/approval-ignore`, { method: 'POST' })
-      .catch(err => console.error('[ignoreApproval] failed:', err))
-    set(state => ({
-      sessions: state.sessions.map(s =>
-        s.id === id ? { ...s, pendingApproval: undefined } : s
-      ),
-    }))
-  },
 
   archiveSession: (id) => {
     if (get().pendingOps.has(id)) return
@@ -421,15 +382,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         break
       case 'terminal:resized':
         terminalBus.resized(msg.payload.terminalId)
-        break
-      case 'approval:required':
-        set(state => ({
-          sessions: state.sessions.map(s =>
-            s.id === msg.payload.sessionId
-              ? { ...s, status: 'waiting', pendingApproval: msg.payload.request }
-              : s
-          ),
-        }))
         break
       case 'diff:update':
         set(state => ({

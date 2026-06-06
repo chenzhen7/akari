@@ -5,7 +5,6 @@ export type {
   AgentSession,
   DiffFile,
   GitDiff,
-  ApprovalRequest,
   ServerMessage,
   ClientMessage,
 } from '@akari/shared-types'

@@ -4,7 +4,6 @@ import { access } from 'node:fs/promises'
 import type {
   AgentSession,
   AgentType,
-  ApprovalRequest,
   CollaborationRole,
   FileNode,
   GitBranch,
@@ -18,7 +17,6 @@ import type {
 import { WorktreeManager } from './worktree-manager.js'
 import { TerminalMultiplexer } from './terminal-mux.js'
 import { createAgentAdapter, SHELL_STARTUP_DELAY_MS } from './agent-adapters/index.js'
-import { approvalRegistry } from './hook-dispatcher.js'
 
 export interface CreateSessionParams {
   name: string
@@ -49,7 +47,6 @@ interface DbRow {
   diff_summary: string
   created_at: string
   tags: string
-  pending_approval: string | null
   collaboration_role: string | null
   parent_session_id: string | null
   child_session_ids: string | null
@@ -349,61 +346,6 @@ export class SessionManager {
 
   setLastAiMessage(sessionId: string, message: string): void {
     this.db.prepare('UPDATE sessions SET last_ai_message = ? WHERE id = ?').run(message, sessionId)
-  }
-
-  handleApproval(
-    sessionId: string,
-    decision: 'approved' | 'rejected',
-    comment?: string,
-    approvalOption?: string,
-  ): void {
-    const session = this.getSession(sessionId)
-    if (!session || session.status !== 'waiting') {
-      return
-    }
-
-    this.db.prepare('UPDATE sessions SET pending_approval = NULL WHERE id = ?').run(sessionId)
-
-    const resolvedByHook = approvalRegistry.resolveApproval(sessionId, decision)
-
-    if (decision === 'approved') {
-      this.updateStatus(sessionId, 'running')
-      // Windows PTY 需要 CRLF 才能识别命令终止符；单独 LF 会被当作行继续符
-      const eol = process.platform === 'win32' ? '\r\n' : '\n'
-      const key = approvalOption ?? '1'
-      const terminalTab = session.tabs.find(t => t.type === 'terminal' || t.type === 'claude')
-      if (terminalTab?.terminalId) {
-        this.terminalMux.sendToTerminal(terminalTab.terminalId, `${key}${eol}`)
-      }
-    } else {
-      this.updateStatus(sessionId, 'paused')
-      const eol = process.platform === 'win32' ? '\r\n' : '\n'
-      const terminalTab = session.tabs.find(t => t.type === 'terminal' || t.type === 'claude')
-      if (terminalTab?.terminalId) {
-        this.terminalMux.sendToTerminal(terminalTab.terminalId, `3${eol}`)
-      }
-    }
-  }
-
-  dismissApproval(sessionId: string): void {
-    this.db.prepare('UPDATE sessions SET pending_approval = NULL WHERE id = ?').run(sessionId)
-    const resolved = approvalRegistry.dismissApproval(sessionId)
-    if (!resolved) return
-    try {
-      this.updateStatus(sessionId, 'running')
-    } catch { /* not in waiting state */ }
-  }
-
-  setWaitingForApproval(sessionId: string, request: ApprovalRequest): void {
-    const timestamp = new Date().toISOString()
-    this.db
-      .prepare('UPDATE sessions SET pending_approval = ? WHERE id = ?')
-      .run(JSON.stringify({ ...request, timestamp }), sessionId)
-    this.updateStatus(sessionId, 'waiting')
-    this.broadcast({
-      event: 'approval:required',
-      payload: { sessionId, request: { ...request, timestamp: new Date(timestamp) } },
-    })
   }
 
   pushTerminalMessage(sessionId: string, data: string): void {
@@ -769,6 +711,7 @@ export class SessionManager {
     if (!cols.includes('workspace_id')) {
       this.db.exec('ALTER TABLE sessions ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ""')
     }
+    // pending_approval column removed — no longer used
   }
 
   private insertRow(s: AgentSession): void {
@@ -777,9 +720,9 @@ export class SessionManager {
         `INSERT INTO sessions (
           id, name, task, status, agent_type, worktree_path, branch_name, base_branch,
           canvas_x, canvas_y, canvas_width, canvas_height,
-          kanban_column, terminal_id, progress, diff_summary, last_ai_message, created_at, tags, pending_approval,
+          kanban_column, terminal_id, progress, diff_summary, last_ai_message, created_at, tags,
           collaboration_role, parent_session_id, child_session_ids, tabs, active_tab_id, workspace_id
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         s.id,
@@ -801,7 +744,6 @@ export class SessionManager {
         s.lastAiMessage,
         s.createdAt instanceof Date ? s.createdAt.toISOString() : String(s.createdAt),
         JSON.stringify(s.tags),
-        s.pendingApproval ? JSON.stringify(s.pendingApproval) : null,
         s.collaborationRole,
         s.parentSessionId ?? null,
         JSON.stringify(s.childSessionIds),
@@ -846,9 +788,6 @@ function rowToSession(r: DbRow): AgentSession {
     terminalOutput: [],
     createdAt: new Date(r.created_at),
     tags: JSON.parse(r.tags) as string[],
-    pendingApproval: r.pending_approval
-      ? (JSON.parse(r.pending_approval) as ApprovalRequest)
-      : undefined,
     collaborationRole: (r.collaboration_role ?? 'standalone') as CollaborationRole,
     parentSessionId: r.parent_session_id ?? undefined,
     childSessionIds: JSON.parse(r.child_session_ids ?? '[]') as string[],

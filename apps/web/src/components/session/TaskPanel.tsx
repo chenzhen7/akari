@@ -16,7 +16,6 @@ import { useSessionStore } from '@/stores/session-store'
 
 const statusLabelMap: Record<string, string> = {
   running: '运行中',
-  waiting: '待审批',
   failed: '失败',
   completed: '已完成',
   initializing: '初始化中',
@@ -29,7 +28,6 @@ const statusVariantMap: Record<
   'default' | 'secondary' | 'destructive' | 'outline'
 > = {
   running: 'default',
-  waiting: 'secondary',
   failed: 'destructive',
   completed: 'outline',
   initializing: 'secondary',
@@ -42,8 +40,6 @@ interface TaskPanelProps {
 }
 
 export function TaskPanel({ session }: TaskPanelProps) {
-  const approveSession = useSessionStore(s => s.approveSession)
-  const rejectSession = useSessionStore(s => s.rejectSession)
   const archiveSession = useSessionStore(s => s.archiveSession)
   const restoreSession = useSessionStore(s => s.restoreSession)
   const deleteSession = useSessionStore(s => s.deleteSession)
@@ -81,18 +77,6 @@ export function TaskPanel({ session }: TaskPanelProps) {
           <span>{session.baseBranch}</span>
         </div>
       </div>
-
-      {/* 审批操作 */}
-      {session.status === 'waiting' && (
-        <div className="flex gap-2">
-          <Button size="sm" onClick={() => approveSession(session.id)}>
-            批准
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => rejectSession(session.id)}>
-            拒绝
-          </Button>
-        </div>
-      )}
 
       {session.status === 'running' && (
         <Button size="sm" variant="outline">

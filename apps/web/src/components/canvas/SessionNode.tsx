@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Bell, Plus, RotateCcw, Loader2 } from 'lucide-react'
+import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Plus, RotateCcw, Loader2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
@@ -32,7 +32,6 @@ const agentConfig: Record<string, { bg: string; Icon: LucideIcon }> = {
 
 const statusConfig: Record<string, { color: string; label: string }> = {
   running: { color: '#22c55e', label: '运行中' },
-  waiting: { color: '#f59e0b', label: '待审批' },
   failed: { color: '#ef4444', label: '失败' },
   completed: { color: '#3b82f6', label: '已完成' },
   initializing: { color: '#94a3b8', label: '初始化中' },
@@ -142,14 +141,6 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
           transition: 'box-shadow 0.2s ease',
         }}
       >
-        {/* Waiting approval pulse glow */}
-        {session.status === 'waiting' && (
-          <div
-            className="pointer-events-none absolute inset-0 rounded-[22px] animate-pulse"
-            style={{ boxShadow: '0 0 0 2px #f59e0b55, 0 0 28px #f59e0b28' }}
-          />
-        )}
-
         {/* Luminous top radial glow */}
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-28"
@@ -274,12 +265,8 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
         <div className="flex items-center gap-1.5 px-4 pb-3">
           <Badge
             variant="outline"
-            className={cn(
-              session.status === 'waiting' && 'animate-pulse',
-            )}
             style={{ background: `${color}18`, color, borderColor: `${color}35`, fontSize: '9px' }}
           >
-            {session.status === 'waiting' && <Bell />}
             {cfg.label}
           </Badge>
           {session.agentType && (() => {

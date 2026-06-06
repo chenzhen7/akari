@@ -25,7 +25,7 @@ export class CanvasEdgeStore {
   createEdge(params: {
     sourceSessionId: string
     targetSessionId: string
-    trigger?: 'on-complete' | 'on-approval'
+    trigger?: 'on-complete'
     injectContext?: boolean
   }): CanvasEdge {
     const id = nanoid(8)

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { ShieldAlert } from 'lucide-react'
 import { Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
@@ -17,7 +16,6 @@ import { useSessionStore } from '@/stores/session-store'
 
 const statusLabelMap: Record<string, string> = {
   running: '运行中',
-  waiting: '待审批',
   failed: '失败',
   completed: '已完成',
   initializing: '初始化中',
@@ -27,7 +25,6 @@ const statusLabelMap: Record<string, string> = {
 
 const statusVariantMap: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   running: 'default',
-  waiting: 'secondary',
   failed: 'destructive',
   completed: 'outline',
   initializing: 'secondary',
@@ -40,8 +37,6 @@ interface SessionInfoPanelProps {
 }
 
 export function SessionInfoPanel({ session }: SessionInfoPanelProps) {
-  const approveSession = useSessionStore(s => s.approveSession)
-  const rejectSession = useSessionStore(s => s.rejectSession)
   const archiveSession = useSessionStore(s => s.archiveSession)
   const restoreSession = useSessionStore(s => s.restoreSession)
   const deleteSession = useSessionStore(s => s.deleteSession)
@@ -80,40 +75,6 @@ export function SessionInfoPanel({ session }: SessionInfoPanelProps) {
           <span className="text-foreground">{session.baseBranch}</span>
         </div>
       </div>
-
-      {/* Approval request detail */}
-      {session.status === 'waiting' && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/8 p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-            <span className="text-xs font-semibold text-amber-400">等待审批</span>
-            {session.pendingApproval?.type && (
-              <Badge
-                variant="outline"
-                className="ml-auto text-[8px] border-amber-500/40 text-amber-400"
-              >
-                {session.pendingApproval.type === 'destructive-op' ? '高危操作'
-                  : session.pendingApproval.type === 'merge-ready' ? '合并就绪'
-                  : '检查点'}
-              </Badge>
-            )}
-          </div>
-          {session.pendingApproval?.message && (
-            <p className="text-xs text-foreground/80 break-all leading-relaxed">
-              {session.pendingApproval.message}
-            </p>
-          )}
-          {session.pendingApproval?.command && (
-            <code className="block rounded bg-black/40 px-2 py-1.5 font-mono text-[11px] text-amber-300/90 break-all">
-              {session.pendingApproval.command}
-            </code>
-          )}
-          <div className="flex gap-2 pt-1">
-            <Button size="sm" className="flex-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold" onClick={() => approveSession(session.id)}>批准</Button>
-            <Button size="sm" variant="outline" className="flex-1 border-amber-500/40 text-amber-400 hover:bg-amber-500/10" onClick={() => rejectSession(session.id)}>拒绝</Button>
-          </div>
-        </div>
-      )}
 
       {/* Spacer */}
       <div className="flex-1" />

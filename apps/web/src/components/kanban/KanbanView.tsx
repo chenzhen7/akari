@@ -6,7 +6,6 @@ import type { KanbanColumn as KanbanColumnType } from '@/types'
 const COLUMNS: { id: KanbanColumnType; label: string }[] = [
   { id: 'backlog', label: '待办' },
   { id: 'in-progress', label: '进行中' },
-  { id: 'waiting-review', label: '待审批' },
   { id: 'approved', label: '已批准' },
   { id: 'done', label: '已完成' },
 ]

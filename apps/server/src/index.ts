@@ -87,35 +87,6 @@ fastify.patch<{ Params: { id: string }; Body: { status: SessionStatus } }>(
   },
 )
 
-fastify.post<{ Params: { id: string }; Body: { decision: 'approved' | 'rejected'; comment?: string; approvalOption?: string } }>(
-  '/sessions/:id/approval',
-  async (request, reply) => {
-    const { id } = request.params
-    const { decision, comment, approvalOption } = request.body
-    const session = sessionManager.getSession(id)
-    if (!session) return reply.status(404).send({ error: 'session not found' })
-    if (session.status !== 'waiting') {
-      fastify.log.warn({ sessionId: id, currentStatus: session.status }, '[approval] not in waiting state')
-      return reply.status(422).send({ error: 'session is not waiting for approval' })
-    }
-    fastify.log.info({ sessionId: id, decision, approvalOption }, '[approval] calling handleApproval')
-    sessionManager.handleApproval(id, decision, comment, approvalOption)
-    return { ok: true }
-  },
-)
-
-// 忽略审批：清除 hook 的等待，让 Claude Code 自己处理（不解锁 PTY）
-fastify.post<{ Params: { id: string } }>(
-  '/sessions/:id/approval-ignore',
-  async (request, reply) => {
-    const { id } = request.params
-    const session = sessionManager.getSession(id)
-    if (!session) return reply.status(404).send({ error: 'session not found' })
-    sessionManager.dismissApproval(id)
-    return { ok: true }
-  },
-)
-
 fastify.post<{ Body: { message: string; targets?: string[] } }>(
   '/broadcast',
   async (request) => {
@@ -462,7 +433,7 @@ fastify.patch<{ Params: { id: string; tabId: string } }>(
 fastify.get('/canvas/edges', async () => canvasEdgeStore.getAllEdges())
 
 fastify.post<{
-  Body: { sourceSessionId: string; targetSessionId: string; trigger?: 'on-complete' | 'on-approval'; injectContext?: boolean }
+  Body: { sourceSessionId: string; targetSessionId: string; trigger?: 'on-complete'; injectContext?: boolean }
 }>(
   '/canvas/edges',
   async (request, reply) => {
@@ -545,11 +516,6 @@ function handleClientMessage(msg: ClientMessage): void {
     case 'terminal:resize': {
       const { terminalId, cols, rows } = msg.payload
       sessionManager.resizeTerminal(terminalId, cols, rows)
-      break
-    }
-    case 'approval:decision': {
-      const { sessionId, decision, comment } = msg.payload
-      sessionManager.handleApproval(sessionId, decision, comment)
       break
     }
     case 'broadcast:send': {

@@ -25,7 +25,7 @@ export interface CanvasEdge {
   id: string
   sourceSessionId: string
   targetSessionId: string
-  trigger: 'on-complete' | 'on-approval'
+  trigger: 'on-complete'
   injectContext: boolean
 }
 
@@ -54,23 +54,6 @@ export interface GitDiff {
   summary: { additions: number; deletions: number; files: number }
 }
 
-export interface ApprovalOption {
-  key: string        // '1' | '2' | '3'
-  label: string      // 'Yes' | 'Yes, and always allow...'
-  description?: string
-}
-
-export interface ApprovalRequest {
-  type: 'checkpoint' | 'destructive-op' | 'merge-ready'
-  message: string
-  description?: string
-  diff?: GitDiff
-  command?: string
-  timestamp: Date
-  /** Options to show in the approval prompt (default: standard Yes/No/Cancel) */
-  options?: ApprovalOption[]
-}
-
 export interface SessionTab {
   id: string
   type: 'terminal' | 'claude' | 'diff' | 'file'
@@ -95,7 +78,6 @@ export interface AgentSession {
 
   kanbanColumn: KanbanColumn
   terminalId: string
-  pendingApproval?: ApprovalRequest
 
   progress: number
   terminalOutput: string[]
@@ -169,7 +151,6 @@ export type ServerMessage =
   | { event: 'terminal:ready'; payload: { sessionId: string; terminalId: string } }
   | { event: 'terminal:resized'; payload: { sessionId: string; terminalId: string } }
   | { event: 'diff:update'; payload: { sessionId: string; diff: GitDiff } }
-  | { event: 'approval:required'; payload: { sessionId: string; request: ApprovalRequest } }
   | { event: 'sessions:list'; payload: AgentSession[] }
   | { event: 'git:log-updated'; payload: { sessionId: string } & GitLogResponse }
   | { event: 'session:lastMessage'; payload: { id: string; lastAiMessage: string } }
@@ -184,7 +165,6 @@ export type ServerMessage =
 export type ClientMessage =
   | { event: 'terminal:input'; payload: { sessionId: string; terminalId: string; data: string } }
   | { event: 'terminal:resize'; payload: { sessionId: string; terminalId: string; cols: number; rows: number } }
-  | { event: 'approval:decision'; payload: { sessionId: string; decision: 'approved' | 'rejected'; comment?: string } }
   | { event: 'broadcast:send'; payload: { message: string; targets?: string[] } }
   | { event: 'tab:create'; payload: { sessionId: string; type: 'terminal' | 'claude' | 'diff' | 'file'; filePath?: string } }
   | { event: 'tab:close'; payload: { sessionId: string; tabId: string } }
@@ -264,7 +244,5 @@ export type HookEvent =
 export interface HookResponse {
   hookSpecificOutput?: {
     hookEventName: HookEventName
-    permissionDecision?: 'approve' | 'deny'
-    permissionDecisionReason?: string
   }
 }
