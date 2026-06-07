@@ -15,7 +15,7 @@ export async function dispatchHookEvent(
     case 'SessionStart': {
       const session = sessionManager.getSession(sessionId)
       if (session && session.status === 'initializing') {
-        sessionManager.updateStatus(sessionId, 'running')
+        sessionManager.updateStatus(sessionId, 'idle')
       }
       return {}
     }
@@ -24,7 +24,7 @@ export async function dispatchHookEvent(
       const { tool_name, tool_input } = event as { hook_event_name: 'PermissionRequest'; tool_name: string; tool_input: Record<string, unknown> }
       const command = typeof tool_input?.['command'] === 'string' ? tool_input['command'] : undefined
       console.log(`[PermissionRequest] session=${sessionId} tool=${tool_name}${command ? ` command=${command}` : ''}`)
-      // 不做任何拦截，让 Claude Code 在终端中走原生权限确认流程
+      // 仅做审批通知，不修改状态，也不拦截 Claude Code 的原生权限确认流程
       return {}
     }
 
@@ -51,7 +51,7 @@ export async function dispatchHookEvent(
     case 'UserPromptSubmit': {
       console.log('[UserPromptSubmit hook]', JSON.stringify(event, null, 2))
       const session = sessionManager.getSession(sessionId)
-      if (session && (session.status === 'paused' || session.status === 'waiting')) {
+      if (session && ['paused', 'waiting', 'idle'].includes(session.status)) {
         sessionManager.updateStatus(sessionId, 'running')
       }
       return {}
@@ -59,6 +59,10 @@ export async function dispatchHookEvent(
 
     case 'Stop': {
       const { last_assistant_message } = event as import('@akari/shared-types').StopPayload
+      const session = sessionManager.getSession(sessionId)
+      if (session && ['running', 'waiting'].includes(session.status)) {
+        sessionManager.updateStatus(sessionId, 'idle')
+      }
       if (last_assistant_message && last_assistant_message.trim().length > 0) {
         sessionManager.setLastAiMessage(sessionId, last_assistant_message)
         sessionManager.broadcastMessage({

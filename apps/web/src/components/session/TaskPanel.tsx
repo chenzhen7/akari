@@ -16,6 +16,7 @@ import { useSessionStore } from '@/stores/session-store'
 
 const statusLabelMap: Record<string, string> = {
   running: '运行中',
+  idle: '闲置中',
   failed: '失败',
   completed: '已完成',
   initializing: '初始化中',
@@ -28,6 +29,7 @@ const statusVariantMap: Record<
   'default' | 'secondary' | 'destructive' | 'outline'
 > = {
   running: 'default',
+  idle: 'secondary',
   failed: 'destructive',
   completed: 'outline',
   initializing: 'secondary',

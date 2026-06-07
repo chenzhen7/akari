@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   XCircle,
   Archive,
+  Coffee,
 } from 'lucide-react'
 
 const STATUS_META: Record<string, {
@@ -35,6 +36,13 @@ const STATUS_META: Record<string, {
     color: 'text-green-500',
     bg: 'bg-green-500/10 text-green-500 border-green-500/30',
     dot: 'fill-green-500 text-green-500',
+  },
+  idle: {
+    label: 'Idle',
+    icon: Coffee,
+    color: 'text-sky-500',
+    bg: 'bg-sky-500/10 text-sky-500 border-sky-500/30',
+    dot: 'fill-sky-500 text-sky-500',
   },
   waiting: {
     label: 'Waiting',

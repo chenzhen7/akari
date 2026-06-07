@@ -10,18 +10,39 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { GitBranch, Circle, Plus, Archive, Trash2, RotateCcw, Loader2 } from 'lucide-react'
+import {
+  GitBranch,
+  Plus,
+  Archive,
+  Trash2,
+  RotateCcw,
+  Loader2,
+  Coffee,
+  Clock,
+  XCircle,
+  CheckCircle2,
+  PauseCircle,
+  Eye,
+  type LucideIcon,
+} from 'lucide-react'
 import type { AgentSession } from '@/types'
 
-const statusColorMap: Record<string, string> = {
-  running: 'fill-green-500 text-green-500',
-  waiting: 'fill-amber-500 text-amber-500',
-  failed: 'fill-red-500 text-red-500',
-  completed: 'fill-blue-500 text-blue-500',
-  initializing: 'fill-slate-400 text-slate-400',
-  paused: 'fill-orange-500 text-orange-500',
-  review: 'fill-purple-500 text-purple-500',
-  archived: 'fill-slate-500 text-slate-500',
+const statusIconMap: Record<string, { Icon: LucideIcon; color: string }> = {
+  running: { Icon: Loader2, color: 'text-green-500' },
+  idle: { Icon: Coffee, color: 'text-sky-500' },
+  waiting: { Icon: Clock, color: 'text-amber-500' },
+  failed: { Icon: XCircle, color: 'text-red-500' },
+  completed: { Icon: CheckCircle2, color: 'text-blue-500' },
+  initializing: { Icon: Loader2, color: 'text-slate-400' },
+  paused: { Icon: PauseCircle, color: 'text-orange-500' },
+  review: { Icon: Eye, color: 'text-purple-500' },
+  archived: { Icon: Archive, color: 'text-slate-500' },
+}
+
+function StatusIcon({ status }: { status: string }) {
+  const { Icon, color } = statusIconMap[status] ?? statusIconMap.initializing
+  const isSpinning = status === 'running' || status === 'initializing'
+  return <Icon className={cn('mt-0.5 h-3 w-3 shrink-0', color, isSpinning && 'animate-spin')} />
 }
 
 function SessionItem({ session, isActive }: { session: AgentSession; isActive: boolean }) {
@@ -66,7 +87,7 @@ function SessionItem({ session, isActive }: { session: AgentSession; isActive: b
         {/* 第一行：状态 + 名称 + 右上角 diff */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2 min-w-0">
-            <Circle className={cn('mt-0.5 h-2 w-2 shrink-0', statusColorMap[session.status] ?? 'fill-slate-400 text-slate-400')} />
+            <StatusIcon status={session.status} />
             <p className={cn('truncate text-xs font-medium', isActive && 'text-primary')}>
               {session.name}
             </p>

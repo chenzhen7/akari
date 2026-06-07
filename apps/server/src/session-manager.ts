@@ -57,8 +57,9 @@ interface DbRow {
 }
 
 const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
-  initializing: ['running', 'failed'],
-  running: ['waiting', 'paused', 'completed', 'failed', 'archived'],
+  initializing: ['idle', 'failed'],
+  running: ['idle', 'waiting', 'paused', 'completed', 'failed', 'archived'],
+  idle: ['running', 'failed', 'archived'],
   waiting: ['running', 'paused', 'failed', 'archived'],
   approved: ['running', 'archived'],
   paused: ['running', 'waiting', 'failed', 'archived'],
@@ -72,6 +73,7 @@ const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
 const STATUS_TO_KANBAN: Partial<Record<SessionStatus, KanbanColumn>> = {
   initializing: 'backlog',
   running: 'in-progress',
+  idle: 'backlog',
   waiting: 'waiting-review',
   paused: 'in-progress',
   review: 'waiting-review',
@@ -599,7 +601,7 @@ export class SessionManager {
         }
       })
 
-      this.updateStatus(id, 'running')
+      this.updateStatus(id, 'idle')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       this.pushTerminalDisplay(id, `> ❌ Init failed: ${msg}\r\n`)

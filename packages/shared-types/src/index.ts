@@ -9,6 +9,7 @@ export type SessionStatus =
   | 'failed'
   | 'merged'
   | 'archived'
+  | 'idle'
 
 export type KanbanColumn =
   | 'backlog'

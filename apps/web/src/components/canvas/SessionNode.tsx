@@ -32,6 +32,7 @@ const agentConfig: Record<string, { bg: string; Icon: LucideIcon }> = {
 
 const statusConfig: Record<string, { color: string; label: string }> = {
   running: { color: '#22c55e', label: '运行中' },
+  idle: { color: '#0ea5e9', label: '闲置中' },
   failed: { color: '#ef4444', label: '失败' },
   completed: { color: '#3b82f6', label: '已完成' },
   initializing: { color: '#94a3b8', label: '初始化中' },
