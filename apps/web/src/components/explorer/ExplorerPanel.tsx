@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { AgentSession, FileNode } from '@akari/shared-types'
 import { API_BASE } from '@/stores/session-store'
 import { FileTreeNode } from './FileTreeNode'
@@ -13,15 +13,27 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | undefined>()
+  const wasInitializingRef = useRef(session.status === 'initializing')
 
   // Load root directory on mount / session change
   useEffect(() => {
     setChildrenCache(new Map())
     setSelectedPath(undefined)
     setError(null)
+    wasInitializingRef.current = session.status === 'initializing'
     loadDir('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id])
+
+  // 当 worktree 就绪后（initializing → 其他状态），自动刷新文件树
+  useEffect(() => {
+    if (wasInitializingRef.current && session.status !== 'initializing') {
+      wasInitializingRef.current = false
+      setError(null)
+      loadDir('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.status])
 
   const loadDir = useCallback(async (path: string): Promise<FileNode[]> => {
     setLoading(true)

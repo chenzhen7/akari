@@ -304,27 +304,32 @@ export class WorktreeManager {
     const worktreePath = this.getWorktreePath(sessionId)
     const targetPath = join(worktreePath, relativePath)
 
-    const entries = await readdir(targetPath, { withFileTypes: true })
-    const filtered = entries.filter(entry => {
-      if (entry.name === 'node_modules') return false
-      if (entry.name === '.git') return false
-      if (entry.name === '.agent-worktrees') return false
-      return true
-    })
+    try {
+      const entries = await readdir(targetPath, { withFileTypes: true })
+      const filtered = entries.filter(entry => {
+        if (entry.name === 'node_modules') return false
+        if (entry.name === '.git') return false
+        if (entry.name === '.agent-worktrees') return false
+        return true
+      })
 
-    const nodes: FileNode[] = filtered.map(entry => ({
-      name: entry.name,
-      path: join(relativePath, entry.name).replace(/\\/g, '/'),
-      type: entry.isDirectory() ? 'directory' : 'file',
-    }))
+      const nodes: FileNode[] = filtered.map(entry => ({
+        name: entry.name,
+        path: join(relativePath, entry.name).replace(/\\/g, '/'),
+        type: entry.isDirectory() ? 'directory' : 'file',
+      }))
 
-    // Sort: directories first, then files, both alphabetically
-    nodes.sort((a, b) => {
-      if (a.type === b.type) return a.name.localeCompare(b.name)
-      return a.type === 'directory' ? -1 : 1
-    })
+      // Sort: directories first, then files, both alphabetically
+      nodes.sort((a, b) => {
+        if (a.type === b.type) return a.name.localeCompare(b.name)
+        return a.type === 'directory' ? -1 : 1
+      })
 
-    return nodes
+      return nodes
+    } catch {
+      // Worktree not ready or directory doesn't exist — return empty list
+      return []
+    }
   }
 
   async readFileContent(sessionId: string, filePath: string): Promise<string> {

@@ -103,8 +103,14 @@ fastify.get<{ Params: { id: string }; Querystring: { file?: string } }>(
     const { file } = request.query
     if (!file) return reply.status(400).send({ error: 'file query param is required' })
     if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-    const content = await sessionManager.getFileDiffContent(id, file)
-    return content
+    try {
+      const content = await sessionManager.getFileDiffContent(id, file)
+      return content
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fastify.log.warn({ err: msg, sessionId: id }, 'getFileDiffContent failed')
+      return { original: '', modified: '' }
+    }
   },
 )
 
@@ -115,8 +121,14 @@ fastify.get<{ Params: { id: string }; Querystring: { path?: string } }>(
     const { path: filePath } = request.query
     if (!filePath) return reply.status(400).send({ error: 'path query param is required' })
     if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-    const lines = await sessionManager.getFileDiffLines(id, filePath)
-    return { lines }
+    try {
+      const lines = await sessionManager.getFileDiffLines(id, filePath)
+      return { lines }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fastify.log.warn({ err: msg, sessionId: id }, 'getFileDiffLines failed')
+      return { lines: [] }
+    }
   },
 )
 
@@ -126,8 +138,14 @@ fastify.get<{ Params: { id: string }; Querystring: { path?: string } }>(
     const { id } = request.params
     const { path: relativePath } = request.query
     if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-    const files = await sessionManager.listFiles(id, relativePath ?? '')
-    return files
+    try {
+      const files = await sessionManager.listFiles(id, relativePath ?? '')
+      return files
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      fastify.log.warn({ err: msg, sessionId: id }, 'listFiles failed')
+      return []
+    }
   },
 )
 

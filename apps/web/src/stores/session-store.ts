@@ -100,6 +100,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           sessions: [...state.sessions.filter(s => s.id !== session.id), session],
           pendingCreatePosition: null,
         }))
+        get().selectSession(session.id)
       })
       .catch(err => { toast.error(`创建会话失败: ${err}`); console.error('[addSession] failed:', err) })
     get().toggleCreateDialog()
