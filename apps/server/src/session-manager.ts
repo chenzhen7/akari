@@ -535,7 +535,9 @@ export class SessionManager {
         }
       }
     }
-    await this.worktreeManager.removeWorktree(sessionId, session?.branchName).catch(() => { })
+    await this.worktreeManager.removeWorktree(sessionId, session?.branchName).catch(err => {
+      console.warn(`[SessionManager] removeWorktree failed for ${sessionId} during delete (non-fatal):`, err)
+    })
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId)
   }
 

@@ -54,11 +54,25 @@ export class WorktreeManager {
     try {
       await this.git(['worktree', 'remove', '--force', worktreePath])
     } catch {
-      await rm(worktreePath, { recursive: true, force: true }).catch(() => {})
+      // worktree not registered in git — proceed to rm the directory directly
     }
-    await this.git(['worktree', 'prune']).catch(() => {})
+    // Always attempt to remove the physical directory, even if git worktree remove succeeded
+    try {
+      await rm(worktreePath, { recursive: true, force: true })
+    } catch {
+      // directory may not exist or be locked — non-fatal
+    }
+    try {
+      await this.git(['worktree', 'prune'])
+    } catch {
+      // prune failure is non-fatal
+    }
     if (branchName) {
-      await this.git(['branch', '-D', branchName]).catch(() => {})
+      try {
+        await this.git(['branch', '-D', branchName])
+      } catch {
+        // branch may already be deleted — non-fatal
+      }
     }
   }
 
