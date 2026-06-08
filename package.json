@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "pnpm --filter @akari/web dev",
     "dev:server": "pnpm --filter @akari/server dev",
-    "dev:all": "concurrently \"pnpm dev:server\" \"pnpm dev\"",
+    "dev:all": "pnpm exec concurrently \"pnpm dev:server\" \"pnpm dev\"",
     "build": "pnpm --filter @akari/web build",
     "build:server": "pnpm --filter @akari/server build",
     "lint": "pnpm -r lint",

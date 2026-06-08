@@ -170,22 +170,20 @@ export class WorkspaceManager {
     if (process.platform !== 'win32') {
       return [{ name: 'Root', path: '/' }]
     }
-    try {
-      const { execa } = await import('execa')
-      const { stdout } = await execa('wmic', ['logicaldisk', 'get', 'name', '/format:csv'])
-      const drives = stdout
-        .split('\n')
-        .filter(line => line.trim() && !line.includes('Node'))
-        .map(line => {
-          const parts = line.split(',')
-          const name = parts[parts.length - 1]?.trim()
-          return name ? { name, path: name + '\\' } : null
-        })
-        .filter((d): d is { name: string; path: string } => d !== null)
-      return drives.length > 0 ? drives : [{ name: 'C:', path: 'C:\\' }]
-    } catch {
-      return [{ name: 'C:', path: 'C:\\' }]
+    // Windows 11 deprecated wmic; use fs.access to probe drive letters instead.
+    const { access } = await import('node:fs/promises')
+    const letters = 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+    const drives: { name: string; path: string }[] = []
+    for (const letter of letters) {
+      const path = letter + ':\\'
+      try {
+        await access(path)
+        drives.push({ name: letter + ':', path })
+      } catch {
+        // drive doesn't exist, skip
+      }
     }
+    return drives.length > 0 ? drives : [{ name: 'C:', path: 'C:\\' }]
   }
 
   async validatePath(path: string): Promise<{ valid: boolean; error?: string }> {

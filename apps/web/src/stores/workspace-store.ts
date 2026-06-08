@@ -120,6 +120,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       })
       .catch(err => {
         console.error('[navigateTo] failed:', err)
+        toast.error(`无法读取目录：${err instanceof Error ? err.message : String(err)}`)
         set({ fileBrowserLoading: false })
       })
   },
