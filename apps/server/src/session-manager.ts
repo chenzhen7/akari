@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
 import { access } from 'node:fs/promises'
+import path from 'node:path'
 import type {
   AgentSession,
   AgentType,
@@ -300,7 +301,7 @@ export class SessionManager {
         label = `Terminal ${count}`
       }
     } else {
-      label = filePath ?? (type === 'file' ? 'File' : 'Diff')
+      label = filePath ? path.basename(filePath) : (type === 'file' ? 'File' : 'Diff')
     }
 
     const tab: SessionTab = { id: tabId, type, label, filePath, terminalId }
