@@ -53,9 +53,13 @@ export function WorkspaceSelector() {
               <DropdownMenuItem
                 className="flex items-center gap-2 text-sm"
                 disabled
+                title={`${currentWorkspace.name}\n${currentWorkspace.path}`}
               >
                 <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-                <span className="truncate">{currentWorkspace.name}</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="truncate">{currentWorkspace.name}</span>
+                  <span className="truncate text-xs text-muted-foreground" title={currentWorkspace.path}>{currentWorkspace.path}</span>
+                </div>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
@@ -72,9 +76,13 @@ export function WorkspaceSelector() {
                     key={workspace.id}
                     className="flex items-center gap-2 text-sm cursor-pointer"
                     onClick={() => switchWorkspace(workspace.id)}
+                    title={`${workspace.name}\n${workspace.path}`}
                   >
                     <span className="w-3.5 shrink-0" />
-                    <span className="truncate">{workspace.name}</span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="truncate">{workspace.name}</span>
+                      <span className="truncate text-xs text-muted-foreground" title={workspace.path}>{workspace.path}</span>
+                    </div>
                   </DropdownMenuItem>
                 ))}
               <DropdownMenuSeparator />
