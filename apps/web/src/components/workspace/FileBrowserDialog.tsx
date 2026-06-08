@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useCallback, memo } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,54 @@ interface FileBrowserDialogProps {
   onOpenChange: (open: boolean) => void
   onSelect: (path: string) => void
 }
+
+interface FileBrowserItemProps {
+  entry: FsEntry
+  isSelected: boolean
+  isAtRoot: boolean
+  onSelect: (path: string) => void
+  onNavigate: (path: string) => void
+}
+
+const FileBrowserItem = memo(function FileBrowserItem({
+  entry,
+  isSelected,
+  isAtRoot,
+  onSelect,
+  onNavigate,
+}: FileBrowserItemProps) {
+  const handleClick = useCallback(() => onSelect(entry.path), [onSelect, entry.path])
+  const handleDoubleClick = useCallback(() => {
+    if (entry.type === 'directory') {
+      onNavigate(entry.path)
+    }
+  }, [onNavigate, entry])
+
+  return (
+    <button
+      key={entry.path}
+      className={cn(
+        'flex items-center gap-3 px-3 py-2 rounded text-sm text-left transition-colors',
+        isSelected
+          ? 'bg-primary/10 text-primary'
+          : 'hover:bg-accent',
+      )}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+    >
+      {entry.type === 'directory' ? (
+        isAtRoot ? (
+          <HardDrive className="h-4 w-4 text-blue-400 shrink-0" />
+        ) : (
+          <Folder className="h-4 w-4 text-blue-400 shrink-0" />
+        )
+      ) : (
+        <File className="h-4 w-4 text-muted-foreground shrink-0" />
+      )}
+      <span className="truncate">{entry.name}</span>
+    </button>
+  )
+})
 
 export function FileBrowserDialog({ open, onOpenChange, onSelect }: FileBrowserDialogProps) {
   const {
@@ -36,19 +84,18 @@ export function FileBrowserDialog({ open, onOpenChange, onSelect }: FileBrowserD
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const handleDoubleClick = (entry: FsEntry) => {
-    if (entry.type === 'directory') {
-      navigateTo(entry.path)
-      selectPath(null)
-    }
-  }
-
   const handleSelect = () => {
     if (fileBrowserSelectedPath) {
       onSelect(fileBrowserSelectedPath)
       closeFileBrowser()
     }
   }
+
+  const handleItemSelect = useCallback((path: string) => selectPath(path), [selectPath])
+  const handleItemNavigate = useCallback((path: string) => {
+    navigateTo(path)
+    selectPath(null)
+  }, [navigateTo, selectPath])
 
   // Build breadcrumb from current path
   const buildBreadcrumb = () => {
@@ -115,28 +162,14 @@ export function FileBrowserDialog({ open, onOpenChange, onSelect }: FileBrowserD
           ) : (
             <div className="flex flex-col gap-0.5">
               {fileBrowserEntries.map((entry) => (
-                <button
+                <FileBrowserItem
                   key={entry.path}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2 rounded text-sm text-left transition-colors',
-                    fileBrowserSelectedPath === entry.path
-                      ? 'bg-primary/10 text-primary'
-                      : 'hover:bg-accent',
-                  )}
-                  onClick={() => selectPath(entry.path)}
-                  onDoubleClick={() => handleDoubleClick(entry)}
-                >
-                  {entry.type === 'directory' ? (
-                    isAtRoot ? (
-                      <HardDrive className="h-4 w-4 text-blue-400 shrink-0" />
-                    ) : (
-                      <Folder className="h-4 w-4 text-blue-400 shrink-0" />
-                    )
-                  ) : (
-                    <File className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <span className="truncate">{entry.name}</span>
-                </button>
+                  entry={entry}
+                  isSelected={fileBrowserSelectedPath === entry.path}
+                  isAtRoot={isAtRoot}
+                  onSelect={handleItemSelect}
+                  onNavigate={handleItemNavigate}
+                />
               ))}
             </div>
           )}
