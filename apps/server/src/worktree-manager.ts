@@ -76,32 +76,41 @@ export class WorktreeManager {
     }
   }
 
-  async getDiff(sessionId: string, baseBranch: string): Promise<GitDiff> {
-    const cwd = this.getWorktreePath(sessionId)
+  async getCurrentBranch(cwd = this.baseRepoPath): Promise<string> {
+    try {
+      const result = await this.git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
+      return result.trim()
+    } catch {
+      return 'main'
+    }
+  }
+
+  async getDiff(sessionId: string, baseBranch: string, cwd?: string): Promise<GitDiff> {
+    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
     try {
       // Use merge-base so the diff only reflects agent branch changes,
       // not new commits that may have landed on baseBranch since the worktree was created.
-      const mergeBase = (await this.git(['merge-base', 'HEAD', baseBranch], cwd).catch(() => '')).trim()
+      const mergeBase = (await this.git(['merge-base', 'HEAD', baseBranch], worktreePath).catch(() => '')).trim()
       const baseRef = mergeBase || baseBranch
 
       const [stat, full, nameStatus, numStat] = await Promise.all([
-        this.git(['diff', '--stat', baseRef], cwd),
-        this.git(['diff', baseRef], cwd),
-        this.git(['diff', '--name-status', baseRef], cwd),
-        this.git(['diff', '--numstat', baseRef], cwd),
+        this.git(['diff', '--stat', baseRef], worktreePath),
+        this.git(['diff', baseRef], worktreePath),
+        this.git(['diff', '--name-status', baseRef], worktreePath),
+        this.git(['diff', '--numstat', baseRef], worktreePath),
       ])
 
       const numStatMap = parseNumStat(numStat)
 
       // git diff only covers tracked files; also capture untracked files
-      const untrackedRaw = await this.git(['ls-files', '--others', '--exclude-standard'], cwd).catch(() => '')
+      const untrackedRaw = await this.git(['ls-files', '--others', '--exclude-standard'], worktreePath).catch(() => '')
       const untrackedFiles = untrackedRaw.trim() ? untrackedRaw.trim().split('\n').filter(Boolean) : []
 
       let extraDiff = ''
       const extraFiles: DiffFile[] = []
       for (const file of untrackedFiles) {
         // git diff --no-index exits with code 1 when differences exist (normal, not an error)
-        const fileDiff = await execa('git', ['diff', '--no-index', '--', '/dev/null', file], { cwd })
+        const fileDiff = await execa('git', ['diff', '--no-index', '--', '/dev/null', file], { cwd: worktreePath })
           .then(r => r.stdout)
           .catch((e: unknown) => {
             const err = e as { exitCode?: number; stdout?: string }
@@ -213,14 +222,14 @@ export class WorktreeManager {
     }
   }
 
-  async getGitLog(sessionId: string, limit = 100): Promise<GitLogResponse> {
-    const cwd = this.getWorktreePath(sessionId)
+  async getGitLog(sessionId: string, limit = 100, cwd?: string): Promise<GitLogResponse> {
+    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
     try {
       const sep = '||'
       const fmt = `%H${sep}%h${sep}%s${sep}%an${sep}%ae${sep}%aI${sep}%P${sep}%D`
       const raw = await this.git(
         ['log', '--all', '--topo-order', `--max-count=${limit}`, `--format=${fmt}`],
-        cwd,
+        worktreePath,
       )
       const commits: GitCommit[] = raw
         .trim()
@@ -244,18 +253,18 @@ export class WorktreeManager {
           return { hash, shortHash, message, author, email, date, parents, refs }
         })
 
-      const head = (await this.git(['rev-parse', 'HEAD'], cwd).catch(() => '')).trim()
-      const branches = await this.getGitBranches(sessionId)
+      const head = (await this.git(['rev-parse', 'HEAD'], worktreePath).catch(() => '')).trim()
+      const branches = await this.getGitBranches(sessionId, worktreePath)
       return { commits, branches, head }
     } catch {
       return { commits: [], branches: [], head: '' }
     }
   }
 
-  async getGitBranches(sessionId: string): Promise<GitBranch[]> {
-    const cwd = this.getWorktreePath(sessionId)
+  async getGitBranches(sessionId: string, cwd?: string): Promise<GitBranch[]> {
+    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
     try {
-      const raw = await this.git(['branch', '-a', '--format=%(refname:short)|%(objectname:short)|%(HEAD)'], cwd)
+      const raw = await this.git(['branch', '-a', '--format=%(refname:short)|%(objectname:short)|%(HEAD)'], worktreePath)
       return raw
         .trim()
         .split('\n')
@@ -293,29 +302,29 @@ export class WorktreeManager {
     }
   }
 
-  async commitAll(sessionId: string, message: string): Promise<void> {
-    const cwd = this.getWorktreePath(sessionId)
-    await this.git(['add', '-A'], cwd)
-    await this.git(['commit', '-m', message], cwd)
+  async commitAll(sessionId: string, message: string, cwd?: string): Promise<void> {
+    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
+    await this.git(['add', '-A'], worktreePath)
+    await this.git(['commit', '-m', message], worktreePath)
   }
 
-  async discardAll(sessionId: string): Promise<void> {
-    const cwd = this.getWorktreePath(sessionId)
-    await this.git(['checkout', '--', '.'], cwd)
-    await this.git(['clean', '-fd'], cwd)
+  async discardAll(sessionId: string, cwd?: string): Promise<void> {
+    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
+    await this.git(['checkout', '--', '.'], worktreePath)
+    await this.git(['clean', '-fd'], worktreePath)
   }
 
-  async checkoutBranch(sessionId: string, branch: string, createNew = false): Promise<void> {
-    const cwd = this.getWorktreePath(sessionId)
+  async checkoutBranch(sessionId: string, branch: string, createNew = false, cwd?: string): Promise<void> {
+    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
     if (createNew) {
-      await this.git(['checkout', '-b', branch], cwd)
+      await this.git(['checkout', '-b', branch], worktreePath)
     } else {
-      await this.git(['checkout', branch], cwd)
+      await this.git(['checkout', branch], worktreePath)
     }
   }
 
-  async listFiles(sessionId: string, relativePath: string): Promise<FileNode[]> {
-    const worktreePath = this.getWorktreePath(sessionId)
+  async listFiles(sessionId: string, relativePath: string, cwd?: string): Promise<FileNode[]> {
+    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
     const targetPath = join(worktreePath, relativePath)
 
     try {
@@ -346,8 +355,8 @@ export class WorktreeManager {
     }
   }
 
-  async readFileContent(sessionId: string, filePath: string): Promise<string> {
-    const worktreePath = this.getWorktreePath(sessionId)
+  async readFileContent(sessionId: string, filePath: string, cwd?: string): Promise<string> {
+    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
     const fullPath = join(worktreePath, filePath)
 
     const stats = await access(fullPath, constants.F_OK)
@@ -359,8 +368,8 @@ export class WorktreeManager {
     return content
   }
 
-  async writeFileContent(sessionId: string, filePath: string, content: string): Promise<void> {
-    const worktreePath = this.getWorktreePath(sessionId)
+  async writeFileContent(sessionId: string, filePath: string, content: string, cwd?: string): Promise<void> {
+    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
     const fullPath = join(worktreePath, filePath)
 
     await mkdir(dirname(fullPath), { recursive: true })

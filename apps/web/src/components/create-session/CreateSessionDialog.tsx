@@ -29,13 +29,15 @@ interface RepoBranch {
 }
 
 export function CreateSessionDialog() {
-  const { createDialogOpen, toggleCreateDialog, addSession } = useSessionStore()
+  const { createDialogOpen, toggleCreateDialog, addSession, sessions } = useSessionStore()
   const [name, setName] = useState('')
   const [task, setTask] = useState('')
   const [baseBranch, setBaseBranch] = useState('')
   const [agentType, setAgentType] = useState<AgentType>('claude')
   const [branches, setBranches] = useState<RepoBranch[]>([])
   const [branchesLoading, setBranchesLoading] = useState(false)
+
+  const mainSession = sessions.find(s => s.isMain)
 
   useEffect(() => {
     if (!createDialogOpen) return
@@ -45,17 +47,18 @@ export function CreateSessionDialog() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = (await res.json()) as RepoBranch[]
         setBranches(data)
-        const current = data.find(b => b.isCurrent)
-        setBaseBranch(current?.name ?? data[0]?.name ?? '')
+        // 默认以主会话的当前分支作为 baseBranch，否则使用仓库当前分支
+        const defaultBranch = mainSession?.branchName ?? data.find(b => b.isCurrent)?.name ?? data[0]?.name ?? ''
+        setBaseBranch(defaultBranch)
       })
       .catch(err => {
         console.error('[CreateSessionDialog] fetch branches failed:', err)
         // 降级：保留空列表，让用户可以手动输入
         setBranches([])
-        setBaseBranch('')
+        setBaseBranch(mainSession?.branchName ?? '')
       })
       .finally(() => setBranchesLoading(false))
-  }, [createDialogOpen])
+  }, [createDialogOpen, mainSession])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

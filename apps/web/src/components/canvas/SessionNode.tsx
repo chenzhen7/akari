@@ -1,15 +1,8 @@
 import { memo, useState, useRef } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Plus, RotateCcw, Loader2 } from 'lucide-react'
+import { DeleteSessionDialog } from '@/components/session/DeleteSessionDialog'
+import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Plus, RotateCcw, Loader2, HardDrive } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
@@ -67,7 +60,8 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
     hoverLeaveRef.current = setTimeout(() => setHovered(false), 60)
   }
 
-  const cfg = statusConfig[session.status] ?? statusConfig.initializing
+  const isMain = session.isMain ?? false
+  const cfg = isMain ? { color: '#f59e0b', label: '主会话' } : (statusConfig[session.status] ?? statusConfig.initializing)
   const isArchived = session.status === 'archived'
   const isPending = pendingOps.has(session.id)
   const color = cfg.color
@@ -158,68 +152,70 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
         />
 
         {/* Hover action buttons */}
-        <div
-          className={cn(
-            'absolute right-2.5 top-3 z-10 flex items-center gap-1 transition-all duration-150',
-            hovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none',
-          )}
-          onClick={stopBubble}
-          onMouseDown={stopBubble}
-          onPointerDown={stopBubble}
-          onPointerUp={stopBubble}
-        >
-          {!isArchived && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none"
-                  style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
-                  disabled={isPending}
-                  onClick={() => archiveSession(session.id)}
-                >
-                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Archive className="h-3 w-3" />}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">归档（终止进程，保留 Worktree）</TooltipContent>
-            </Tooltip>
-          )}
-          {isArchived && !isPending && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  className="rounded-lg p-1.5 text-blue-400 transition-colors hover:text-blue-300"
-                  style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
-                  onClick={() => restoreSession(session.id)}
-                >
-                  <RotateCcw className="h-3 w-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">恢复正常</TooltipContent>
-            </Tooltip>
-          )}
-          {isArchived && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  className="rounded-lg p-1.5 text-red-400 transition-colors hover:bg-red-500 hover:text-white disabled:pointer-events-none"
-                  style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
-                  disabled={isPending}
-                  onClick={() => setDeleteOpen(true)}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">彻底删除</TooltipContent>
-            </Tooltip>
-          )}
-        </div>
+        {!isMain && (
+          <div
+            className={cn(
+              'absolute right-2.5 top-3 z-10 flex items-center gap-1 transition-all duration-150',
+              hovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none',
+            )}
+            onClick={stopBubble}
+            onMouseDown={stopBubble}
+            onPointerDown={stopBubble}
+            onPointerUp={stopBubble}
+          >
+            {!isArchived && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none"
+                    style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
+                    disabled={isPending}
+                    onClick={() => archiveSession(session.id)}
+                  >
+                    {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Archive className="h-3 w-3" />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">归档（终止进程，保留 Worktree）</TooltipContent>
+              </Tooltip>
+            )}
+            {isArchived && !isPending && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="rounded-lg p-1.5 text-blue-400 transition-colors hover:text-blue-300"
+                    style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
+                    onClick={() => restoreSession(session.id)}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">恢复正常</TooltipContent>
+              </Tooltip>
+            )}
+            {isArchived && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="rounded-lg p-1.5 text-red-400 transition-colors hover:bg-red-500 hover:text-white disabled:pointer-events-none"
+                    style={{ background: 'hsl(var(--muted) / 0.8)', backdropFilter: 'blur(8px)' }}
+                    disabled={isPending}
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">彻底删除</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        )}
 
         {/* Header */}
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-stretch gap-3 pr-9">
             {/* Agent avatar (rounded-xl, stretches to match title+branch height) + status badge */}
             {(() => {
-              const ac = agentConfig[session.agentType] ?? agentConfig.shell
+              const ac = isMain ? { bg: '#b45309', Icon: HardDrive } : (agentConfig[session.agentType] ?? agentConfig.shell)
               const Icon = ac.Icon
               return (
                 <div className="relative w-10 shrink-0">
@@ -229,21 +225,23 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
                   >
                     <Icon className="h-4 w-4 text-white" />
                   </div>
-                  <span
-                    className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-[2px]"
-                    style={{
-                      background: color,
-                      borderColor: 'hsl(var(--background))',
-                      boxShadow: `0 0 5px ${color}`,
-                    }}
-                  >
-                    {session.status === 'running' && (
-                      <span
-                        className="absolute inset-0 rounded-full animate-ping opacity-70"
-                        style={{ background: color }}
-                      />
-                    )}
-                  </span>
+                  {!isMain && (
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-[2px]"
+                      style={{
+                        background: color,
+                        borderColor: 'hsl(var(--background))',
+                        boxShadow: `0 0 5px ${color}`,
+                      }}
+                    >
+                      {session.status === 'running' && (
+                        <span
+                          className="absolute inset-0 rounded-full animate-ping opacity-70"
+                          style={{ background: color }}
+                        />
+                      )}
+                    </span>
+                  )}
                 </div>
               )
             })()}
@@ -270,7 +268,7 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
           >
             {cfg.label}
           </Badge>
-          {session.agentType && (() => {
+          {!isMain && session.agentType && (() => {
             const ac = agentConfig[session.agentType] ?? agentConfig.shell
             const Icon = ac.Icon
             return (
@@ -304,41 +302,22 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
       </div>
 
       {/* Delete confirmation dialog */}
-      <div
-        onClick={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-          <DialogContent showCloseButton={false}>
-            <DialogHeader>
-              <DialogTitle>彻底删除会话</DialogTitle>
-              <DialogDescription>
-                将删除 Worktree 目录（
-                <span className="font-mono text-foreground">.agent-worktrees/{session.id}</span>
-                ）和分支（
-                <span className="font-mono text-foreground">{session.branchName}</span>
-                ），此操作不可恢复。
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDeleteOpen(false)}>
-                取消
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={() => {
-                  deleteSession(session.id)
-                  setDeleteOpen(false)
-                }}
-              >
-                确认删除
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+      {!isMain && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <DeleteSessionDialog
+            open={deleteOpen}
+            onOpenChange={setDeleteOpen}
+            sessionId={session.id}
+            branchName={session.branchName}
+            onConfirm={() => deleteSession(session.id)}
+          />
+        </div>
+      )}
     </>
   )
 }
@@ -357,7 +336,8 @@ function areEqual(
     p.branchName === n.branchName &&
     p.lastAiMessage === n.lastAiMessage &&
     p.canvasPosition.x === n.canvasPosition.x &&
-    p.canvasPosition.y === n.canvasPosition.y
+    p.canvasPosition.y === n.canvasPosition.y &&
+    p.isMain === n.isMain
   )
 }
 

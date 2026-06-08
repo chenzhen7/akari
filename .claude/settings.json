@@ -16,7 +16,8 @@
       "Bash(mkdir -p *)",
       "Bash(touch *)",
       "Bash(xxd)",
-      "Bash(find *)"
+      "Bash(find *)",
+      "Bash(pnpm *)"
     ]
   },
   "enabledPlugins": {}

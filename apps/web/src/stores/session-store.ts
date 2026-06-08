@@ -202,14 +202,21 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body: '{}',
     })
-      .then(() => {
+      .then(async res => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body?.error ?? `HTTP ${res.status}`)
+        }
         set(state => ({
           sessions: state.sessions.map(s =>
             s.id === id ? { ...s, status: 'archived' as SessionStatus, kanbanColumn: 'done' } : s
           ),
         }))
       })
-      .catch(err => console.error('[archiveSession] failed:', err))
+      .catch(err => {
+        console.error('[archiveSession] failed:', err)
+        toast.error(`归档失败: ${err instanceof Error ? err.message : String(err)}`)
+      })
       .finally(() => {
         set(state => {
           const next = new Set(state.pendingOps)
@@ -223,7 +230,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     if (get().pendingOps.has(id)) return
     set(state => ({ pendingOps: new Set(state.pendingOps).add(id) }))
     fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE' })
-      .then(() => {
+      .then(async res => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body?.error ?? `HTTP ${res.status}`)
+        }
         set(state => ({
           sessions: state.sessions.filter(s => s.id !== id),
           openTabs: state.openTabs.filter(t => t !== id),
@@ -231,7 +242,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           activeSessionId: state.activeSessionId === id ? null : state.activeSessionId,
         }))
       })
-      .catch(err => console.error('[deleteSession] failed:', err))
+      .catch(err => {
+        console.error('[deleteSession] failed:', err)
+        toast.error(`删除失败: ${err instanceof Error ? err.message : String(err)}`)
+      })
       .finally(() => {
         set(state => {
           const next = new Set(state.pendingOps)

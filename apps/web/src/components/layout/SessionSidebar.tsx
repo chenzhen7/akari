@@ -3,14 +3,6 @@ import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session-store'
 import { Button } from '@/components/ui/button'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
   GitBranch,
   Plus,
   Archive,
@@ -26,6 +18,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { AgentSession } from '@/types'
+import { DeleteSessionDialog } from '@/components/session/DeleteSessionDialog'
+import { SessionContextMenu } from './SessionContextMenu'
 
 const statusIconMap: Record<string, { Icon: LucideIcon; color: string }> = {
   running: { Icon: Loader2, color: 'text-green-500' },
@@ -45,7 +39,15 @@ function StatusIcon({ status }: { status: string }) {
   return <Icon className={cn('mt-0.5 h-3 w-3 shrink-0', color, isSpinning && 'animate-spin')} />
 }
 
-function SessionItem({ session, isActive }: { session: AgentSession; isActive: boolean }) {
+interface SessionItemProps {
+  session: AgentSession
+  isActive: boolean
+  contextMenu: { x: number; y: number; sessionId: string } | null
+  onContextMenu: (e: React.MouseEvent, sessionId: string) => void
+  onCloseContextMenu: () => void
+}
+
+function SessionItem({ session, isActive, contextMenu, onContextMenu, onCloseContextMenu }: SessionItemProps) {
   const selectSession = useSessionStore(s => s.selectSession)
   const archiveSession = useSessionStore(s => s.archiveSession)
   const deleteSession = useSessionStore(s => s.deleteSession)
@@ -57,6 +59,7 @@ function SessionItem({ session, isActive }: { session: AgentSession; isActive: b
   const isTerminal = ['archived', 'merged'].includes(session.status)
   const additions = session.diffSummary?.additions ?? 0
   const deletions = session.diffSummary?.deletions ?? 0
+  const isMain = session.isMain ?? false
 
   const handleArchive = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -73,10 +76,17 @@ function SessionItem({ session, isActive }: { session: AgentSession; isActive: b
     setConfirmDelete(true)
   }
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!isMain) return
+    e.preventDefault()
+    onContextMenu(e, session.id)
+  }
+
   return (
     <>
       <button
         onClick={() => selectSession(session.id)}
+        onContextMenu={handleContextMenu}
         className={cn(
           'group flex w-full flex-col gap-0.5 rounded-lg border px-2.5 py-2 text-left transition-all',
           isActive
@@ -91,6 +101,9 @@ function SessionItem({ session, isActive }: { session: AgentSession; isActive: b
             <p className={cn('truncate text-xs font-medium', isActive && 'text-primary')}>
               {session.name}
             </p>
+            {isMain && (
+              <span className="flex h-3 items-center text-xs text-muted-foreground shrink-0">*</span>
+            )}
           </div>
           {(additions > 0 || deletions > 0) && (
             <div className="flex items-center gap-2 text-[10px] font-mono shrink-0">
@@ -105,78 +118,67 @@ function SessionItem({ session, isActive }: { session: AgentSession; isActive: b
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground min-w-0">
             <GitBranch className="h-2.5 w-2.5 shrink-0" />
             <span className="truncate">{session.branchName}</span>
-            <span className="opacity-50 shrink-0">→</span>
-            <span className="truncate">{session.baseBranch}</span>
-          </div>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-            {!isTerminal && (
-              <Button
-                variant="ghost"
-                size="xs"
-                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                disabled={isPending}
-                onClick={handleArchive}
-                title="归档"
-              >
-                {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Archive className="h-3 w-3" />}
-              </Button>
-            )}
-            {session.status === 'archived' && (
+            {!isMain && (
               <>
+                <span className="opacity-50 shrink-0">→</span>
+                <span className="truncate">{session.baseBranch}</span>
+              </>
+            )}
+          </div>
+          {isMain ? (
+            <div className="h-6 shrink-0" />
+          ) : (
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              {!isTerminal && (
                 <Button
                   variant="ghost"
                   size="xs"
                   className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                   disabled={isPending}
-                  onClick={handleRestore}
-                  title="恢复"
+                  onClick={handleArchive}
+                  title="归档"
                 >
-                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Archive className="h-3 w-3" />}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                  disabled={isPending}
-                  onClick={handleDelete}
-                  title="删除"
-                >
-                  {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                </Button>
-              </>
-            )}
-          </div>
+              )}
+              {session.status === 'archived' && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    disabled={isPending}
+                    onClick={handleRestore}
+                    title="恢复"
+                  >
+                    {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                    disabled={isPending}
+                    onClick={handleDelete}
+                    title="删除"
+                  >
+                    {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </button>
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>彻底删除会话</DialogTitle>
-            <DialogDescription>
-              将删除 Worktree 目录（
-              <span className="font-mono text-foreground">.agent-worktrees/{session.id}</span>
-              ）和分支（
-              <span className="font-mono text-foreground">{session.branchName}</span>
-              ），此操作不可恢复。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
-              取消
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                deleteSession(session.id)
-                setConfirmDelete(false)
-              }}
-            >
-              确认删除
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {!isMain && (
+        <DeleteSessionDialog
+          open={confirmDelete}
+          onOpenChange={setConfirmDelete}
+          sessionId={session.id}
+          branchName={session.branchName}
+          onConfirm={() => deleteSession(session.id)}
+        />
+      )}
     </>
   )
 }
@@ -185,66 +187,110 @@ export function SessionSidebar() {
   const sessions = useSessionStore(s => s.sessions)
   const openCreateDialog = useSessionStore(s => s.openCreateDialog)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)
 
-  const activeSessions = sessions.filter(s => s.status !== 'archived')
-  const archivedSessions = sessions.filter(s => s.status === 'archived')
+  const mainSession = sessions.find(s => s.isMain)
+  const regularSessions = sessions.filter(s => !s.isMain)
+  const activeSessions = regularSessions.filter(s => s.status !== 'archived')
+  const archivedSessions = regularSessions.filter(s => s.status === 'archived')
+
+  const handleContextMenu = (e: React.MouseEvent, sessionId: string) => {
+    setContextMenu({ x: e.clientX, y: e.clientY, sessionId })
+  }
+
+  const closeContextMenu = () => setContextMenu(null)
+
+  const ctxSession = contextMenu ? sessions.find(s => s.id === contextMenu.sessionId) : null
 
   return (
-    <aside className="flex h-full w-full flex-col bg-panel">
-      <div className="flex h-full w-full flex-col">
-        {/* Header */}
-        <div className="flex h-9 shrink-0 items-center px-2 gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            会话列表
-          </span>
-          <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
-            {activeSessions.length}
-          </span>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="h-6 w-6 p-0"
-            onClick={() => openCreateDialog()}
-            title="添加会话"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+    <>
+      <aside className="flex h-full w-full flex-col bg-panel">
+        <div className="flex h-full w-full flex-col">
+          {/* Header */}
+          <div className="flex h-9 shrink-0 items-center px-2 gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              会话列表
+            </span>
+            <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
+              {activeSessions.length}
+            </span>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-6 w-6 p-0"
+              onClick={() => openCreateDialog()}
+              title="添加会话"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </div>
 
-        {/* Active session list */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1.5 min-h-0">
-          {activeSessions.map(session => (
-            <SessionItem
-              key={session.id}
-              session={session}
-              isActive={session.id === activeSessionId}
-            />
-          ))}
-        </div>
+          {/* Main session */}
+          {mainSession && (
+            <div className="px-2 pt-1">
+              <SessionItem
+                session={mainSession}
+                isActive={mainSession.id === activeSessionId}
+                contextMenu={contextMenu}
+                onContextMenu={handleContextMenu}
+                onCloseContextMenu={closeContextMenu}
+              />
+            </div>
+          )}
 
-        {/* Archived list */}
-        {archivedSessions.length > 0 && (
-          <>
-            <div className="flex h-7 shrink-0 items-center px-2 gap-2 border-t border-border/50">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                归档
-              </span>
-              <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
-                {archivedSessions.length}
-              </span>
-            </div>
-            <div className="shrink-0 overflow-y-auto p-2 space-y-1.5 max-h-[35%]">
-              {archivedSessions.map(session => (
-                <SessionItem
-                  key={session.id}
-                  session={session}
-                  isActive={session.id === activeSessionId}
-                />
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    </aside>
+    
+
+          {/* Active session list */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5 min-h-0">
+            {activeSessions.map(session => (
+              <SessionItem
+                key={session.id}
+                session={session}
+                isActive={session.id === activeSessionId}
+                contextMenu={contextMenu}
+                onContextMenu={handleContextMenu}
+                onCloseContextMenu={closeContextMenu}
+              />
+            ))}
+          </div>
+
+          {/* Archived list */}
+          {archivedSessions.length > 0 && (
+            <>
+              <div className="flex h-7 shrink-0 items-center px-2 gap-2 border-t border-border/50">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  归档
+                </span>
+                <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
+                  {archivedSessions.length}
+                </span>
+              </div>
+              <div className="shrink-0 overflow-y-auto p-2 space-y-1.5 max-h-[35%]">
+                {archivedSessions.map(session => (
+                  <SessionItem
+                    key={session.id}
+                    session={session}
+                    isActive={session.id === activeSessionId}
+                    contextMenu={contextMenu}
+                    onContextMenu={handleContextMenu}
+                    onCloseContextMenu={closeContextMenu}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </aside>
+
+      {contextMenu && ctxSession && (
+        <SessionContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          sessionId={ctxSession.id}
+          currentBranch={ctxSession.branchName}
+          onClose={closeContextMenu}
+        />
+      )}
+    </>
   )
 }

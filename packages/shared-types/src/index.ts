@@ -97,6 +97,7 @@ export interface AgentSession {
   tabs: SessionTab[]
   activeTabId: string | null
   workspaceId: string
+  isMain?: boolean
 }
 
 export interface GitCommit {

@@ -45,6 +45,9 @@ const sessionManager = await createSessionManager({
 // 迁移旧数据：将无 workspace_id 的 session 关联到默认工作区
 db.prepare("UPDATE sessions SET workspace_id = ? WHERE workspace_id = '' OR workspace_id IS NULL").run(currentWorkspace.id)
 
+// 确保当前工作区有主会话
+await sessionManager.ensureMainSession(currentWorkspace.path)
+
 const canvasEdgeStore = new CanvasEdgeStore(sessionManager.getDb())
 canvasEdgeStore.initDb()
 
@@ -199,8 +202,13 @@ fastify.post<{ Params: { id: string } }>(
   async (request, reply) => {
     const { id } = request.params
     if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-    sessionManager.archiveSession(id)
-    return { ok: true }
+    try {
+      sessionManager.archiveSession(id)
+      return { ok: true }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(422).send({ error: msg })
+    }
   },
 )
 
@@ -252,8 +260,13 @@ fastify.delete<{ Params: { id: string } }>(
   async (request, reply) => {
     const { id } = request.params
     if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-    await sessionManager.deleteSession(id)
-    return { ok: true }
+    try {
+      await sessionManager.deleteSession(id)
+      return { ok: true }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(422).send({ error: msg })
+    }
   },
 )
 
@@ -367,6 +380,7 @@ fastify.post<{ Params: { id: string } }>('/workspaces/:id/switch', async (reques
   if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
   sessionManager.setWorkspace(workspace.id, workspace.path)
   await sessionManager.restoreSessions()
+  await sessionManager.ensureMainSession(workspace.path)
   broadcast({ event: 'workspace:current', payload: workspace })
   broadcast({ event: 'sessions:list', payload: sessionManager.listSessions() })
   broadcast({ event: 'workspace:list', payload: workspaceManager.listWorkspaces() })

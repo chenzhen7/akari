@@ -54,6 +54,7 @@ interface DbRow {
   tabs: string
   active_tab_id: string | null
   workspace_id: string
+  is_main: number
 }
 
 const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
@@ -107,7 +108,8 @@ export class SessionManager {
 
   async createSession(params: CreateSessionParams): Promise<AgentSession> {
     const id = nanoid(8)
-    const baseBranch = params.baseBranch ?? 'main'
+    const mainSession = this.getMainSession()
+    const baseBranch = params.baseBranch ?? mainSession?.branchName ?? 'main'
     const safeName = params.name
       .trim()
       .replace(/[^a-zA-Z0-9]/g, '-')
@@ -181,6 +183,50 @@ export class SessionManager {
       .prepare('SELECT * FROM sessions WHERE id = ?')
       .get(sessionId) as DbRow | undefined
     return row ? rowToSession(row) : null
+  }
+
+  getMainSession(): AgentSession | null {
+    const row = this.db
+      .prepare('SELECT * FROM sessions WHERE workspace_id = ? AND is_main = 1')
+      .get(this.workspaceId) as DbRow | undefined
+    return row ? rowToSession(row) : null
+  }
+
+  async ensureMainSession(workspacePath: string): Promise<AgentSession> {
+    const existing = this.getMainSession()
+    if (existing) return existing
+
+    const currentBranch = await this.worktreeManager.getCurrentBranch()
+    const id = nanoid(8)
+    const session: AgentSession = {
+      id,
+      name: currentBranch,
+      task: '主分支',
+      status: 'idle',
+      agentType: 'shell',
+      worktreePath: workspacePath,
+      branchName: currentBranch,
+      baseBranch: currentBranch,
+      canvasPosition: { x: 50, y: 50 },
+      canvasSize: { width: 280, height: 280 },
+      kanbanColumn: 'backlog',
+      terminalId: '',
+      progress: 0,
+      terminalOutput: [],
+      lastAiMessage: '',
+      diffSummary: { additions: 0, deletions: 0 },
+      createdAt: new Date(),
+      tags: [],
+      collaborationRole: 'standalone',
+      childSessionIds: [],
+      tabs: [],
+      activeTabId: null,
+      workspaceId: this.workspaceId,
+      isMain: true,
+    }
+    this.insertRow(session)
+    this.broadcast({ event: 'session:created', payload: session })
+    return session
   }
 
   listSessions(): AgentSession[] {
@@ -266,7 +312,9 @@ export class SessionManager {
       .run(JSON.stringify(updatedTabs), activeTabId, sessionId)
 
     if ((type === 'terminal' || type === 'claude') && terminalId) {
-      const worktreePath = this.worktreeManager.getWorktreePath(sessionId)
+      const worktreePath = session.isMain
+        ? session.worktreePath
+        : this.worktreeManager.getWorktreePath(sessionId)
       this.terminalMux.createTerminal(terminalId, sessionId, worktreePath)
     }
 
@@ -343,7 +391,8 @@ export class SessionManager {
     if (!session?.worktreePath) {
       return { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
     }
-    return this.worktreeManager.getDiff(sessionId, session.baseBranch)
+    const cwd = session.isMain ? session.worktreePath : undefined
+    return this.worktreeManager.getDiff(sessionId, session.baseBranch, cwd)
   }
 
   setLastAiMessage(sessionId: string, message: string): void {
@@ -356,6 +405,9 @@ export class SessionManager {
 
   archiveSession(sessionId: string): void {
     const session = this.getSession(sessionId)
+    if (session?.isMain) {
+      throw new Error('Cannot archive the main session')
+    }
     if (session) {
       for (const tab of session.tabs) {
         if (tab.type === 'terminal' && tab.terminalId) {
@@ -379,13 +431,15 @@ export class SessionManager {
   async getGitLog(sessionId: string, limit = 100): Promise<GitLogResponse> {
     const session = this.getSession(sessionId)
     if (!session?.worktreePath) return { commits: [], branches: [], head: '' }
-    return this.worktreeManager.getGitLog(sessionId, limit)
+    const cwd = session.isMain ? session.worktreePath : undefined
+    return this.worktreeManager.getGitLog(sessionId, limit, cwd)
   }
 
   async getGitBranches(sessionId: string): Promise<GitBranch[]> {
     const session = this.getSession(sessionId)
     if (!session?.worktreePath) return []
-    return this.worktreeManager.getGitBranches(sessionId)
+    const cwd = session.isMain ? session.worktreePath : undefined
+    return this.worktreeManager.getGitBranches(sessionId, cwd)
   }
 
   async getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]> {
@@ -395,21 +449,31 @@ export class SessionManager {
   async commitAll(sessionId: string, message: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    await this.worktreeManager.commitAll(sessionId, message)
-    const log = await this.worktreeManager.getGitLog(sessionId)
+    const cwd = session.isMain ? session.worktreePath : undefined
+    await this.worktreeManager.commitAll(sessionId, message, cwd)
+    const log = await this.worktreeManager.getGitLog(sessionId, 100, cwd)
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
   }
 
   async discardAll(sessionId: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    await this.worktreeManager.discardAll(sessionId)
+    const cwd = session.isMain ? session.worktreePath : undefined
+    await this.worktreeManager.discardAll(sessionId, cwd)
   }
 
   async checkoutBranch(sessionId: string, branch: string, createNew = false): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    await this.worktreeManager.checkoutBranch(sessionId, branch, createNew)
+    const cwd = session.isMain ? session.worktreePath : undefined
+    await this.worktreeManager.checkoutBranch(sessionId, branch, createNew, cwd)
+    if (session.isMain) {
+      this.db.prepare('UPDATE sessions SET branch_name = ? WHERE id = ?').run(branch, sessionId)
+      const updated = this.getSession(sessionId)
+      if (updated) {
+        this.broadcast({ event: 'session:updated', payload: updated })
+      }
+    }
   }
 
   async worktreeMerge(sessionId: string, sourceBranch: string): Promise<void> {
@@ -423,45 +487,43 @@ export class SessionManager {
   async getFileDiffContent(sessionId: string, filePath: string): Promise<{ original: string; modified: string }> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    return this.worktreeManager.getFileDiffContent(
-      this.worktreeManager.getWorktreePath(sessionId),
-      session.baseBranch,
-      filePath,
-    )
+    const worktreePath = session.isMain ? session.worktreePath : this.worktreeManager.getWorktreePath(sessionId)
+    return this.worktreeManager.getFileDiffContent(worktreePath, session.baseBranch, filePath)
   }
 
   async getFileDiffLines(sessionId: string, filePath: string): Promise<import('@akari/shared-types').FileDiffLine[]> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    return this.worktreeManager.getFileDiffLines(
-      this.worktreeManager.getWorktreePath(sessionId),
-      session.baseBranch,
-      filePath,
-    )
+    const worktreePath = session.isMain ? session.worktreePath : this.worktreeManager.getWorktreePath(sessionId)
+    return this.worktreeManager.getFileDiffLines(worktreePath, session.baseBranch, filePath)
   }
 
   async listFiles(sessionId: string, relativePath: string): Promise<FileNode[]> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    return this.worktreeManager.listFiles(sessionId, relativePath)
+    const cwd = session.isMain ? session.worktreePath : undefined
+    return this.worktreeManager.listFiles(sessionId, relativePath, cwd)
   }
 
   async readFileContent(sessionId: string, filePath: string): Promise<string> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    return this.worktreeManager.readFileContent(sessionId, filePath)
+    const cwd = session.isMain ? session.worktreePath : undefined
+    return this.worktreeManager.readFileContent(sessionId, filePath, cwd)
   }
 
   async writeFileContent(sessionId: string, filePath: string, content: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    await this.worktreeManager.writeFileContent(sessionId, filePath, content)
+    const cwd = session.isMain ? session.worktreePath : undefined
+    await this.worktreeManager.writeFileContent(sessionId, filePath, content, cwd)
   }
 
   async restoreSessions(): Promise<void> {
     const sessions = this.listSessions()
 
     for (const session of sessions) {
+      if (session.isMain) continue
       if (session.status === 'initializing') {
         this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
         continue
@@ -528,6 +590,9 @@ export class SessionManager {
 
   async deleteSession(sessionId: string): Promise<void> {
     const session = this.getSession(sessionId)
+    if (session?.isMain) {
+      throw new Error('Cannot delete the main session')
+    }
     if (session) {
       for (const tab of session.tabs) {
         if (tab.type === 'terminal' && tab.terminalId) {
@@ -694,7 +759,8 @@ export class SessionManager {
         last_ai_message    TEXT NOT NULL DEFAULT '',
         tabs               TEXT NOT NULL DEFAULT '[]',
         active_tab_id      TEXT,
-        workspace_id       TEXT NOT NULL DEFAULT ''
+        workspace_id       TEXT NOT NULL DEFAULT '',
+        is_main            INTEGER NOT NULL DEFAULT 0
       )
     `)
 
@@ -715,6 +781,9 @@ export class SessionManager {
     if (!cols.includes('workspace_id')) {
       this.db.exec('ALTER TABLE sessions ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ""')
     }
+    if (!cols.includes('is_main')) {
+      this.db.exec('ALTER TABLE sessions ADD COLUMN is_main INTEGER NOT NULL DEFAULT 0')
+    }
     // pending_approval column removed — no longer used
   }
 
@@ -725,8 +794,8 @@ export class SessionManager {
           id, name, task, status, agent_type, worktree_path, branch_name, base_branch,
           canvas_x, canvas_y, canvas_width, canvas_height,
           kanban_column, terminal_id, progress, diff_summary, last_ai_message, created_at, tags,
-          collaboration_role, parent_session_id, child_session_ids, tabs, active_tab_id, workspace_id
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          collaboration_role, parent_session_id, child_session_ids, tabs, active_tab_id, workspace_id, is_main
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         s.id,
@@ -754,6 +823,7 @@ export class SessionManager {
         JSON.stringify(s.tabs),
         s.activeTabId,
         s.workspaceId,
+        s.isMain ? 1 : 0,
       )
   }
 }
@@ -798,6 +868,7 @@ function rowToSession(r: DbRow): AgentSession {
     tabs: JSON.parse(r.tabs ?? '[]') as SessionTab[],
     activeTabId: r.active_tab_id ?? null,
     workspaceId: r.workspace_id ?? '',
+    isMain: r.is_main === 1,
   }
 }
 
