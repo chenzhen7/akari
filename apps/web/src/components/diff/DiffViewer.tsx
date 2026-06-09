@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { AgentSession } from '@akari/shared-types'
 import { useTheme } from '@/components/theme-provider'
+import { detectLanguage } from '@/lib/language-utils'
 
 const MonacoDiffEditor = lazy(() =>
   import('@monaco-editor/react').then(m => ({ default: m.DiffEditor }))
@@ -10,19 +11,6 @@ const MonacoDiffEditor = lazy(() =>
 interface DiffViewerProps {
   session: AgentSession
   filePath: string
-}
-
-const EXT_LANG: Record<string, string> = {
-  ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-  py: 'python', rs: 'rust', go: 'go', java: 'java', cs: 'csharp',
-  css: 'css', scss: 'scss', html: 'html', json: 'json', md: 'markdown',
-  yaml: 'yaml', yml: 'yaml', toml: 'toml', sh: 'shell', bash: 'shell',
-  txt: 'plaintext', vue: 'html', svelte: 'html',
-}
-
-function detectLanguage(filePath: string): string {
-  const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
-  return EXT_LANG[ext] ?? 'plaintext'
 }
 
 export function DiffViewer({ session, filePath }: DiffViewerProps) {

@@ -229,16 +229,13 @@ export class SessionManager {
     this.broadcast({ event: 'session:created', payload: session })
 
     // 主会话监听仓库根目录的文件变更
-    this.worktreeManager.watchDiff(session.id, session.baseBranch, async diff => {
-      this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, session.id)
-      this.broadcast({ event: 'diff:update', payload: { sessionId: session.id, diff } })
-      try {
-        const log = await this.worktreeManager.getGitLog(session.id, 100, session.worktreePath)
-        this.broadcast({ event: 'git:log-updated', payload: { sessionId: session.id, ...log } })
-      } catch {
-        // git log failure is non-fatal
-      }
-    }, session.worktreePath, session.worktreePath)
+    this.worktreeManager.watchDiff(
+      session.id,
+      session.baseBranch,
+      this.createDiffCallback(session.id, session.worktreePath),
+      session.worktreePath,
+      session.worktreePath,
+    )
 
     return session
   }
@@ -540,16 +537,13 @@ export class SessionManager {
       if (session.isMain) {
         // 主会话：不需要恢复终端，只需启动文件监听（监听仓库根目录）
         if (session.worktreePath) {
-          this.worktreeManager.watchDiff(session.id, session.baseBranch, async diff => {
-            this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, session.id)
-            this.broadcast({ event: 'diff:update', payload: { sessionId: session.id, diff } })
-            try {
-              const log = await this.worktreeManager.getGitLog(session.id, 100, session.worktreePath)
-              this.broadcast({ event: 'git:log-updated', payload: { sessionId: session.id, ...log } })
-            } catch {
-              // git log failure is non-fatal
-            }
-          }, session.worktreePath, session.worktreePath)
+          this.worktreeManager.watchDiff(
+            session.id,
+            session.baseBranch,
+            this.createDiffCallback(session.id, session.worktreePath),
+            session.worktreePath,
+            session.worktreePath,
+          )
         }
         continue
       }
@@ -605,16 +599,11 @@ export class SessionManager {
 
       this.pushTerminalDisplay(session.id, `\r\n\x1b[33m> [Server restarted — terminal restored]\x1b[0m\r\n`)
 
-      this.worktreeManager.watchDiff(session.id, session.baseBranch, async diff => {
-        this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, session.id)
-        this.broadcast({ event: 'diff:update', payload: { sessionId: session.id, diff } })
-        try {
-          const log = await this.worktreeManager.getGitLog(session.id)
-          this.broadcast({ event: 'git:log-updated', payload: { sessionId: session.id, ...log } })
-        } catch {
-          // git log failure is non-fatal
-        }
-      })
+      this.worktreeManager.watchDiff(
+        session.id,
+        session.baseBranch,
+        this.createDiffCallback(session.id),
+      )
     }
   }
 
@@ -687,16 +676,7 @@ export class SessionManager {
         }
       }
 
-      this.worktreeManager.watchDiff(id, resolvedBase, async diff => {
-        this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(JSON.stringify(diff.summary), id)
-        this.broadcast({ event: 'diff:update', payload: { sessionId: id, diff } })
-        try {
-          const log = await this.worktreeManager.getGitLog(id)
-          this.broadcast({ event: 'git:log-updated', payload: { sessionId: id, ...log } })
-        } catch {
-          // git log failure is non-fatal
-        }
-      })
+      this.worktreeManager.watchDiff(id, resolvedBase, this.createDiffCallback(id))
 
       this.updateStatus(id, 'idle')
     } catch (err) {
@@ -758,6 +738,18 @@ export class SessionManager {
     const terminalId = (activeTab?.type === 'terminal' || activeTab?.type === 'claude') ? activeTab.terminalId : session?.tabs.find(t => t.type === 'terminal' || t.type === 'claude')?.terminalId
     if (terminalId) {
       this.broadcast({ event: 'terminal:data', payload: { sessionId, terminalId, data } })
+    }
+  }
+
+  private createDiffCallback(sessionId: string, cwd?: string): (diff: GitDiff) => void {
+    return (diff: GitDiff) => {
+      this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(JSON.stringify(diff.summary), sessionId)
+      this.broadcast({ event: 'diff:update', payload: { sessionId, diff } })
+      this.worktreeManager.getGitLog(sessionId, 100, cwd).then(log => {
+        this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+      }).catch(() => {
+        // git log failure is non-fatal
+      })
     }
   }
 
