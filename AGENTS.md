@@ -302,7 +302,6 @@ interface AgentAdapter {
 
 ## 文档索引
 
-- [docs/progress.md](docs/progress.md) — **开发进度快照**（接手新任务前必读）
 - [docs/设计文档.md](docs/设计文档.md) — 完整产品架构、数据模型、视图设计、代码示例
 - [docs/开发计划/phase-N-*.md](docs/开发计划/) — 各阶段详细任务拆解（已合并索引到 progress.md）
 - [.claude/rules/error-handling.md](.claude/rules/error-handling.md) — **异常处理规范**：禁止吞异常、前端用 toast 暴露错误、状态机用守卫代替 try/catch
