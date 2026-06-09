@@ -1,3 +1,4 @@
+import { memo, useCallback } from 'react'
 import { FileCode, FileText, Plus, X, Terminal } from 'lucide-react'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { cn } from '@/lib/utils'
@@ -49,19 +50,20 @@ interface MiddleTabBarProps {
   session: AgentSession
 }
 
-function SortableTab({
+const SortableTab = memo(function SortableTab({
+  sessionId,
   tab,
   isActive,
-  onActivate,
-  onClose,
   allTabs,
 }: {
+  sessionId: string
   tab: AgentSession['tabs'][number]
   isActive: boolean
-  onActivate: () => void
-  onClose: (e: React.MouseEvent) => void
   allTabs: SessionTab[]
 }) {
+  const activateTab = useSessionStore(s => s.activateTab)
+  const closeTab = useSessionStore(s => s.closeTab)
+
   const {
     attributes,
     listeners,
@@ -88,6 +90,18 @@ function SortableTab({
   const displayLabel = getTabDisplayLabel(tab, allTabs)
   const tooltipContent = tab.filePath ?? tab.label
 
+  const handleActivate = useCallback(() => {
+    activateTab(sessionId, tab.id)
+  }, [activateTab, sessionId, tab.id])
+
+  const handleClose = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    if ((tab.type === 'terminal' || tab.type === 'claude') && tab.terminalId) {
+      destroyTerminalInstance(tab.terminalId)
+    }
+    closeTab(sessionId, tab.id)
+  }, [tab.type, tab.terminalId, tab.id, sessionId, closeTab])
+
   return (
     <Tooltip delayDuration={500}>
       <TooltipTrigger asChild>
@@ -96,7 +110,7 @@ function SortableTab({
           style={style}
           {...attributes}
           {...listeners}
-          onClick={onActivate}
+          onClick={handleActivate}
           className={cn(
             'group relative flex h-full shrink-0 items-center gap-1.5 px-2.5 text-xs transition-colors select-none focus:outline-none',
             isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
@@ -111,10 +125,7 @@ function SortableTab({
           )}
           <span className="max-w-[120px] truncate">{displayLabel}</span>
           <span
-            onClick={e => {
-              e.stopPropagation()
-              onClose(e)
-            }}
+            onClick={handleClose}
             onPointerDown={e => e.stopPropagation()}
             className={cn(
               'ml-0.5 flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded opacity-0 transition-opacity',
@@ -131,11 +142,9 @@ function SortableTab({
       </TooltipContent>
     </Tooltip>
   )
-}
+})
 
 export function MiddleTabBar({ session }: MiddleTabBarProps) {
-  const closeTab = useSessionStore(s => s.closeTab)
-  const activateTab = useSessionStore(s => s.activateTab)
   const createTerminal = useSessionStore(s => s.createTerminal)
   const reorderTabs = useSessionStore(s => s.reorderTabs)
   const tabs = session.tabs
@@ -149,7 +158,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
     })
   )
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event
     if (over && active.id !== over.id) {
       const oldIndex = tabs.findIndex(t => t.id === active.id)
@@ -161,20 +170,11 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
         reorderTabs(session.id, reordered.map(t => t.id))
       }
     }
-  }
+  }, [tabs, session.id, reorderTabs])
 
-  const handleClose = (e: React.MouseEvent, tabId: string) => {
-    e.stopPropagation()
-    const tab = tabs.find(t => t.id === tabId)
-    if ((tab?.type === 'terminal' || tab?.type === 'claude') && tab.terminalId) {
-      destroyTerminalInstance(tab.terminalId)
-    }
-    closeTab(session.id, tabId)
-  }
-
-  const handleCreateTerminal = () => {
+  const handleCreateTerminal = useCallback(() => {
     createTerminal(session.id)
-  }
+  }, [createTerminal, session.id])
 
   return (
     <div className="flex h-10 shrink-0 items-center bg-background dark:bg-[#1e1e1e]">
@@ -191,10 +191,9 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
             {tabs.map(tab => (
               <SortableTab
                 key={tab.id}
+                sessionId={session.id}
                 tab={tab}
                 isActive={tab.id === activeTabId}
-                onActivate={() => activateTab(session.id, tab.id)}
-                onClose={e => handleClose(e, tab.id)}
                 allTabs={tabs}
               />
             ))}

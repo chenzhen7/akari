@@ -227,6 +227,19 @@ export class SessionManager {
     }
     this.insertRow(session)
     this.broadcast({ event: 'session:created', payload: session })
+
+    // 主会话监听仓库根目录的文件变更
+    this.worktreeManager.watchDiff(session.id, session.baseBranch, async diff => {
+      this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, session.id)
+      this.broadcast({ event: 'diff:update', payload: { sessionId: session.id, diff } })
+      try {
+        const log = await this.worktreeManager.getGitLog(session.id, 100, session.worktreePath)
+        this.broadcast({ event: 'git:log-updated', payload: { sessionId: session.id, ...log } })
+      } catch {
+        // git log failure is non-fatal
+      }
+    }, session.worktreePath, session.worktreePath)
+
     return session
   }
 
@@ -524,13 +537,29 @@ export class SessionManager {
     const sessions = this.listSessions()
 
     for (const session of sessions) {
-      if (session.isMain) continue
+      if (session.isMain) {
+        // 主会话：不需要恢复终端，只需启动文件监听（监听仓库根目录）
+        if (session.worktreePath) {
+          this.worktreeManager.watchDiff(session.id, session.baseBranch, async diff => {
+            this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(diff.stat, session.id)
+            this.broadcast({ event: 'diff:update', payload: { sessionId: session.id, diff } })
+            try {
+              const log = await this.worktreeManager.getGitLog(session.id, 100, session.worktreePath)
+              this.broadcast({ event: 'git:log-updated', payload: { sessionId: session.id, ...log } })
+            } catch {
+              // git log failure is non-fatal
+            }
+          }, session.worktreePath, session.worktreePath)
+        }
+        continue
+      }
+
       if (session.status === 'initializing') {
         this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
         continue
       }
 
-      const needsRestore = ['running', 'waiting', 'paused', 'review'].includes(session.status)
+      const needsRestore = ['running', 'waiting', 'paused', 'review', 'idle'].includes(session.status)
       if (!needsRestore || !session.worktreePath) continue
 
       const worktreePath = this.worktreeManager.getWorktreePath(session.id)

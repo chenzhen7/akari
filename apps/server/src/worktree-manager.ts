@@ -181,9 +181,9 @@ export class WorktreeManager {
     return parseDiffLines(diffOutput)
   }
 
-  watchDiff(sessionId: string, baseBranch: string, callback: (diff: GitDiff) => void): FSWatcher {
-    const worktreePath = this.getWorktreePath(sessionId)
-    const watcher = watch(worktreePath, {
+  watchDiff(sessionId: string, baseBranch: string, callback: (diff: GitDiff) => void, watchPath?: string, cwd?: string): FSWatcher {
+    const resolvedPath = watchPath ?? this.getWorktreePath(sessionId)
+    const watcher = watch(resolvedPath, {
       ignored: /(node_modules|\.git)/,
       persistent: true,
       ignoreInitial: true,
@@ -193,7 +193,7 @@ export class WorktreeManager {
     const trigger = () => {
       if (debounce) clearTimeout(debounce)
       debounce = setTimeout(() => {
-        void this.getDiff(sessionId, baseBranch).then(callback)
+        void this.getDiff(sessionId, baseBranch, cwd).then(callback)
       }, 500)
     }
 
@@ -201,7 +201,7 @@ export class WorktreeManager {
     this.watchers.set(sessionId, watcher)
 
     // Push initial diff immediately so the client sees the starting state.
-    void this.getDiff(sessionId, baseBranch).then(callback)
+    void this.getDiff(sessionId, baseBranch, cwd).then(callback)
 
     return watcher
   }
