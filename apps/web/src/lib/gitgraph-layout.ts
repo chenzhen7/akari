@@ -5,7 +5,12 @@ import {
   toSvgPath,
 } from '@gitgraph/core'
 import type { GitCommit } from '@akari/shared-types'
-import { ROW_H, LANE_W, PAD_LEFT, PAD_TOP, DOT_R } from './git-graph-utils'
+import { ROW_H, PAD_TOP } from './git-graph-utils'
+
+const COMPACT_PAD_LEFT = 8
+const COMPACT_LANE_W = 12
+
+export const COMPACT_DOT_R = 2.5
 
 const template = templateExtend(TemplateName.BlackArrow, {
   colors: [
@@ -14,12 +19,13 @@ const template = templateExtend(TemplateName.BlackArrow, {
   ],
   commit: {
     spacing: ROW_H,
-    dot: { size: DOT_R * 2, strokeWidth: 0 },
+    dot: { size: COMPACT_DOT_R * 2, strokeWidth: 0 },
     message: { display: false, displayAuthor: false, displayHash: false, font: '' },
   },
   branch: {
     color: '',
-    spacing: LANE_W,
+    lineWidth: 1.5,
+    spacing: COMPACT_LANE_W,
     label: { display: false, color: '', strokeColor: '', bgColor: '', font: '', borderRadius: 0 },
   },
   tag: { color: '', font: '', borderRadius: 0, pointerWidth: 0 },
@@ -67,7 +73,7 @@ export function computeGitgraphLayout(
 ): GitgraphLayout {
   const core = new GitgraphCore<SVGElement>({
     template,
-    initCommitOffsetX: PAD_LEFT,
+    initCommitOffsetX: COMPACT_PAD_LEFT,
     initCommitOffsetY: PAD_TOP,
   })
 
@@ -101,7 +107,7 @@ export function computeGitgraphLayout(
   return {
     positions,
     edges,
-    graphWidth: Math.max(maxX + PAD_LEFT + DOT_R * 2, 80),
-    svgHeight: maxY + PAD_TOP + DOT_R * 2,
+    graphWidth: Math.max(maxX + COMPACT_PAD_LEFT + COMPACT_DOT_R * 2, 60),
+    svgHeight: maxY + PAD_TOP + COMPACT_DOT_R * 2,
   }
 }

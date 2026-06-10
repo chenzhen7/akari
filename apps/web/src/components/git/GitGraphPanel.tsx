@@ -8,17 +8,18 @@ import type { GitCommit, GitLogResponse } from '@akari/shared-types'
 import { useSessionStore } from '@/stores/session-store'
 import {
   computeGitgraphLayout,
+  COMPACT_DOT_R,
   type GitgraphNode,
 } from '@/lib/gitgraph-layout'
 import {
   truncate,
   ROW_H,
-  DOT_R,
 } from '@/lib/git-graph-utils'
 import { GitContextMenu } from './GitContextMenu'
 import { cn } from '@/lib/utils'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
+const PAGE_SIZE = 50
 
 interface ContextMenuState {
   commit: GitCommit
@@ -47,51 +48,80 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   const [newBranch, setNewBranch] = useState<NewBranchState | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // 分页状态（组件本地管理，不依赖 store 中的完整数据）
+  const [commits, setCommits] = useState<GitCommit[]>([])
+  const [offset, setOffset] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+
   const logData: GitLogResponse | null = gitLogs[sessionId] ?? null
 
-  const fetchLog = useCallback((branch?: string) => {
+  const fetchLog = useCallback((branch?: string, currentOffset = 0) => {
     setLoading(true)
-    const url = branch
-      ? `${API_BASE}/sessions/${sessionId}/git-log?limit=150&branch=${encodeURIComponent(branch)}`
-      : `${API_BASE}/sessions/${sessionId}/git-log?limit=150`
-    fetch(url)
+    const params = new URLSearchParams({
+      limit: String(PAGE_SIZE),
+      offset: String(currentOffset),
+    })
+    if (branch) params.set('branch', branch)
+    fetch(`${API_BASE}/sessions/${sessionId}/git-log?${params}`)
       .then(r => r.json())
-      .then((data: GitLogResponse) => setGitLog(sessionId, data))
+      .then((data: GitLogResponse) => {
+        if (currentOffset === 0) {
+          setCommits(data.commits)
+        } else {
+          setCommits(prev => [...prev, ...data.commits])
+        }
+        setOffset(currentOffset + data.commits.length)
+        setHasMore(data.commits.length === PAGE_SIZE)
+        setGitLog(sessionId, data)
+      })
       .catch(err => console.error('[GitGraphPanel] fetch failed:', err))
       .finally(() => setLoading(false))
   }, [sessionId, setGitLog])
 
+  // 初始化加载
   useEffect(() => {
-    if (!logData) fetchLog()
-  }, [sessionId, logData, fetchLog])
-
-  useEffect(() => {
-    if (logData) {
-      const branch = branchFilter === '__all__' ? undefined : branchFilter
-      fetchLog(branch)
+    if (commits.length === 0 && !loading) {
+      fetchLog()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId])
+
+  // 分支切换时重置并重新加载
+  useEffect(() => {
+    setCommits([])
+    setOffset(0)
+    setHasMore(true)
+    const branch = branchFilter === '__all__' ? undefined : branchFilter
+    fetchLog(branch, 0)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchFilter])
 
-  const filteredCommits = useMemo(() => {
-    if (!logData) return []
-    let commits = logData.commits
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
-      commits = commits.filter(c =>
-        c.message.toLowerCase().includes(q) ||
-        c.shortHash.startsWith(q) ||
-        c.author.toLowerCase().includes(q),
-      )
+  // 滚动到底部加载更多
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+    if (nearBottom && hasMore && !loading) {
+      const branch = branchFilter === '__all__' ? undefined : branchFilter
+      fetchLog(branch, offset)
     }
-    return commits
-  }, [logData, search])
+  }, [hasMore, loading, branchFilter, offset, fetchLog])
+
+  // 搜索只在已加载数据中过滤
+  const filteredCommits = useMemo(() => {
+    if (!search.trim()) return commits
+    const q = search.trim().toLowerCase()
+    return commits.filter(c =>
+      c.message.toLowerCase().includes(q) ||
+      c.shortHash.startsWith(q) ||
+      c.author.toLowerCase().includes(q),
+    )
+  }, [commits, search])
 
   const { positions, edges, graphWidth, svgHeight } = useMemo(
-    () => logData
+    () => commits.length > 0 && logData
       ? computeGitgraphLayout(filteredCommits, logData.head)
       : { positions: new Map<string, GitgraphNode>(), edges: [], graphWidth: 80, svgHeight: 0 },
-    [filteredCommits, logData],
+    [filteredCommits, commits.length, logData],
   )
 
   const localBranchNames = useMemo(
@@ -118,23 +148,22 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ branch: newBranch.name.trim(), createNew: true, from: newBranch.hash }),
     })
-      .then(() => fetchLog())
+      .then(() => {
+        setCommits([])
+        setOffset(0)
+        setHasMore(true)
+        fetchLog(branchFilter === '__all__' ? undefined : branchFilter, 0)
+      })
       .catch(err => console.error('[GitGraphPanel] create branch failed:', err))
     setNewBranch(null)
   }
 
-  if (!logData || logData.commits.length === 0) {
+  if (commits.length === 0 && !loading) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-        {loading ? (
-          <RefreshCw className="h-5 w-5 animate-spin" />
-        ) : (
-          <>
-            <GitBranch className="h-8 w-8 opacity-40" />
-            <span className="text-sm">暂无 Git 历史</span>
-            <Button variant="outline" size="sm" onClick={() => fetchLog(branchFilter === '__all__' ? undefined : branchFilter)}>刷新</Button>
-          </>
-        )}
+        <GitBranch className="h-8 w-8 opacity-40" />
+        <span className="text-sm">暂无 Git 历史</span>
+        <Button variant="outline" size="sm" onClick={() => fetchLog(branchFilter === '__all__' ? undefined : branchFilter, 0)}>刷新</Button>
       </div>
     )
   }
@@ -153,7 +182,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
           className="h-6 rounded-sm border border-border bg-background px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         >
           <option value="__all__">所有分支</option>
-          {logData.branches.map(b => (
+          {logData?.branches.map(b => (
             <option key={b.name} value={b.name}>{b.name}</option>
           ))}
         </select>
@@ -165,15 +194,16 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
         />
         <span className="ml-auto text-[11px] text-muted-foreground">
           {filteredCommits.length} commits
+          {hasMore && !search.trim() && ' +'}
         </span>
-        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs" onClick={() => fetchLog(branchFilter === '__all__' ? undefined : branchFilter)} disabled={loading}>
+        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs" onClick={() => fetchLog(branchFilter === '__all__' ? undefined : branchFilter, 0)} disabled={loading}>
           <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} />
           刷新
         </Button>
       </div>
 
       {/* Graph + rows (scrollable) */}
-      <div ref={scrollRef} className="relative flex-1 overflow-auto">
+      <div ref={scrollRef} className="relative flex-1 overflow-auto" onScroll={handleScroll}>
         {/* Canvas area */}
         <div className="relative" style={{ height: svgHeight, minWidth: graphWidth + 160 }}>
 
@@ -203,7 +233,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
                   key={commit.hash}
                   cx={node.x}
                   cy={node.y}
-                  r={DOT_R}
+                  r={COMPACT_DOT_R}
                   fill={isHead ? 'hsl(var(--background))' : node.color}
                   stroke={node.color}
                   strokeWidth={isHead ? 2 : 1.5}
@@ -280,6 +310,14 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
             )
           })}
         </div>
+
+        {/* Loading more indicator */}
+        {loading && commits.length > 0 && (
+          <div className="flex items-center justify-center py-3 text-muted-foreground">
+            <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+            <span className="text-xs">加载更多...</span>
+          </div>
+        )}
       </div>
 
       {/* Commit detail panel */}

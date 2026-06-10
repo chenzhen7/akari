@@ -222,14 +222,14 @@ export class WorktreeManager {
     }
   }
 
-  async getGitLog(sessionId: string, limit = 100, cwd?: string, branch?: string): Promise<GitLogResponse> {
+  async getGitLog(sessionId: string, limit = 100, offset = 0, cwd?: string, branch?: string): Promise<GitLogResponse> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
     try {
       const sep = '||'
       const fmt = `%H${sep}%h${sep}%s${sep}%an${sep}%ae${sep}%aI${sep}%P${sep}%D`
       const logArgs = branch
-        ? ['log', branch, '--topo-order', `--max-count=${limit}`, `--format=${fmt}`]
-        : ['log', '--all', '--topo-order', `--max-count=${limit}`, `--format=${fmt}`]
+        ? ['log', branch, '--topo-order', `--skip=${offset}`, `--max-count=${limit}`, `--format=${fmt}`]
+        : ['log', '--all', '--topo-order', `--skip=${offset}`, `--max-count=${limit}`, `--format=${fmt}`]
       const raw = await this.git(logArgs, worktreePath)
       const commits: GitCommit[] = raw
         .trim()

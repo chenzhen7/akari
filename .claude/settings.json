@@ -17,7 +17,8 @@
       "Bash(touch *)",
       "Bash(xxd)",
       "Bash(find *)",
-      "Bash(pnpm *)"
+      "Bash(pnpm *)",
+      "Bash(cd *)"
     ]
   },
   "enabledPlugins": {}

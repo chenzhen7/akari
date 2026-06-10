@@ -450,11 +450,11 @@ export class SessionManager {
     this.updateStatus(sessionId, 'paused')
   }
 
-  async getGitLog(sessionId: string, limit = 100, branch?: string): Promise<GitLogResponse> {
+  async getGitLog(sessionId: string, limit = 100, offset = 0, branch?: string): Promise<GitLogResponse> {
     const session = this.getSession(sessionId)
     if (!session?.worktreePath) return { commits: [], branches: [], head: '' }
     const cwd = session.isMain ? session.worktreePath : undefined
-    return this.worktreeManager.getGitLog(sessionId, limit, cwd, branch)
+    return this.worktreeManager.getGitLog(sessionId, limit, offset, cwd, branch)
   }
 
   async getGitBranches(sessionId: string): Promise<GitBranch[]> {
@@ -473,7 +473,7 @@ export class SessionManager {
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     const cwd = session.isMain ? session.worktreePath : undefined
     await this.worktreeManager.commitAll(sessionId, message, cwd)
-    const log = await this.worktreeManager.getGitLog(sessionId, 100, cwd)
+    const log = await this.worktreeManager.getGitLog(sessionId, 100, 0, cwd)
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
   }
 
@@ -502,7 +502,7 @@ export class SessionManager {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     await this.worktreeManager.mergeToBase(sourceBranch, session.branchName, 'merge')
-    const log = await this.worktreeManager.getGitLog(sessionId)
+    const log = await this.worktreeManager.getGitLog(sessionId, 100, 0)
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
   }
 
@@ -756,7 +756,7 @@ export class SessionManager {
     return (diff: GitDiff) => {
       this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(JSON.stringify(diff.summary), sessionId)
       this.broadcast({ event: 'diff:update', payload: { sessionId, diff } })
-      this.worktreeManager.getGitLog(sessionId, 100, cwd).then(log => {
+      this.worktreeManager.getGitLog(sessionId, 100, 0, cwd).then(log => {
         this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
       }).catch(() => {
         // git log failure is non-fatal
