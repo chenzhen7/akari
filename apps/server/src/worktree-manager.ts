@@ -249,7 +249,7 @@ export class WorktreeManager {
             .split(',')
             .map(r => r.trim())
             .filter(r => r && r !== 'HEAD')
-            .map(r => r.replace(/^HEAD -> /, '').replace(/^tag: /, ''))
+            .map(r => r.replace(/^HEAD -> /, ''))
           return { hash, shortHash, message, author, email, date, parents, refs }
         })
 

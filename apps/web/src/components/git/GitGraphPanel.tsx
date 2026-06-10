@@ -7,10 +7,10 @@ import { Input } from '@/components/ui/input'
 import type { GitCommit, GitLogResponse } from '@akari/shared-types'
 import { useSessionStore } from '@/stores/session-store'
 import {
-  buildGraph,
-  graphColWidth,
-  cx as laneCx,
-  cy as laneCy,
+  computeGitgraphLayout,
+  type GitgraphNode,
+} from '@/lib/gitgraph-layout'
+import {
   truncate,
   ROW_H,
   DOT_R,
@@ -83,18 +83,17 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
     return commits
   }, [logData, branchFilter, search])
 
-  const { laneInfo, edges, maxLane } = useMemo(
-    () => buildGraph(filteredCommits),
-    [filteredCommits],
+  const { positions, edges, graphWidth, svgHeight } = useMemo(
+    () => logData
+      ? computeGitgraphLayout(filteredCommits, logData.head)
+      : { positions: new Map<string, GitgraphNode>(), edges: [], graphWidth: 80, svgHeight: 0 },
+    [filteredCommits, logData],
   )
 
   const localBranchNames = useMemo(
     () => new Set(logData?.branches.map(b => b.name) ?? []),
     [logData],
   )
-
-  const gColW = graphColWidth(maxLane)
-  const svgH = ROW_H * filteredCommits.length
 
   const handleCheckout = (hash: string) => {
     fetch(`${API_BASE}/sessions/${sessionId}/git/checkout`, {
@@ -172,42 +171,37 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       {/* Graph + rows (scrollable) */}
       <div ref={scrollRef} className="relative flex-1 overflow-auto">
         {/* Canvas area */}
-        <div className="relative" style={{ height: svgH, minWidth: gColW + 160 }}>
+        <div className="relative" style={{ height: svgHeight, minWidth: graphWidth + 160 }}>
 
           {/* SVG graph layer */}
           <svg
-            width={gColW}
-            height={svgH}
+            width={graphWidth}
+            height={svgHeight}
             className="pointer-events-none absolute left-0 top-0 select-none"
           >
-            {edges.map((edge, i) => {
-              const x1 = laneCx(edge.fromLane)
-              const y1 = laneCy(edge.fromRow)
-              const x2 = laneCx(edge.toLane)
-              const y2 = laneCy(edge.toRow)
-              const straight = edge.fromLane === edge.toLane
-              const d = straight
-                ? `M ${x1} ${y1} L ${x2} ${y2}`
-                : `M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2} ${x2} ${(y1 + y2) / 2} ${x2} ${y2}`
-              return (
-                <path key={i} d={d} stroke={edge.color} strokeWidth={1.5} fill="none" opacity={0.75} />
-              )
-            })}
+            {edges.map((edge, i) => (
+              <path
+                key={i}
+                d={edge.d}
+                stroke={edge.color}
+                strokeWidth={1.5}
+                fill="none"
+                opacity={0.75}
+              />
+            ))}
 
-            {filteredCommits.map((commit, rowIdx) => {
-              const info = laneInfo.get(commit.hash)
-              if (!info) return null
-              const x = laneCx(info.lane)
-              const y = laneCy(rowIdx)
-              const isHead = commit.hash === logData.head
+            {filteredCommits.map(commit => {
+              const node = positions.get(commit.hash)
+              if (!node) return null
+              const isHead = commit.hash === logData!.head
               return (
                 <circle
                   key={commit.hash}
-                  cx={x}
-                  cy={y}
+                  cx={node.x}
+                  cy={node.y}
                   r={DOT_R}
-                  fill={isHead ? 'hsl(var(--background))' : info.color}
-                  stroke={info.color}
+                  fill={isHead ? 'hsl(var(--background))' : node.color}
+                  stroke={node.color}
                   strokeWidth={isHead ? 2 : 1.5}
                 />
               )
@@ -216,7 +210,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
 
           {/* DOM rows */}
           {filteredCommits.map((commit, rowIdx) => {
-            const info = laneInfo.get(commit.hash)
+            const node = positions.get(commit.hash)
             const isSelected = commit.hash === selectedHash
             const branchRefs = commit.refs.filter(r => r && r !== 'HEAD')
 
@@ -241,15 +235,15 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
                   })
                 }}
               >
-                {/* Message column: leave left gColW for SVG dots, then show refs + message */}
+                {/* Message column: leave left graphWidth for SVG dots, then show refs + message */}
                 <div
                   className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden px-2"
-                  style={{ paddingLeft: gColW }}
+                  style={{ paddingLeft: graphWidth }}
                 >
                   {branchRefs.slice(0, 3).map((ref, ri) => {
                     const isRemote = ref.includes('/') && !localBranchNames.has(ref)
                     const isTag = ref.startsWith('tag:')
-                    const isHead = commit.hash === logData.head && ri === 0
+                    const isHead = commit.hash === logData!.head && ri === 0
                     const label = isTag ? ref.replace('tag: ', '') : ref
                     const Icon = isTag ? Tag : isRemote ? Globe : isHead ? CircleDot : GitBranch
                     return (
@@ -258,7 +252,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
                           <Badge
                             variant={isHead ? 'default' : isRemote ? 'secondary' : 'outline'}
                             className="inline-flex shrink-0 items-center gap-1 px-1.5 py-0 text-[11px] h-5"
-                            style={!isHead && !isRemote && !isTag && info ? { borderColor: info.color, color: info.color } : undefined}
+                            style={!isHead && !isRemote && !isTag && node ? { borderColor: node.color, color: node.color } : undefined}
                           >
                             <Icon className="h-3 w-3 shrink-0" />
                             {truncate(label, 16)}
@@ -268,7 +262,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
                       </Tooltip>
                     )
                   })}
-                  <span className="min-w-0 truncate text-foreground">
+                  <span className={cn('min-w-0 truncate', commit.parents.length > 1 ? 'text-muted-foreground' : 'text-foreground')}>
                     {commit.message}
                   </span>
                   {commit.parents.length > 1 && (
