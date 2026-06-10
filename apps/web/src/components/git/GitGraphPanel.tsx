@@ -179,7 +179,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
         <select
           value={branchFilter}
           onChange={e => setBranchFilter(e.target.value)}
-          className="h-6 rounded-sm border border-border bg-background px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="h-6 w-28 shrink-0 truncate rounded-sm border border-border bg-background px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         >
           <option value="__all__">所有分支</option>
           {logData?.branches.map(b => (
@@ -190,7 +190,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
           placeholder="搜索提交..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="h-6 w-44 text-xs"
+          className="h-6 min-w-0 flex-1 text-xs"
         />
         <span className="ml-auto text-[11px] text-muted-foreground">
           {filteredCommits.length} commits
