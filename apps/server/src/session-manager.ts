@@ -18,6 +18,7 @@ import type {
 import { WorktreeManager } from './worktree-manager.js'
 import { TerminalMultiplexer } from './terminal-mux.js'
 import { createAgentAdapter, SHELL_STARTUP_DELAY_MS } from './agent-adapters/index.js'
+import { SettingsStore } from './settings-store.js'
 
 export interface CreateSessionParams {
   name: string
@@ -96,11 +97,13 @@ export class SessionManager {
   private readonly terminalMux: TerminalMultiplexer
   private readonly broadcast: (msg: ServerMessage) => void
   private workspaceId: string
+  private readonly settingsStore: SettingsStore
 
   constructor(opts: { repoPath: string; db: Database.Database; broadcast: (msg: ServerMessage) => void; workspaceId: string }) {
     this.db = opts.db
     this.workspaceId = opts.workspaceId
-    this.worktreeManager = new WorktreeManager(opts.repoPath)
+    this.settingsStore = new SettingsStore(opts.db)
+    this.worktreeManager = new WorktreeManager(opts.repoPath, this.settingsStore.getWorktreeBaseDir())
     this.terminalMux = new TerminalMultiplexer()
     this.broadcast = opts.broadcast
     this.initDb()
@@ -262,7 +265,15 @@ export class SessionManager {
   /** Expose db for CanvasEdgeStore — only used within the same process */
   setWorkspace(workspaceId: string, repoPath: string): void {
     this.workspaceId = workspaceId
-    this.worktreeManager = new WorktreeManager(repoPath)
+    this.worktreeManager = new WorktreeManager(repoPath, this.settingsStore.getWorktreeBaseDir())
+  }
+
+  getSettings(): { worktreeBaseDir: string } {
+    return { worktreeBaseDir: this.settingsStore.getWorktreeBaseDir() }
+  }
+
+  updateSettings(settings: { worktreeBaseDir: string }): void {
+    this.settingsStore.setWorktreeBaseDir(settings.worktreeBaseDir)
   }
 
   getDb(): Database.Database {

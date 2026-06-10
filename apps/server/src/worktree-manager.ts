@@ -9,9 +9,9 @@ export class WorktreeManager {
   private readonly worktreeBaseDir: string
   private readonly watchers = new Map<string, FSWatcher>()
 
-  constructor(repoPath: string) {
+  constructor(repoPath: string, worktreeBaseDir: string) {
     this.baseRepoPath = resolve(repoPath)
-    this.worktreeBaseDir = join(this.baseRepoPath, '.agent-worktrees')
+    this.worktreeBaseDir = resolve(worktreeBaseDir)
   }
 
   async createWorktree(

@@ -53,6 +53,19 @@ canvasEdgeStore.initDb()
 
 fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
 
+fastify.get('/settings', async () => sessionManager.getSettings())
+
+fastify.patch<{ Body: { worktreeBaseDir?: string } }>('/settings', async (request, reply) => {
+  const { worktreeBaseDir } = request.body
+  if (worktreeBaseDir !== undefined && typeof worktreeBaseDir !== 'string') {
+    return reply.status(400).send({ error: 'worktreeBaseDir must be a string' })
+  }
+  if (worktreeBaseDir) {
+    sessionManager.updateSettings({ worktreeBaseDir })
+  }
+  return sessionManager.getSettings()
+})
+
 fastify.get('/repo/branches', async () => sessionManager.getRepoBranches())
 
 fastify.get('/sessions', async () => sessionManager.listSessions())

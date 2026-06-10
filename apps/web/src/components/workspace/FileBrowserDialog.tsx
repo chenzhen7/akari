@@ -1,4 +1,4 @@
-import { useEffect, useCallback, memo } from 'react'
+import { useEffect, useCallback, useState, memo } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -6,10 +6,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useWorkspaceStore } from '@/stores/workspace-store'
 import { Folder, File, ChevronUp, HardDrive } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { FsEntry } from '@akari/shared-types'
+
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 interface FileBrowserDialogProps {
   open: boolean
@@ -66,43 +67,76 @@ const FileBrowserItem = memo(function FileBrowserItem({
 })
 
 export function FileBrowserDialog({ open, onOpenChange, onSelect }: FileBrowserDialogProps) {
-  const {
-    fileBrowserPath,
-    fileBrowserEntries,
-    fileBrowserSelectedPath,
-    fileBrowserLoading,
-    navigateTo,
-    selectPath,
-    goUp,
-    closeFileBrowser,
-  } = useWorkspaceStore()
+  const [currentPath, setCurrentPath] = useState('')
+  const [entries, setEntries] = useState<FsEntry[]>([])
+  const [loading, setLoading] = useState(false)
+  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+
+  const navigateTo = useCallback((path: string) => {
+    setLoading(true)
+    setCurrentPath(path)
+    const url = path
+      ? `${API_BASE}/fs/list?path=${encodeURIComponent(path)}`
+      : `${API_BASE}/fs/list`
+    fetch(url)
+      .then(r => r.json())
+      .then((data: { entries: FsEntry[]; currentPath: string; parentPath: string | null }) => {
+        setEntries(data.entries)
+        setCurrentPath(data.currentPath)
+        setLoading(false)
+      })
+      .catch(err => {
+        console.error('[FileBrowserDialog] navigateTo failed:', err)
+        setLoading(false)
+      })
+  }, [])
 
   useEffect(() => {
     if (open) {
       navigateTo('')
+      setSelectedPath(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const handleSelect = () => {
-    if (fileBrowserSelectedPath) {
-      onSelect(fileBrowserSelectedPath)
-      closeFileBrowser()
+    if (selectedPath) {
+      onSelect(selectedPath)
+      onOpenChange(false)
     }
   }
 
-  const handleItemSelect = useCallback((path: string) => selectPath(path), [selectPath])
+  const handleItemSelect = useCallback((path: string) => setSelectedPath(path), [])
   const handleItemNavigate = useCallback((path: string) => {
     navigateTo(path)
-    selectPath(null)
-  }, [navigateTo, selectPath])
+    setSelectedPath(null)
+  }, [navigateTo])
 
-  // Build breadcrumb from current path
+  const goUp = () => {
+    if (!currentPath) return
+    const normalized = currentPath.replace(/\\/g, '/')
+    if (/^[A-Za-z]:\/?$/.test(normalized)) {
+      navigateTo('')
+      return
+    }
+    const lastSlash = normalized.lastIndexOf('/')
+    if (lastSlash <= 0) {
+      navigateTo('')
+      return
+    }
+    const parent = normalized.slice(0, lastSlash)
+    if (/^[A-Za-z]:$/.test(parent)) {
+      navigateTo(parent + '/')
+      return
+    }
+    navigateTo(parent || '/')
+  }
+
   const buildBreadcrumb = () => {
-    if (!fileBrowserPath) {
+    if (!currentPath) {
       return [{ label: '此电脑', path: '' }]
     }
-    const normalized = fileBrowserPath.replace(/\\/g, '/')
+    const normalized = currentPath.replace(/\\/g, '/')
     const parts = normalized.split('/').filter(Boolean)
     const crumbs: { label: string; path: string }[] = [{ label: '此电脑', path: '' }]
     let acc = ''
@@ -114,13 +148,13 @@ export function FileBrowserDialog({ open, onOpenChange, onSelect }: FileBrowserD
   }
 
   const breadcrumb = buildBreadcrumb()
-  const isAtRoot = !fileBrowserPath
+  const isAtRoot = !currentPath
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl h-[500px] flex flex-col p-0 gap-0">
         <DialogHeader className="px-4 py-3 border-b shrink-0">
-          <DialogTitle className="text-base">选择工作区文件夹</DialogTitle>
+          <DialogTitle className="text-base">选择文件夹</DialogTitle>
         </DialogHeader>
 
         {/* Toolbar */}
@@ -151,21 +185,21 @@ export function FileBrowserDialog({ open, onOpenChange, onSelect }: FileBrowserD
 
         {/* File list */}
         <div className="flex-1 overflow-y-auto px-1 py-1 min-h-0">
-          {fileBrowserLoading ? (
+          {loading ? (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
               加载中...
             </div>
-          ) : fileBrowserEntries.length === 0 ? (
+          ) : entries.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
               空文件夹
             </div>
           ) : (
             <div className="flex flex-col gap-0.5">
-              {fileBrowserEntries.map((entry) => (
+              {entries.map((entry) => (
                 <FileBrowserItem
                   key={entry.path}
                   entry={entry}
-                  isSelected={fileBrowserSelectedPath === entry.path}
+                  isSelected={selectedPath === entry.path}
                   isAtRoot={isAtRoot}
                   onSelect={handleItemSelect}
                   onNavigate={handleItemNavigate}
@@ -178,13 +212,13 @@ export function FileBrowserDialog({ open, onOpenChange, onSelect }: FileBrowserD
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3 border-t shrink-0 gap-3">
           <div className="text-sm text-muted-foreground truncate flex-1 min-w-0">
-            {fileBrowserSelectedPath || '请选择一个文件夹'}
+            {selectedPath || '请选择一个文件夹'}
           </div>
           <div className="flex gap-2 shrink-0">
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               取消
             </Button>
-            <Button size="sm" onClick={handleSelect} disabled={!fileBrowserSelectedPath}>
+            <Button size="sm" onClick={handleSelect} disabled={!selectedPath}>
               选择
             </Button>
           </div>

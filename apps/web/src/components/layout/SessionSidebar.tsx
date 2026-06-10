@@ -15,11 +15,13 @@ import {
   CheckCircle2,
   PauseCircle,
   Eye,
+  Settings,
   type LucideIcon,
 } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { DeleteSessionDialog } from '@/components/session/DeleteSessionDialog'
 import { SessionContextMenu } from './SessionContextMenu'
+import { SettingsDialog } from '@/components/settings/SettingsDialog'
 
 const statusIconMap: Record<string, { Icon: LucideIcon; color: string }> = {
   running: { Icon: Loader2, color: 'text-green-500' },
@@ -188,6 +190,7 @@ export function SessionSidebar() {
   const openCreateDialog = useSessionStore(s => s.openCreateDialog)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const mainSession = sessions.find(s => s.isMain)
   const regularSessions = sessions.filter(s => !s.isMain)
@@ -279,6 +282,19 @@ export function SessionSidebar() {
               </div>
             </>
           )}
+
+          {/* Footer: Settings */}
+          <div className="flex h-8 shrink-0 items-center justify-end  border-border/50 px-2">
+            <Button
+              variant="ghost"
+              size="xs"
+              className='h-6 w-6 p-0 text-muted-foreg round hover:text-foreground'
+              onClick={() => setSettingsOpen(true)}
+              title="设置"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </aside>
 
@@ -291,6 +307,7 @@ export function SessionSidebar() {
           onClose={closeContextMenu}
         />
       )}
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </>
   )
 }

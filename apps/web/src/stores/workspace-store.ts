@@ -7,33 +7,17 @@ const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 interface WorkspaceStore {
   workspaces: Workspace[]
   currentWorkspace: Workspace | null
-  fileBrowserOpen: boolean
-  fileBrowserPath: string
-  fileBrowserEntries: FsEntry[]
-  fileBrowserSelectedPath: string | null
-  fileBrowserLoading: boolean
 
   fetchWorkspaces: () => void
   addWorkspace: (name: string, path: string) => void
   switchWorkspace: (id: string) => void
   deleteWorkspace: (id: string) => void
   setCurrentWorkspace: (workspace: Workspace) => void
-
-  openFileBrowser: () => void
-  closeFileBrowser: () => void
-  navigateTo: (path: string) => void
-  selectPath: (path: string | null) => void
-  goUp: () => void
 }
 
-export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
+export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   workspaces: [],
   currentWorkspace: null,
-  fileBrowserOpen: false,
-  fileBrowserPath: '',
-  fileBrowserEntries: [],
-  fileBrowserSelectedPath: null,
-  fileBrowserLoading: false,
 
   fetchWorkspaces: () => {
     fetch(`${API_BASE}/workspaces`)
@@ -93,68 +77,5 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   setCurrentWorkspace: (workspace) => {
     set({ currentWorkspace: workspace })
-  },
-
-  openFileBrowser: () => {
-    set({ fileBrowserOpen: true, fileBrowserSelectedPath: null })
-    get().navigateTo('')
-  },
-
-  closeFileBrowser: () => {
-    set({ fileBrowserOpen: false })
-  },
-
-  navigateTo: (path) => {
-    set({ fileBrowserLoading: true, fileBrowserPath: path })
-    const url = path
-      ? `${API_BASE}/fs/list?path=${encodeURIComponent(path)}`
-      : `${API_BASE}/fs/list`
-    fetch(url)
-      .then(r => r.json())
-      .then((data: { entries: FsEntry[]; currentPath: string; parentPath: string | null }) => {
-        set({
-          fileBrowserEntries: data.entries,
-          fileBrowserPath: data.currentPath,
-          fileBrowserLoading: false,
-        })
-      })
-      .catch(err => {
-        console.error('[navigateTo] failed:', err)
-        toast.error(`无法读取目录：${err instanceof Error ? err.message : String(err)}`)
-        set({ fileBrowserLoading: false })
-      })
-  },
-
-  selectPath: (path) => {
-    set({ fileBrowserSelectedPath: path })
-  },
-
-  goUp: () => {
-    const { fileBrowserPath } = get()
-    if (!fileBrowserPath) return
-
-    const normalized = fileBrowserPath.replace(/\\/g, '/')
-
-    // Windows drive root (e.g. C:/ or C:) → go to drive list
-    if (/^[A-Za-z]:\/?$/.test(normalized)) {
-      get().navigateTo('')
-      return
-    }
-
-    const lastSlash = normalized.lastIndexOf('/')
-    if (lastSlash <= 0) {
-      get().navigateTo('')
-      return
-    }
-
-    const parent = normalized.slice(0, lastSlash)
-    // Parent is a drive root → normalize to trailing slash so the backend
-    // consistently returns currentPath as "C:/" rather than "C:".
-    if (/^[A-Za-z]:$/.test(parent)) {
-      get().navigateTo(parent + '/')
-      return
-    }
-
-    get().navigateTo(parent || '/')
   },
 }))
