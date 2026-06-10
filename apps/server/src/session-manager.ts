@@ -450,11 +450,11 @@ export class SessionManager {
     this.updateStatus(sessionId, 'paused')
   }
 
-  async getGitLog(sessionId: string, limit = 100): Promise<GitLogResponse> {
+  async getGitLog(sessionId: string, limit = 100, branch?: string): Promise<GitLogResponse> {
     const session = this.getSession(sessionId)
     if (!session?.worktreePath) return { commits: [], branches: [], head: '' }
     const cwd = session.isMain ? session.worktreePath : undefined
-    return this.worktreeManager.getGitLog(sessionId, limit, cwd)
+    return this.worktreeManager.getGitLog(sessionId, limit, cwd, branch)
   }
 
   async getGitBranches(sessionId: string): Promise<GitBranch[]> {

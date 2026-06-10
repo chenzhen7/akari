@@ -283,13 +283,14 @@ fastify.delete<{ Params: { id: string } }>(
   },
 )
 
-fastify.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
+fastify.get<{ Params: { id: string }; Querystring: { limit?: string; branch?: string } }>(
   '/sessions/:id/git-log',
   async (request, reply) => {
     const { id } = request.params
     const limit = parseInt(request.query.limit ?? '100') || 100
+    const branch = request.query.branch
     if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-    return sessionManager.getGitLog(id, limit)
+    return sessionManager.getGitLog(id, limit, branch)
   },
 )
 

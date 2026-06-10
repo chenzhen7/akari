@@ -49,9 +49,12 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
 
   const logData: GitLogResponse | null = gitLogs[sessionId] ?? null
 
-  const fetchLog = useCallback(() => {
+  const fetchLog = useCallback((branch?: string) => {
     setLoading(true)
-    fetch(`${API_BASE}/sessions/${sessionId}/git-log?limit=150`)
+    const url = branch
+      ? `${API_BASE}/sessions/${sessionId}/git-log?limit=150&branch=${encodeURIComponent(branch)}`
+      : `${API_BASE}/sessions/${sessionId}/git-log?limit=150`
+    fetch(url)
       .then(r => r.json())
       .then((data: GitLogResponse) => setGitLog(sessionId, data))
       .catch(err => console.error('[GitGraphPanel] fetch failed:', err))
@@ -62,16 +65,17 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
     if (!logData) fetchLog()
   }, [sessionId, logData, fetchLog])
 
+  useEffect(() => {
+    if (logData) {
+      const branch = branchFilter === '__all__' ? undefined : branchFilter
+      fetchLog(branch)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchFilter])
+
   const filteredCommits = useMemo(() => {
     if (!logData) return []
     let commits = logData.commits
-    if (branchFilter !== '__all__') {
-      const branchCommit = logData.branches.find(b => b.name === branchFilter)?.commit
-      if (branchCommit) {
-        const idx = commits.findIndex(c => c.hash === branchCommit)
-        commits = idx >= 0 ? commits.slice(0, idx + 1) : commits
-      }
-    }
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       commits = commits.filter(c =>
@@ -81,7 +85,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       )
     }
     return commits
-  }, [logData, branchFilter, search])
+  }, [logData, search])
 
   const { positions, edges, graphWidth, svgHeight } = useMemo(
     () => logData
@@ -128,7 +132,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
           <>
             <GitBranch className="h-8 w-8 opacity-40" />
             <span className="text-sm">暂无 Git 历史</span>
-            <Button variant="outline" size="sm" onClick={fetchLog}>刷新</Button>
+            <Button variant="outline" size="sm" onClick={() => fetchLog(branchFilter === '__all__' ? undefined : branchFilter)}>刷新</Button>
           </>
         )}
       </div>
@@ -162,7 +166,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
         <span className="ml-auto text-[11px] text-muted-foreground">
           {filteredCommits.length} commits
         </span>
-        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs" onClick={fetchLog} disabled={loading}>
+        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs" onClick={() => fetchLog(branchFilter === '__all__' ? undefined : branchFilter)} disabled={loading}>
           <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} />
           刷新
         </Button>
