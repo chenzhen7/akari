@@ -328,11 +328,53 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
         )}
       >
         {selectedCommit && (
-          <div className="flex flex-col gap-1 px-4 py-2 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-muted-foreground text-[11px]">{selectedCommit.hash}</span>
+          <div className="flex h-full flex-col gap-2 px-4 py-3 text-xs">
+            {/* Hash + Author + Date */}
+            <div className="flex items-center gap-3 text-[11px]">
+              <span className="font-mono text-muted-foreground">{selectedCommit.shortHash}</span>
+              <span className="text-muted-foreground">
+                {selectedCommit.author}
+                {selectedCommit.email && ` <${selectedCommit.email}>`}
+              </span>
+              <span className="ml-auto text-muted-foreground">
+                {new Date(selectedCommit.date).toLocaleString('zh-CN')}
+              </span>
             </div>
-            <div className="font-medium text-foreground leading-snug">{selectedCommit.message}</div>
+
+            {/* Message */}
+            <div className="font-medium text-foreground text-sm leading-snug">{selectedCommit.message}</div>
+
+            {/* Parents */}
+            {selectedCommit.parents.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Parents:</span>
+                <div className="flex gap-1.5">
+                  {selectedCommit.parents.map(p => (
+                    <button
+                      key={p}
+                      className="font-mono text-[11px] text-primary hover:underline"
+                      onClick={() => setSelectedHash(p)}
+                    >
+                      {p.slice(0, 8)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Refs */}
+            {selectedCommit.refs.filter(r => r && r !== 'HEAD').length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Refs:</span>
+                <div className="flex gap-1.5">
+                  {selectedCommit.refs.filter(r => r && r !== 'HEAD').map(ref => (
+                    <Badge key={ref} variant="outline" className="h-4 px-1 text-[10px]">
+                      {ref.startsWith('tag:') ? ref.replace('tag: ', '') : ref}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
