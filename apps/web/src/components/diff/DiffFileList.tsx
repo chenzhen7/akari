@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { GitCommit, Trash2, GitMerge, GitBranch, Loader2 } from 'lucide-react'
+import { GitCommit, Trash2, GitMerge, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 function statusColor(s: DiffFile['status']) {
@@ -130,12 +130,6 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
         <span className="rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
           {diffFiles.length}
         </span>
-        <div className="flex items-center gap-1 text-[11px] text-muted-foreground min-w-0">
-          <GitBranch className="h-3 w-3 shrink-0" />
-          <span className="font-mono truncate">{session.branchName}</span>
-          <span className="opacity-50 shrink-0">→</span>
-          <span className="font-mono truncate">{session.baseBranch}</span>
-        </div>
 
         <div className="ml-auto flex items-center gap-1.5">
           <div className="flex items-center gap-0.5 font-mono text-[10px]">
