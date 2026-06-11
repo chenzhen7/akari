@@ -314,6 +314,7 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
             onOpenChange={setDeleteOpen}
             sessionId={session.id}
             branchName={session.branchName}
+            worktreePath={session.worktreePath}
             onConfirm={() => deleteSession(session.id)}
           />
         </div>

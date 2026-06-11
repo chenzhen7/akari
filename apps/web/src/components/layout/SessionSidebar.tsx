@@ -178,6 +178,7 @@ function SessionItem({ session, isActive, contextMenu, onContextMenu, onCloseCon
           onOpenChange={setConfirmDelete}
           sessionId={session.id}
           branchName={session.branchName}
+          worktreePath={session.worktreePath}
           onConfirm={() => deleteSession(session.id)}
         />
       )}

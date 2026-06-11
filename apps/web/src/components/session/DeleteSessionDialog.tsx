@@ -13,6 +13,7 @@ interface DeleteSessionDialogProps {
   onOpenChange: (open: boolean) => void
   sessionId: string
   branchName: string
+  worktreePath: string
   onConfirm: () => void
 }
 
@@ -21,6 +22,7 @@ export function DeleteSessionDialog({
   onOpenChange,
   sessionId,
   branchName,
+  worktreePath,
   onConfirm,
 }: DeleteSessionDialogProps) {
   return (
@@ -30,7 +32,7 @@ export function DeleteSessionDialog({
           <DialogTitle>彻底删除会话</DialogTitle>
           <DialogDescription>
             将删除 Worktree 目录（
-            <span className="font-mono text-foreground">.agent-worktrees/{sessionId}</span>
+            <span className="font-mono text-foreground">{worktreePath}</span>
             ）和分支（
             <span className="font-mono text-foreground">{branchName}</span>
             ），此操作不可恢复。

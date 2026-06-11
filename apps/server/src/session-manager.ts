@@ -114,12 +114,6 @@ export class SessionManager {
     const id = nanoid(8)
     const mainSession = this.getMainSession()
     const baseBranch = params.baseBranch ?? mainSession?.branchName ?? 'main'
-    const safeName = params.name
-      .trim()
-      .replace(/[^a-zA-Z0-9]/g, '-')
-      .toLowerCase()
-      .slice(0, 40)
-
     const agentType = params.agentType ?? 'claude'
 
     const session: AgentSession = {
@@ -128,8 +122,8 @@ export class SessionManager {
       task: params.task.trim(),
       status: 'initializing',
       agentType,
-      worktreePath: `.agent-worktrees/${id}`,
-      branchName: `agent/${safeName}-${id.slice(0, 8)}`,
+      worktreePath: '',
+      branchName: `agent/${id.slice(0, 8)}`,
       baseBranch,
       canvasPosition: params.canvasPosition ?? {
         x: 100 + Math.random() * 600,
@@ -334,10 +328,7 @@ export class SessionManager {
       .run(JSON.stringify(updatedTabs), activeTabId, sessionId)
 
     if ((type === 'terminal' || type === 'claude') && terminalId) {
-      const worktreePath = session.isMain
-        ? session.worktreePath
-        : this.worktreeManager.getWorktreePath(sessionId)
-      this.terminalMux.createTerminal(terminalId, sessionId, worktreePath)
+      this.terminalMux.createTerminal(terminalId, sessionId, session.worktreePath)
     }
 
     this.broadcast({ event: 'tab:created', payload: { sessionId, tab } })
@@ -413,8 +404,7 @@ export class SessionManager {
     if (!session?.worktreePath) {
       return { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
     }
-    const cwd = session.isMain ? session.worktreePath : undefined
-    return this.worktreeManager.getDiff(sessionId, session.baseBranch, cwd)
+    return this.worktreeManager.getDiff(sessionId, session.baseBranch, session.worktreePath)
   }
 
   setLastAiMessage(sessionId: string, message: string): void {
@@ -453,15 +443,13 @@ export class SessionManager {
   async getGitLog(sessionId: string, limit = 100, offset = 0, branch?: string): Promise<GitLogResponse> {
     const session = this.getSession(sessionId)
     if (!session?.worktreePath) return { commits: [], branches: [], head: '' }
-    const cwd = session.isMain ? session.worktreePath : undefined
-    return this.worktreeManager.getGitLog(sessionId, limit, offset, cwd, branch)
+    return this.worktreeManager.getGitLog(sessionId, limit, offset, session.worktreePath, branch)
   }
 
   async getGitBranches(sessionId: string): Promise<GitBranch[]> {
     const session = this.getSession(sessionId)
     if (!session?.worktreePath) return []
-    const cwd = session.isMain ? session.worktreePath : undefined
-    return this.worktreeManager.getGitBranches(sessionId, cwd)
+    return this.worktreeManager.getGitBranches(sessionId, session.worktreePath)
   }
 
   async getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]> {
@@ -471,24 +459,21 @@ export class SessionManager {
   async commitAll(sessionId: string, message: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    const cwd = session.isMain ? session.worktreePath : undefined
-    await this.worktreeManager.commitAll(sessionId, message, cwd)
-    const log = await this.worktreeManager.getGitLog(sessionId, 100, 0, cwd)
+    await this.worktreeManager.commitAll(sessionId, message, session.worktreePath)
+    const log = await this.worktreeManager.getGitLog(sessionId, 100, 0, session.worktreePath)
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
   }
 
   async discardAll(sessionId: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    const cwd = session.isMain ? session.worktreePath : undefined
-    await this.worktreeManager.discardAll(sessionId, cwd)
+    await this.worktreeManager.discardAll(sessionId, session.worktreePath)
   }
 
   async checkoutBranch(sessionId: string, branch: string, createNew = false): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    const cwd = session.isMain ? session.worktreePath : undefined
-    await this.worktreeManager.checkoutBranch(sessionId, branch, createNew, cwd)
+    await this.worktreeManager.checkoutBranch(sessionId, branch, createNew, session.worktreePath)
     if (session.isMain) {
       this.db.prepare('UPDATE sessions SET branch_name = ? WHERE id = ?').run(branch, sessionId)
       const updated = this.getSession(sessionId)
@@ -509,36 +494,31 @@ export class SessionManager {
   async getFileDiffContent(sessionId: string, filePath: string): Promise<{ original: string; modified: string }> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    const worktreePath = session.isMain ? session.worktreePath : this.worktreeManager.getWorktreePath(sessionId)
-    return this.worktreeManager.getFileDiffContent(worktreePath, session.baseBranch, filePath)
+    return this.worktreeManager.getFileDiffContent(session.worktreePath, session.baseBranch, filePath)
   }
 
   async getFileDiffLines(sessionId: string, filePath: string): Promise<import('@akari/shared-types').FileDiffLine[]> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    const worktreePath = session.isMain ? session.worktreePath : this.worktreeManager.getWorktreePath(sessionId)
-    return this.worktreeManager.getFileDiffLines(worktreePath, session.baseBranch, filePath)
+    return this.worktreeManager.getFileDiffLines(session.worktreePath, session.baseBranch, filePath)
   }
 
   async listFiles(sessionId: string, relativePath: string): Promise<FileNode[]> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    const cwd = session.isMain ? session.worktreePath : undefined
-    return this.worktreeManager.listFiles(sessionId, relativePath, cwd)
+    return this.worktreeManager.listFiles(sessionId, relativePath, session.worktreePath)
   }
 
   async readFileContent(sessionId: string, filePath: string): Promise<string> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    const cwd = session.isMain ? session.worktreePath : undefined
-    return this.worktreeManager.readFileContent(sessionId, filePath, cwd)
+    return this.worktreeManager.readFileContent(sessionId, filePath, session.worktreePath)
   }
 
   async writeFileContent(sessionId: string, filePath: string, content: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    const cwd = session.isMain ? session.worktreePath : undefined
-    await this.worktreeManager.writeFileContent(sessionId, filePath, content, cwd)
+    await this.worktreeManager.writeFileContent(sessionId, filePath, content, session.worktreePath)
   }
 
   async restoreSessions(): Promise<void> {
@@ -567,9 +547,8 @@ export class SessionManager {
       const needsRestore = ['running', 'waiting', 'paused', 'review', 'idle'].includes(session.status)
       if (!needsRestore || !session.worktreePath) continue
 
-      const worktreePath = this.worktreeManager.getWorktreePath(session.id)
       try {
-        await access(worktreePath)
+        await access(session.worktreePath)
       } catch {
         this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
         continue
@@ -585,13 +564,13 @@ export class SessionManager {
         const tab: SessionTab = { id: nanoid(6), type: isClaudeAgent ? 'claude' : 'terminal', label: isClaudeAgent ? 'Claude' : 'Terminal 1', terminalId }
         tabs = [tab]
         activeTabId = tab.id
-        this.terminalMux.createTerminal(terminalId, session.id, worktreePath)
+        this.terminalMux.createTerminal(terminalId, session.id, session.worktreePath)
       } else {
         const restoredTabs: SessionTab[] = []
         for (const tab of tabs) {
           if (tab.type === 'terminal' || tab.type === 'claude') {
             const terminalId = nanoid(8)
-            this.terminalMux.createTerminal(terminalId, session.id, worktreePath)
+            this.terminalMux.createTerminal(terminalId, session.id, session.worktreePath)
             restoredTabs.push({ ...tab, terminalId })
           } else {
             restoredTabs.push(tab)
@@ -623,27 +602,28 @@ export class SessionManager {
     if (session?.isMain) {
       throw new Error('Cannot delete the main session')
     }
-    if (session) {
-      for (const tab of session.tabs) {
-        if (tab.type === 'terminal' && tab.terminalId) {
-          this.terminalMux.killTerminal(tab.terminalId)
-        }
+    if (!session) {
+      this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId)
+      return
+    }
+    for (const tab of session.tabs) {
+      if (tab.type === 'terminal' && tab.terminalId) {
+        this.terminalMux.killTerminal(tab.terminalId)
       }
     }
-    await this.worktreeManager.removeWorktree(sessionId, session?.branchName).catch(err => {
+    await this.worktreeManager.removeWorktree(sessionId, session.worktreePath, session.branchName).catch(err => {
       console.warn(`[SessionManager] removeWorktree failed for ${sessionId} during delete (non-fatal):`, err)
     })
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId)
   }
 
   private async initSession(session: AgentSession): Promise<void> {
-    const { id, name, baseBranch } = session
+    const { id, baseBranch } = session
     try {
       this.pushTerminalDisplay(id, '> Creating git worktree...\r\n')
 
       const { branchName, worktreePath, resolvedBase } = await this.worktreeManager.createWorktree(
         id,
-        name,
         baseBranch,
       )
 

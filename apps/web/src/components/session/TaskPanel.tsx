@@ -171,7 +171,7 @@ export function TaskPanel({ session }: TaskPanelProps) {
             <DialogTitle>彻底删除会话</DialogTitle>
             <DialogDescription>
               将删除 Worktree 目录（
-              <span className="font-mono text-foreground">.agent-worktrees/{session.id}</span>
+              <span className="font-mono text-foreground">{session.worktreePath}</span>
               ）和分支（
               <span className="font-mono text-foreground">{session.branchName}</span>
               ），此操作不可恢复。

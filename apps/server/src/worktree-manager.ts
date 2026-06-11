@@ -1,7 +1,7 @@
 import { execa } from 'execa'
 import { watch, type FSWatcher } from 'chokidar'
 import { mkdir, symlink, rm, access, constants, readFile, readdir, writeFile } from 'node:fs/promises'
-import { join, resolve, dirname } from 'node:path'
+import { join, resolve, dirname, basename } from 'node:path'
 import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileNode, FileDiffLine } from '@akari/shared-types'
 
 export class WorktreeManager {
@@ -16,16 +16,9 @@ export class WorktreeManager {
 
   async createWorktree(
     sessionId: string,
-    taskName: string,
     baseBranch = 'main',
   ): Promise<{ branchName: string; worktreePath: string; resolvedBase: string }> {
-    const safeName = taskName
-      .replace(/[^a-zA-Z0-9]/g, '-')
-      .toLowerCase()
-      .replace(/-{2,}/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 40)
-    const branchName = `agent/${safeName}-${sessionId.slice(0, 8)}`
+    const branchName = `agent/${sessionId.slice(0, 8)}`
     const worktreePath = this.getWorktreePath(sessionId)
 
     await mkdir(this.worktreeBaseDir, { recursive: true })
@@ -44,13 +37,12 @@ export class WorktreeManager {
     return { branchName, worktreePath, resolvedBase }
   }
 
-  async removeWorktree(sessionId: string, branchName?: string): Promise<void> {
+  async removeWorktree(sessionId: string, worktreePath: string, branchName?: string): Promise<void> {
     const watcher = this.watchers.get(sessionId)
     if (watcher) {
       await watcher.close()
       this.watchers.delete(sessionId)
     }
-    const worktreePath = this.getWorktreePath(sessionId)
     try {
       await this.git(['worktree', 'remove', '--force', worktreePath])
     } catch {
@@ -377,7 +369,8 @@ export class WorktreeManager {
   }
 
   getWorktreePath(sessionId: string): string {
-    return join(this.worktreeBaseDir, sessionId)
+    const repoSlug = basename(this.baseRepoPath)
+    return join(this.worktreeBaseDir, repoSlug, sessionId)
   }
 
   private async git(args: string[], cwd = this.baseRepoPath): Promise<string> {

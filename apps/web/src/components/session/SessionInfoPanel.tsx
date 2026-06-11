@@ -124,6 +124,7 @@ export function SessionInfoPanel({ session }: SessionInfoPanelProps) {
           onOpenChange={setConfirmDelete}
           sessionId={session.id}
           branchName={session.branchName}
+          worktreePath={session.worktreePath}
           onConfirm={() => deleteSession(session.id)}
         />
       )}
