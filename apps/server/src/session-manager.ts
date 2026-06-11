@@ -491,6 +491,14 @@ export class SessionManager {
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
   }
 
+  async updateFromBase(sessionId: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.worktreeManager.updateFromBase(sessionId, session.baseBranch, session.worktreePath)
+    const log = await this.worktreeManager.getGitLog(sessionId, 100, 0)
+    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+  }
+
   async getFileDiffContent(sessionId: string, filePath: string): Promise<{ original: string; modified: string }> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)

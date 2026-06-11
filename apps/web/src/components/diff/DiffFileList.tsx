@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { GitCommit, Trash2, GitMerge, Loader2 } from 'lucide-react'
+import { GitCommit, Trash2, GitMerge, GitPullRequest, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 function statusColor(s: DiffFile['status']) {
@@ -49,6 +49,10 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   // Merge dialog
   const [mergeOpen, setMergeOpen] = useState(false)
   const [merging, setMerging] = useState(false)
+
+  // Update from base dialog
+  const [updateOpen, setUpdateOpen] = useState(false)
+  const [updating, setUpdating] = useState(false)
 
   async function handleCommit() {
     if (!commitMsg.trim()) return
@@ -111,6 +115,23 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
     }
   }
 
+  async function handleUpdateFromBase() {
+    setUpdating(true)
+    try {
+      const res = await fetch(`${API_BASE}/sessions/${session.id}/git/update-branch`, { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json() as { error?: string }
+        throw new Error(body.error ?? res.statusText)
+      }
+      toast.success(`已从 ${session.baseBranch} 更新到当前分支`)
+      setUpdateOpen(false)
+    } catch (e) {
+      toast.error(`更新失败: ${String(e)}`)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
   if (diffFiles.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -153,6 +174,18 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Commit 所有变更</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  onClick={() => setUpdateOpen(true)}
+                >
+                  <GitPullRequest className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">从基准分支更新</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -288,6 +321,27 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
             <Button variant="outline" onClick={() => setMergeOpen(false)} disabled={merging}>取消</Button>
             <Button onClick={() => void handleMerge()} disabled={merging}>
               {merging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '确认合并'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update from base dialog */}
+      <Dialog open={updateOpen} onOpenChange={setUpdateOpen}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>从基准分支更新</DialogTitle>
+            <DialogDescription>
+              将把{' '}
+              <span className="font-mono text-foreground">{session.baseBranch}</span>{' '}
+              的最新代码合并（--no-ff）到当前分支{' '}
+              <span className="font-mono text-foreground">{session.branchName}</span>。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUpdateOpen(false)} disabled={updating}>取消</Button>
+            <Button onClick={() => void handleUpdateFromBase()} disabled={updating}>
+              {updating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '确认更新'}
             </Button>
           </DialogFooter>
         </DialogContent>

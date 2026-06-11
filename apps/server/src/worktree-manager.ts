@@ -214,6 +214,10 @@ export class WorktreeManager {
     }
   }
 
+  async updateFromBase(sessionId: string, baseBranch: string, worktreePath: string): Promise<void> {
+    await this.git(['merge', '--no-ff', '-m', `Merge ${baseBranch} into current branch`, baseBranch], worktreePath)
+  }
+
   async getGitLog(sessionId: string, limit = 100, offset = 0, cwd?: string, branch?: string): Promise<GitLogResponse> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
     try {

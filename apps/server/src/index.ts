@@ -339,6 +339,21 @@ fastify.post<{ Params: { id: string }; Body: { sourceBranch: string } }>(
   },
 )
 
+fastify.post<{ Params: { id: string } }>(
+  '/sessions/:id/git/update-branch',
+  async (request, reply) => {
+    const { id } = request.params
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    try {
+      await sessionManager.updateFromBase(id)
+      return { ok: true }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.status(422).send({ error: msg })
+    }
+  },
+)
+
 fastify.post<{ Params: { id: string }; Body: { branch: string; createNew?: boolean } }>(
   '/sessions/:id/git/checkout',
   async (request, reply) => {
