@@ -470,6 +470,18 @@ export class SessionManager {
     await this.worktreeManager.discardAll(sessionId, session.worktreePath)
   }
 
+  async discardFile(sessionId: string, filePath: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.worktreeManager.discardFile(sessionId, filePath, session.worktreePath)
+  }
+
+  async openFile(sessionId: string, filePath: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.worktreeManager.openFile(sessionId, filePath, session.worktreePath)
+  }
+
   async checkoutBranch(sessionId: string, branch: string, createNew = false): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)

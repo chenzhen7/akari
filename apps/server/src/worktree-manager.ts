@@ -1,8 +1,12 @@
 import { execa } from 'execa'
 import { watch, type FSWatcher } from 'chokidar'
 import { mkdir, symlink, rm, access, constants, readFile, readdir, writeFile } from 'node:fs/promises'
-import { join, resolve, dirname, basename } from 'node:path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { join, resolve, dirname, basename, sep } from 'node:path'
 import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileNode, FileDiffLine } from '@akari/shared-types'
+
+const execFileAsync = promisify(execFile)
 
 export class WorktreeManager {
   private readonly baseRepoPath: string
@@ -318,6 +322,36 @@ export class WorktreeManager {
     } else {
       await this.git(['checkout', branch], worktreePath)
     }
+  }
+
+  async discardFile(sessionId: string, filePath: string, cwd?: string): Promise<void> {
+    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
+    this.assertPathInWorktree(worktreePath, filePath)
+    await this.git(['checkout', '--', filePath], worktreePath)
+    await this.git(['clean', '-fd', '--', filePath], worktreePath)
+  }
+
+  async openFile(sessionId: string, filePath: string, cwd?: string): Promise<void> {
+    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
+    const fullPath = this.assertPathInWorktree(worktreePath, filePath)
+    const platform = process.platform
+    if (platform === 'win32') {
+      await execFileAsync('cmd', ['/c', 'start', '', fullPath], { windowsHide: true })
+    } else if (platform === 'darwin') {
+      await execFileAsync('open', [fullPath])
+    } else {
+      await execFileAsync('xdg-open', [fullPath])
+    }
+  }
+
+  private assertPathInWorktree(worktreePath: string, filePath: string): string {
+    const resolvedWorktree = resolve(worktreePath)
+    const resolvedFile = resolve(worktreePath, filePath)
+    const isInside = resolvedFile === resolvedWorktree || resolvedFile.startsWith(resolvedWorktree + sep)
+    if (!isInside) {
+      throw new Error(`invalid file path: ${filePath}`)
+    }
+    return resolvedFile
   }
 
   async listFiles(sessionId: string, relativePath: string, cwd?: string): Promise<FileNode[]> {

@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { GitCommit, Trash2, GitMerge, GitPullRequest, Loader2 } from 'lucide-react'
+import { GitCommit, Trash2, GitMerge, GitPullRequest, Loader2, FileIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 function statusColor(s: DiffFile['status']) {
@@ -45,6 +45,10 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   // Discard dialog
   const [discardOpen, setDiscardOpen] = useState(false)
   const [discarding, setDiscarding] = useState(false)
+
+  // Single-file discard dialog
+  const [discardFileTarget, setDiscardFileTarget] = useState<DiffFile | null>(null)
+  const [discardingFile, setDiscardingFile] = useState(false)
 
   // Merge dialog
   const [mergeOpen, setMergeOpen] = useState(false)
@@ -91,6 +95,43 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
       toast.error(`丢弃失败: ${String(e)}`)
     } finally {
       setDiscarding(false)
+    }
+  }
+
+  async function handleOpenFile(file: DiffFile) {
+    try {
+      const res = await fetch(`${API_BASE}/sessions/${session.id}/open-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath: file.path }),
+      })
+      if (!res.ok) {
+        const body = await res.json() as { error?: string }
+        throw new Error(body.error ?? res.statusText)
+      }
+    } catch (e) {
+      toast.error(`打开文件失败: ${String(e)}`)
+    }
+  }
+
+  async function handleDiscardFile(file: DiffFile) {
+    setDiscardingFile(true)
+    try {
+      const res = await fetch(`${API_BASE}/sessions/${session.id}/git/discard-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath: file.path }),
+      })
+      if (!res.ok) {
+        const body = await res.json() as { error?: string }
+        throw new Error(body.error ?? res.statusText)
+      }
+      toast.success(`已丢弃 ${file.path}`)
+      setDiscardFileTarget(null)
+    } catch (e) {
+      toast.error(`丢弃文件失败: ${String(e)}`)
+    } finally {
+      setDiscardingFile(false)
     }
   }
 
@@ -227,11 +268,11 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
           const hasAdd = f.additions > 0
           const hasDel = f.deletions > 0
           return (
-            <button
+            <div
               key={f.path}
               onClick={() => onSelectFile(f.path)}
               className={cn(
-                'flex w-full items-center gap-1.5 py-1 pl-1.5 pr-2 text-left transition-colors',
+                'group flex w-full cursor-pointer items-center gap-1.5 py-1 pl-1.5 pr-2 transition-colors',
                 isSelected
                   ? 'border-l-2 border-primary bg-accent/40'
                   : 'border-l-2 border-transparent hover:bg-muted/50',
@@ -246,14 +287,50 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
                   <div className="mt-0.5 truncate text-[10px] leading-none text-muted-foreground/70">{dir}</div>
                 )}
               </div>
-              {(hasAdd || hasDel) && (
-                <div className="shrink-0 font-mono text-[10px] leading-none">
-                  {hasAdd && <span className="text-green-500">+{f.additions}</span>}
-                  {hasAdd && hasDel && <span className="text-muted-foreground/50"> </span>}
-                  {hasDel && <span className="text-red-400">-{f.deletions}</span>}
+              <div className="flex shrink-0 items-center gap-0.5">
+                <div className="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={e => {
+                          e.stopPropagation()
+                          void handleOpenFile(f)
+                        }}
+                      >
+                        <FileIcon className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">打开文件</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        className="h-6 w-6 text-red-400 hover:text-red-400"
+                        onClick={e => {
+                          e.stopPropagation()
+                          setDiscardFileTarget(f)
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">丢弃此文件变更</TooltipContent>
+                  </Tooltip>
                 </div>
-              )}
-            </button>
+                {(hasAdd || hasDel) && (
+                  <div className="font-mono text-[10px] leading-none">
+                    {hasAdd && <span className="text-green-500">+{f.additions}</span>}
+                    {hasAdd && hasDel && <span className="text-muted-foreground/50"> </span>}
+                    {hasDel && <span className="text-red-400">-{f.deletions}</span>}
+                  </div>
+                )}
+              </div>
+            </div>
           )
         })}
       </div>
@@ -300,6 +377,29 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
             <Button variant="outline" onClick={() => setDiscardOpen(false)} disabled={discarding}>取消</Button>
             <Button variant="destructive" onClick={() => void handleDiscard()} disabled={discarding}>
               {discarding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '确认丢弃'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discard single file dialog */}
+      <Dialog open={!!discardFileTarget} onOpenChange={open => { if (!open) setDiscardFileTarget(null) }}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>丢弃文件变更</DialogTitle>
+            <DialogDescription>
+              将丢弃 <span className="font-mono text-foreground">{discardFileTarget?.path}</span> 的变更。
+              此操作不可恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDiscardFileTarget(null)} disabled={discardingFile}>取消</Button>
+            <Button
+              variant="destructive"
+              onClick={() => { if (discardFileTarget) void handleDiscardFile(discardFileTarget) }}
+              disabled={discardingFile}
+            >
+              {discardingFile ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '确认丢弃'}
             </Button>
           </DialogFooter>
         </DialogContent>
