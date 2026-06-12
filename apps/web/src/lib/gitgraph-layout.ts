@@ -44,7 +44,7 @@ function toGit2Json(commits: GitCommit[], head: string): unknown[] {
     subject: c.message,
     refs: [
       ...(c.hash === head ? ['HEAD'] : []),
-      ...c.refs,
+      ...[...c.refs].sort((a, b) => a.localeCompare(b)),
     ],
   }))
 }
@@ -70,11 +70,21 @@ export interface GitgraphLayout {
 export function computeGitgraphLayout(
   commits: GitCommit[],
   head: string,
+  baseBranch?: string,
 ): GitgraphLayout {
+  const compareBranchesOrder = (a: string, b: string): number => {
+    if (baseBranch) {
+      if (a === baseBranch) return -1
+      if (b === baseBranch) return 1
+    }
+    return a.localeCompare(b)
+  }
+
   const core = new GitgraphCore<SVGElement>({
     template,
     initCommitOffsetX: COMPACT_PAD_LEFT,
     initCommitOffsetY: PAD_TOP,
+    compareBranchesOrder,
   })
 
   const data = toGit2Json(commits, head)
@@ -82,12 +92,23 @@ export function computeGitgraphLayout(
 
   const rendered = core.getRenderedData()
 
+  // Stable branch-to-color mapping, aligned with lane order (baseBranch first)
+  const branchNames = Array.from(rendered.branchesPaths.keys())
+    .map(b => b.name)
+    .sort(compareBranchesOrder)
+  const branchColorMap = new Map<string, string>(
+    branchNames.map((name, i) => [name, template.colors[i % template.colors.length]]),
+  )
+
   const positions = new Map<string, GitgraphNode>()
   let maxX = 0
   let maxY = 0
 
   rendered.commits.forEach(commit => {
-    const color = commit.style?.color ?? commit.style?.dot?.color ?? '#4f9ef8'
+    const branchName = (commit as { branch?: { name?: string } }).branch?.name
+    const color = branchName && branchColorMap.has(branchName)
+      ? branchColorMap.get(branchName)!
+      : (commit.style?.color ?? commit.style?.dot?.color ?? '#4f9ef8')
     positions.set(commit.hash, {
       x: commit.x,
       y: commit.y,
@@ -100,7 +121,7 @@ export function computeGitgraphLayout(
   const edges: GitgraphEdge[] = []
   rendered.branchesPaths.forEach((coordinates, branch) => {
     const d = toSvgPath(coordinates, true, true)
-    const color = branch.computedColor || branch.style?.color || '#4f9ef8'
+    const color = branchColorMap.get(branch.name) ?? branch.computedColor ?? branch.style?.color ?? '#4f9ef8'
     edges.push({ d, color })
   })
 

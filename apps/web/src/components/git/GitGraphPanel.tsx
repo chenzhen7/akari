@@ -40,6 +40,7 @@ interface GitGraphPanelProps {
 export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   const gitLogs = useSessionStore(s => s.gitLogs)
   const setGitLog = useSessionStore(s => s.setGitLog)
+  const session = useSessionStore(s => s.sessions.find(sess => sess.id === sessionId))
   const [loading, setLoading] = useState(false)
   const [selectedHash, setSelectedHash] = useState<string | null>(null)
   const [branchFilter, setBranchFilter] = useState<string>('__all__')
@@ -122,9 +123,9 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
 
   const { positions, edges, graphWidth, svgHeight } = useMemo(
     () => commits.length > 0 && logData
-      ? computeGitgraphLayout(filteredCommits, logData.head)
+      ? computeGitgraphLayout(filteredCommits, logData.head, session?.baseBranch)
       : { positions: new Map<string, GitgraphNode>(), edges: [], graphWidth: 80, svgHeight: 0 },
-    [filteredCommits, commits.length, logData],
+    [filteredCommits, commits.length, logData, session?.baseBranch],
   )
 
   const localBranchNames = useMemo(
