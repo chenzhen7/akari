@@ -102,7 +102,7 @@ export class WorktreeManager {
       const extraFiles: DiffFile[] = []
       for (const file of untrackedFiles) {
         // git diff --no-index exits with code 1 when differences exist (normal, not an error)
-        const fileDiff = await execa('git', ['diff', '--no-index', '--', '/dev/null', file], { cwd: worktreePath })
+        const fileDiff = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--no-index', '--', '/dev/null', file], { cwd: worktreePath })
           .then(r => r.stdout)
           .catch((e: unknown) => {
             const err = e as { exitCode?: number; stdout?: string }
@@ -133,11 +133,11 @@ export class WorktreeManager {
   }
 
   async getFileDiffContent(worktreePath: string, baseBranch: string, filePath: string): Promise<{ original: string; modified: string }> {
-    const mergeBase = await execa('git', ['merge-base', 'HEAD', baseBranch], { cwd: worktreePath })
+    const mergeBase = await execa('git', ['-c', 'core.quotepath=false', 'merge-base', 'HEAD', baseBranch], { cwd: worktreePath })
       .then(r => r.stdout.trim())
       .catch(() => '')
     const baseRef = mergeBase || baseBranch
-    const original = await execa('git', ['show', `${baseRef}:${filePath}`], { cwd: worktreePath })
+    const original = await execa('git', ['-c', 'core.quotepath=false', 'show', `${baseRef}:${filePath}`], { cwd: worktreePath })
       .then(r => r.stdout)
       .catch(() => '')
     const modified = await readFile(join(worktreePath, filePath), 'utf8').catch(() => '')
@@ -145,26 +145,26 @@ export class WorktreeManager {
   }
 
   async getFileDiffLines(worktreePath: string, baseBranch: string, filePath: string): Promise<FileDiffLine[]> {
-    const mergeBase = await execa('git', ['merge-base', 'HEAD', baseBranch], { cwd: worktreePath })
+    const mergeBase = await execa('git', ['-c', 'core.quotepath=false', 'merge-base', 'HEAD', baseBranch], { cwd: worktreePath })
       .then(r => r.stdout.trim())
       .catch(() => '')
     const baseRef = mergeBase || baseBranch
 
     // For untracked (new) files, use git diff --no-index against /dev/null
-    const isUntracked = await execa('git', ['ls-files', '--others', '--exclude-standard'], { cwd: worktreePath })
+    const isUntracked = await execa('git', ['-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard'], { cwd: worktreePath })
       .then(r => r.stdout.split('\n').includes(filePath))
       .catch(() => false)
 
     let diffOutput: string
     if (isUntracked) {
-      diffOutput = await execa('git', ['diff', '--no-index', '--unified=0', '--', '/dev/null', filePath], { cwd: worktreePath })
+      diffOutput = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--no-index', '--unified=0', '--', '/dev/null', filePath], { cwd: worktreePath })
         .then(r => r.stdout)
         .catch((e: unknown) => {
           const err = e as { exitCode?: number; stdout?: string }
           return err.exitCode === 1 ? (err.stdout ?? '') : ''
         })
     } else {
-      diffOutput = await execa('git', ['diff', '--unified=0', baseRef, '--', filePath], { cwd: worktreePath })
+      diffOutput = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--unified=0', baseRef, '--', filePath], { cwd: worktreePath })
         .then(r => r.stdout)
         .catch(() => '')
     }
@@ -199,18 +199,19 @@ export class WorktreeManager {
   }
 
   async mergeToBase(
+    worktreePath: string,
     branchName: string,
     baseBranch: string,
     strategy: 'squash' | 'merge' | 'rebase' = 'squash',
   ): Promise<void> {
-    await this.git(['checkout', baseBranch])
+    // worktreePath 已经 checkout 在 baseBranch（agent 分支）上，直接在该 worktree 内合并即可
     if (strategy === 'squash') {
-      await this.git(['merge', '--squash', branchName])
-      await this.git(['commit', '-m', `chore: squash merge ${branchName}`])
+      await this.git(['merge', '--squash', branchName], worktreePath)
+      await this.git(['commit', '-m', `chore: squash merge ${branchName}`], worktreePath)
     } else if (strategy === 'merge') {
-      await this.git(['merge', '--no-ff', '-m', `Merge ${branchName}`, branchName])
+      await this.git(['merge', '--no-ff', '-m', `Merge ${branchName}`, branchName], worktreePath)
     } else {
-      await this.git(['rebase', branchName])
+      await this.git(['rebase', branchName], worktreePath)
     }
   }
 
@@ -378,7 +379,7 @@ export class WorktreeManager {
   }
 
   private async git(args: string[], cwd = this.baseRepoPath): Promise<string> {
-    const result = await execa('git', args, { cwd })
+    const result = await execa('git', ['-c', 'core.quotepath=false', '-c', 'core.quotepath=false', ...args], { cwd })
     return result.stdout
   }
 

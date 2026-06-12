@@ -486,7 +486,7 @@ export class SessionManager {
   async worktreeMerge(sessionId: string, sourceBranch: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    await this.worktreeManager.mergeToBase(sourceBranch, session.branchName, 'merge')
+    await this.worktreeManager.mergeToBase(session.worktreePath, sourceBranch, session.branchName, 'merge')
     const log = await this.worktreeManager.getGitLog(sessionId, 100, 0)
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
   }
