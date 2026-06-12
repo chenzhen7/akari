@@ -78,11 +78,14 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       .finally(() => setLoading(false))
   }, [sessionId, setGitLog])
 
-  // 初始化加载
+  // 初始化加载 / 切换会话时重置
   useEffect(() => {
-    if (commits.length === 0 && !loading) {
-      fetchLog()
-    }
+    setCommits([])
+    setOffset(0)
+    setHasMore(true)
+    setSelectedHash(null)
+    setSearch('')
+    fetchLog(branchFilter === '__all__' ? undefined : branchFilter, 0)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 
@@ -227,7 +230,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
             {filteredCommits.map(commit => {
               const node = positions.get(commit.hash)
               if (!node) return null
-              const isHead = commit.hash === logData!.head
+              const isHead = commit.hash === logData?.head
               return (
                 <circle
                   key={commit.hash}
@@ -277,7 +280,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
                   {branchRefs.slice(0, 3).map((ref, ri) => {
                     const isRemote = ref.includes('/') && !localBranchNames.has(ref)
                     const isTag = ref.startsWith('tag:')
-                    const isHead = commit.hash === logData!.head && ri === 0
+                    const isHead = commit.hash === logData?.head && ri === 0
                     const label = isTag ? ref.replace('tag: ', '') : ref
                     const Icon = isTag ? Tag : isRemote ? Globe : isHead ? CircleDot : GitBranch
                     return (
