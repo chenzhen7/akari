@@ -26,6 +26,8 @@ interface SessionStore {
   globalViewMode: 'canvas' | 'kanban' | null
   /** 当前选中的会话 ID（侧边栏高亮 + 中间区域显示该会话的标签栏） */
   activeSessionId: string | null
+  /** 每个 session 在 Git Graph 中选中的 commit hash */
+  selectedGitCommits: Record<string, string | null>
 
   addSession: (name: string, task: string, baseBranch?: string, agentType?: AgentType, canvasPosition?: { x: number; y: number }) => void
   openCreateDialog: (position?: { x: number; y: number }) => void
@@ -46,6 +48,7 @@ interface SessionStore {
   addTerminalLine: (id: string, line: string) => void
   clearTerminal: (id: string) => void
   setGitLog: (sessionId: string, log: GitLogResponse) => void
+  setSelectedGitCommit: (sessionId: string, hash: string | null) => void
   setConnectionStatus: (status: ConnectionStatus) => void
   setActiveRightTab: (tab: 'git-graph' | 'diff' | 'info' | 'explorer') => void
   createTab: (sessionId: string, type: 'terminal' | 'claude' | 'diff' | 'file', filePath?: string) => void
@@ -77,6 +80,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   activeRightTab: 'explorer',
   globalViewMode: null,
   activeSessionId: null,
+  selectedGitCommits: {},
 
   openCreateDialog: (position) => {
     set({ createDialogOpen: true, pendingCreatePosition: position ?? null })
@@ -293,6 +297,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   setGitLog: (sessionId, log) =>
     set(state => ({ gitLogs: { ...state.gitLogs, [sessionId]: log } })),
+
+  setSelectedGitCommit: (sessionId, hash) =>
+    set(state => ({ selectedGitCommits: { ...state.selectedGitCommits, [sessionId]: hash } })),
 
   setConnectionStatus: (status) => {
     set(state => ({
