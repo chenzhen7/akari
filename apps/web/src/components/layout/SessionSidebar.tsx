@@ -79,7 +79,6 @@ function SessionItem({ session, isActive, contextMenu, onContextMenu, onCloseCon
   }
 
   const handleContextMenu = (e: React.MouseEvent) => {
-    if (!isMain) return
     e.preventDefault()
     onContextMenu(e, session.id)
   }
@@ -303,8 +302,7 @@ export function SessionSidebar() {
         <SessionContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          sessionId={ctxSession.id}
-          currentBranch={ctxSession.branchName}
+          session={ctxSession}
           onClose={closeContextMenu}
         />
       )}
