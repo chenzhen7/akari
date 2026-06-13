@@ -32,6 +32,8 @@ export interface UseResizablePanelsReturn {
   isDraggingLeft: boolean
   /** 拖拽过程中是否在调整右侧（用于显示样式） */
   isDraggingRight: boolean
+  /** 挂载到容器以直接操作面板 DOM */
+  containerRef: React.RefObject<HTMLDivElement | null>
 }
 
 export function useResizablePanels(
@@ -53,11 +55,14 @@ export function useResizablePanels(
   const [isDraggingLeft, setIsDraggingLeft] = useState(false)
   const [isDraggingRight, setIsDraggingRight] = useState(false)
 
+  const containerRef = useRef<HTMLDivElement>(null)
+
   const dragStateRef = useRef<{
     startX: number
     startWidth: number
     dragTarget: 'left' | 'right'
     containerWidth: number
+    panelEl: HTMLElement
   } | null>(null)
 
   const onMouseMove = useCallback((e: MouseEvent) => {
@@ -71,7 +76,7 @@ export function useResizablePanels(
         maxLeftWidth,
         Math.max(minLeftWidth, state.startWidth + deltaPct),
       )
-      setLeftWidth(newWidth)
+      state.panelEl.style.width = `${newWidth}%`
     } else {
       const delta = state.startX - e.clientX
       const deltaPct = (delta / state.containerWidth) * 100
@@ -79,11 +84,25 @@ export function useResizablePanels(
         maxRightWidth,
         Math.max(minRightWidth, state.startWidth + deltaPct),
       )
-      setRightWidth(newWidth)
+      state.panelEl.style.width = `${newWidth}%`
     }
   }, [maxLeftWidth, minLeftWidth, maxRightWidth, minRightWidth])
 
   const onMouseUp = useCallback(() => {
+    const state = dragStateRef.current
+    if (!state) {
+      setIsDraggingLeft(false)
+      setIsDraggingRight(false)
+      return
+    }
+
+    const width = parseFloat(state.panelEl.style.width)
+    if (state.dragTarget === 'left') {
+      setLeftWidth(width)
+    } else {
+      setRightWidth(width)
+    }
+
     dragStateRef.current = null
     setIsDraggingLeft(false)
     setIsDraggingRight(false)
@@ -101,26 +120,32 @@ export function useResizablePanels(
   const onLeftHandleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault()
     setIsDraggingLeft(true)
-    const container = e.currentTarget.parentElement
+    const container = containerRef.current
     if (!container) return
+    const panelEl = container.querySelector<HTMLElement>('[data-resizable-panel="left"]')
+    if (!panelEl) return
     dragStateRef.current = {
       startX: e.clientX,
       startWidth: leftWidth,
       dragTarget: 'left',
       containerWidth: container.offsetWidth,
+      panelEl,
     }
   }, [leftWidth])
 
   const onRightHandleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault()
     setIsDraggingRight(true)
-    const container = e.currentTarget.parentElement
+    const container = containerRef.current
     if (!container) return
+    const panelEl = container.querySelector<HTMLElement>('[data-resizable-panel="right"]')
+    if (!panelEl) return
     dragStateRef.current = {
       startX: e.clientX,
       startWidth: rightWidth,
       dragTarget: 'right',
       containerWidth: container.offsetWidth,
+      panelEl,
     }
   }, [rightWidth])
 
@@ -153,5 +178,6 @@ export function useResizablePanels(
     onRightHandleMouseDown,
     isDraggingLeft,
     isDraggingRight,
+    containerRef,
   }
 }

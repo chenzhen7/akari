@@ -76,6 +76,7 @@ export function AppShell() {
     onRightHandleMouseDown,
     isDraggingLeft,
     isDraggingRight,
+    containerRef,
   } = useResizablePanels({
     initialLeftWidth: 20,
     minLeftWidth: 12,
@@ -109,14 +110,6 @@ export function AppShell() {
     }
   }
 
-  const middleWidth = leftCollapsed
-    ? rightCollapsed
-      ? '100%'
-      : `${100 - rightWidth}%`
-    : rightCollapsed
-      ? `${100 - leftWidth}%`
-      : `${100 - leftWidth - rightWidth}%`
-
   const isResizing = isDraggingLeft || isDraggingRight
 
   // 画布功能临时关闭：若当前处于画布模式则自动切回默认视图
@@ -136,9 +129,10 @@ export function AppShell() {
           rightCollapsed={rightCollapsed}
           onToggleRight={toggleRight}
         />
-        <div className="flex flex-1 overflow-hidden">
+        <div ref={containerRef} className="flex flex-1 overflow-hidden">
           {/* Left Sidebar */}
           <div
+            data-resizable-panel="left"
             className={cn(
               'shrink-0 overflow-hidden transition-[width] duration-150',
               isResizing && 'transition-none',
@@ -156,7 +150,7 @@ export function AppShell() {
           />
 
           {/* Middle */}
-          <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl bg-background" style={{ width: middleWidth }}>
+          <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl bg-background">
             {globalViewMode === 'canvas' && CANVAS_ENABLED ? (
               <CanvasView />
             ) : globalViewMode === 'kanban' ? (
@@ -185,6 +179,7 @@ export function AppShell() {
 
           {/* Right Sidebar */}
           <div
+            data-resizable-panel="right"
             className={cn(
               'shrink-0 overflow-hidden transition-[width] duration-150',
               isResizing && 'transition-none',
