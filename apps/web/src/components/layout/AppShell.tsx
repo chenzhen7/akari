@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { TopNav } from './TopNav'
 import { SessionSidebar } from './SessionSidebar'
 import { RightSidebar } from './RightSidebar'
-import { useSessionStore } from '@/stores/session-store'
+import { useSessionStore, CANVAS_ENABLED } from '@/stores/session-store'
 import { MiddleTabBar } from '@/components/session/MiddleTabBar'
 import { TabContent } from '@/components/session/TabContent'
 import { CanvasView } from '@/components/canvas/CanvasView'
@@ -119,6 +119,13 @@ export function AppShell() {
 
   const isResizing = isDraggingLeft || isDraggingRight
 
+  // 画布功能临时关闭：若当前处于画布模式则自动切回默认视图
+  useEffect(() => {
+    if (!CANVAS_ENABLED && globalViewMode === 'canvas') {
+      useSessionStore.getState().setGlobalViewMode(null)
+    }
+  }, [globalViewMode])
+
   return (
     <TooltipProvider>
       <WebSocketProvider />
@@ -150,7 +157,7 @@ export function AppShell() {
 
           {/* Middle */}
           <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl bg-background" style={{ width: middleWidth }}>
-            {globalViewMode === 'canvas' ? (
+            {globalViewMode === 'canvas' && CANVAS_ENABLED ? (
               <CanvasView />
             ) : globalViewMode === 'kanban' ? (
               <KanbanView />

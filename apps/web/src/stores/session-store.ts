@@ -58,6 +58,9 @@ interface SessionStore {
 
 export const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
+/** 功能开关：临时关闭画布视图 */
+export const CANVAS_ENABLED = false
+
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   canvasEdges: [],

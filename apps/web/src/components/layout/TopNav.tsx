@@ -1,4 +1,4 @@
-import { useSessionStore } from '@/stores/session-store'
+import { useSessionStore, CANVAS_ENABLED } from '@/stores/session-store'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -77,10 +77,12 @@ export function TopNav({
           }}
         >
           <TabsList className="h-7">
-            <TabsTrigger value="canvas" className="gap-1.5 px-2.5 text-xs">
-              <LayoutGrid className="h-3.5 w-3.5" />
-              画布
-            </TabsTrigger>
+            {CANVAS_ENABLED && (
+              <TabsTrigger value="canvas" className="gap-1.5 px-2.5 text-xs">
+                <LayoutGrid className="h-3.5 w-3.5" />
+                画布
+              </TabsTrigger>
+            )}
             <TabsTrigger value="kanban" className="gap-1.5 px-2.5 text-xs">
               <Columns3 className="h-3.5 w-3.5" />
               看板
