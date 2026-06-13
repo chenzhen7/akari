@@ -14,6 +14,35 @@ import type { IdeaGraphNode } from '@/lib/git-graph-utils'
 import { ROW_H, truncate } from '@/lib/git-graph-utils'
 import { cn } from '@/lib/utils'
 
+interface RefBadgeProps {
+  ref: string
+  isHead: boolean
+  nodeColor?: string
+  localBranchNames: Set<string>
+}
+
+function RefBadge({ ref, isHead, nodeColor, localBranchNames }: RefBadgeProps) {
+  const isRemote = ref.includes('/') && !localBranchNames.has(ref)
+  const isTag = ref.startsWith('tag:')
+  const label = isTag ? ref.replace('tag: ', '') : ref
+  const Icon = isTag ? Tag : isRemote ? Globe : isHead ? CircleDot : GitBranch
+
+  return (
+    <Badge
+      variant={isHead ? 'default' : isRemote ? 'secondary' : 'outline'}
+      className="inline-flex shrink-0 items-center gap-1 px-1.5 py-0 text-[11px] h-5"
+      style={
+        !isHead && !isRemote && !isTag && nodeColor
+          ? { borderColor: nodeColor, color: nodeColor }
+          : undefined
+      }
+    >
+      <Icon className="h-3 w-3 shrink-0" />
+      {truncate(label, 14)}
+    </Badge>
+  )
+}
+
 interface GitGraphRowProps {
   commit: GitCommit
   row: number
@@ -40,6 +69,9 @@ export function GitGraphRow({
   onCreateBranch,
 }: GitGraphRowProps) {
   const branchRefs = commit.refs.filter(r => r && r !== 'HEAD')
+  const hasRefs = branchRefs.length > 0
+  const firstRef = branchRefs[0]
+  const extraCount = branchRefs.length - 1
 
   return (
     <ContextMenu>
@@ -57,13 +89,13 @@ export function GitGraphRow({
           <div
             className="grid w-full items-center"
             style={{
-              gridTemplateColumns: `${graphWidth}px 1fr minmax(80px, auto)`,
+              gridTemplateColumns: `${graphWidth}px 1fr`,
             }}
           >
             {/* Graph spacer */}
             <div className="relative h-full" />
 
-            {/* Message */}
+            {/* Message + Refs inline */}
             <div className="flex min-w-0 items-center gap-1.5 overflow-hidden px-2">
               <span
                 className={cn(
@@ -73,6 +105,7 @@ export function GitGraphRow({
               >
                 {commit.message}
               </span>
+
               {commit.parents.length > 1 && (
                 <Badge
                   variant="outline"
@@ -82,40 +115,37 @@ export function GitGraphRow({
                   merge
                 </Badge>
               )}
-            </div>
 
-            {/* Refs */}
-            <div className="flex min-w-0 items-center justify-end gap-1 overflow-hidden px-2">
-              {branchRefs.slice(0, 4).map((ref, ri) => {
-                const isRemote = ref.includes('/') && !localBranchNames.has(ref)
-                const isTag = ref.startsWith('tag:')
-                const isHeadRef = isHead && ri === 0
-                const label = isTag ? ref.replace('tag: ', '') : ref
-                const Icon = isTag ? Tag : isRemote ? Globe : isHeadRef ? CircleDot : GitBranch
-                return (
-                  <Tooltip key={ri}>
-                    <TooltipTrigger asChild>
-                      <Badge
-                        variant={isHeadRef ? 'default' : isRemote ? 'secondary' : 'outline'}
-                        className="inline-flex shrink-0 items-center gap-1 px-1.5 py-0 text-[11px] h-5"
-                        style={
-                          !isHeadRef && !isRemote && !isTag && node
-                            ? { borderColor: node.color, color: node.color }
-                            : undefined
-                        }
-                      >
-                        <Icon className="h-3 w-3 shrink-0" />
-                        {truncate(label, 14)}
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-[11px]">{label}</TooltipContent>
-                  </Tooltip>
-                )
-              })}
-              {branchRefs.length > 4 && (
-                <Badge variant="outline" className="h-5 px-1.5 text-[11px]">
-                  +{branchRefs.length - 4}
-                </Badge>
+              {hasRefs && firstRef && (
+                <div className="ml-auto flex shrink-0 items-center gap-1">
+                  <RefBadge
+                    ref={firstRef}
+                    isHead={isHead}
+                    nodeColor={node?.color}
+                    localBranchNames={localBranchNames}
+                  />
+
+                  {extraCount > 0 && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="outline" className="h-5 px-1.5 text-[11px]">
+                          +{extraCount}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="flex max-w-xs flex-wrap gap-1 p-1.5 text-[11px]">
+                        {branchRefs.map((ref, ri) => (
+                          <RefBadge
+                            key={ri}
+                            ref={ref}
+                            isHead={isHead && ri === 0}
+                            nodeColor={node?.color}
+                            localBranchNames={localBranchNames}
+                          />
+                        ))}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
               )}
             </div>
           </div>

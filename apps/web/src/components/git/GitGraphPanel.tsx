@@ -213,19 +213,18 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       <div
         className="grid shrink-0 border-b border-border bg-background px-3 py-1 text-[11px] font-medium text-muted-foreground"
         style={{
-          gridTemplateColumns: `${graphWidth}px 1fr minmax(80px, auto)`,
+          gridTemplateColumns: `${graphWidth}px 1fr`,
         }}
       >
         <div />
         <div className="px-2">Message</div>
-        <div className="px-2 text-right">Refs</div>
       </div>
 
       {/* Scrollable graph + rows */}
       <div className="relative flex-1 overflow-auto">
         <div
           className="relative"
-          style={{ height: svgHeight, minWidth: graphWidth + 240 }}
+          style={{ height: svgHeight, minWidth: graphWidth + 160 }}
         >
           <GitGraphSvg
             commits={filteredCommits}
