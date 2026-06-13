@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { AgentSession, DiffFile } from '@akari/shared-types'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -36,6 +36,16 @@ interface DiffFileListProps {
 export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   const diffFiles = session.diffFiles ?? []
   const hasDiff = diffFiles.length > 0
+
+  const activeTab = useMemo(
+    () => session.tabs.find(t => t.id === session.activeTabId),
+    [session.tabs, session.activeTabId]
+  )
+
+  const fileRows = useMemo(() =>
+    diffFiles.map(f => ({ ...f, ...splitPath(f.path) })),
+    [diffFiles]
+  )
 
   // Commit dialog
   const [commitOpen, setCommitOpen] = useState(false)
@@ -261,9 +271,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
 
       {/* File list */}
       <div className="flex-1 overflow-y-auto py-0.5">
-        {diffFiles.map(f => {
-          const { dir, name } = splitPath(f.path)
-          const activeTab = session.tabs.find(t => t.id === session.activeTabId)
+        {fileRows.map(f => {
           const isSelected = activeTab?.type === 'diff' && activeTab.filePath === f.path
           const hasAdd = f.additions > 0
           const hasDel = f.deletions > 0
@@ -282,9 +290,9 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
                 {f.status}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[12px] leading-tight text-foreground">{name}</div>
-                {dir && (
-                  <div className="mt-0.5 truncate text-[10px] leading-none text-muted-foreground/70">{dir}</div>
+                <div className="truncate text-[12px] leading-tight text-foreground">{f.name}</div>
+                {f.dir && (
+                  <div className="mt-0.5 truncate text-[10px] leading-none text-muted-foreground/70">{f.dir}</div>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-0.5">

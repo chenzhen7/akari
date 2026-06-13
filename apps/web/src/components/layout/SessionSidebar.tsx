@@ -184,6 +184,7 @@ const SessionItem = memo(function SessionItem({
     </>
   )
 }
+)
 
 export function SessionSidebar() {
   const sessions = useSessionStore(s => s.sessions)
