@@ -30,11 +30,11 @@ export function DeleteSessionDialog({
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>彻底删除会话</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="break-words">
             将删除 Worktree 目录（
-            <span className="font-mono text-foreground">{worktreePath}</span>
+            <span className="break-all font-mono text-foreground">{worktreePath}</span>
             ）和分支（
-            <span className="font-mono text-foreground">{branchName}</span>
+            <span className="break-all font-mono text-foreground">{branchName}</span>
             ），此操作不可恢复。
           </DialogDescription>
         </DialogHeader>

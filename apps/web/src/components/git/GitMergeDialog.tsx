@@ -74,9 +74,9 @@ export function GitMergeDialog({ open, onOpenChange, sessionId, currentBranch }:
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>合并分支</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="break-words">
             将所选分支合并到当前分支{' '}
-            <span className="font-mono text-foreground">{currentBranch}</span>（--no-ff）
+            <span className="break-all font-mono text-foreground">{currentBranch}</span>（--no-ff）
           </DialogDescription>
         </DialogHeader>
 
@@ -93,7 +93,7 @@ export function GitMergeDialog({ open, onOpenChange, sessionId, currentBranch }:
                 <SelectContent>
                   {branches.map(b => (
                     <SelectItem key={b.name} value={b.name}>
-                      <span className="font-mono text-sm">{b.name}</span>
+                      <span className="break-all font-mono text-sm">{b.name}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>

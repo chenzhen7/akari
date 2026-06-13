@@ -387,8 +387,8 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>丢弃文件变更</DialogTitle>
-            <DialogDescription>
-              将丢弃 <span className="font-mono text-foreground">{discardFileTarget?.path}</span> 的变更。
+            <DialogDescription className="break-words">
+              将丢弃 <span className="break-all font-mono text-foreground">{discardFileTarget?.path}</span> 的变更。
               此操作不可恢复。
             </DialogDescription>
           </DialogHeader>
@@ -410,11 +410,11 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>合并到基准分支</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words">
               将把{' '}
-              <span className="font-mono text-foreground">{session.branchName}</span>{' '}
+              <span className="break-all font-mono text-foreground">{session.branchName}</span>{' '}
               合并（--no-ff）到{' '}
-              <span className="font-mono text-foreground">{session.baseBranch}</span>。
+              <span className="break-all font-mono text-foreground">{session.baseBranch}</span>。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -431,11 +431,11 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>从基准分支更新</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words">
               将把{' '}
-              <span className="font-mono text-foreground">{session.baseBranch}</span>{' '}
+              <span className="break-all font-mono text-foreground">{session.baseBranch}</span>{' '}
               的最新代码合并（--no-ff）到当前分支{' '}
-              <span className="font-mono text-foreground">{session.branchName}</span>。
+              <span className="break-all font-mono text-foreground">{session.branchName}</span>。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -131,7 +131,7 @@ export function CreateSessionDialog() {
                     <SelectContent>
                       {branches.map(b => (
                         <SelectItem key={b.name} value={b.name}>
-                          {b.name}{b.isCurrent ? ' (当前)' : ''}
+                          <span className="break-all">{b.name}{b.isCurrent ? ' (当前)' : ''}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>

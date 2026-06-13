@@ -64,12 +64,12 @@ export function SessionInfoPanel({ session }: SessionInfoPanelProps) {
         </div>
         <div className="flex gap-1.5 text-xs">
           <span className="text-muted-foreground">分支</span>
-          <span className="font-mono text-foreground">{session.branchName}</span>
+          <span className="min-w-0 break-all font-mono text-foreground">{session.branchName}</span>
         </div>
         {!isMain && (
           <div className="flex gap-1.5 text-xs">
             <span className="text-muted-foreground">基准</span>
-            <span className="text-foreground">{session.baseBranch}</span>
+            <span className="min-w-0 break-all text-foreground">{session.baseBranch}</span>
           </div>
         )}
       </div>

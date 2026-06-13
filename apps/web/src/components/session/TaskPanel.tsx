@@ -72,11 +72,11 @@ export function TaskPanel({ session }: TaskPanelProps) {
       <div className="space-y-1 text-sm">
         <div className="flex gap-2">
           <span className="text-muted-foreground">分支：</span>
-          <span className="font-mono text-xs">{session.branchName}</span>
+          <span className="min-w-0 break-all font-mono text-xs">{session.branchName}</span>
         </div>
         <div className="flex gap-2">
           <span className="text-muted-foreground">基础分支：</span>
-          <span>{session.baseBranch}</span>
+          <span className="min-w-0 break-all">{session.baseBranch}</span>
         </div>
       </div>
 
@@ -169,11 +169,11 @@ export function TaskPanel({ session }: TaskPanelProps) {
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>彻底删除会话</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words">
               将删除 Worktree 目录（
-              <span className="font-mono text-foreground">{session.worktreePath}</span>
+              <span className="break-all font-mono text-foreground">{session.worktreePath}</span>
               ）和分支（
-              <span className="font-mono text-foreground">{session.branchName}</span>
+              <span className="break-all font-mono text-foreground">{session.branchName}</span>
               ），此操作不可恢复。
             </DialogDescription>
           </DialogHeader>
