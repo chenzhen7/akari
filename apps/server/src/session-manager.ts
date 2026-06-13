@@ -679,8 +679,10 @@ export class SessionManager {
         for (const { cmd, delayMs = 0 } of commands) {
           cumulativeDelay += delayMs
           const delay = cumulativeDelay
+          console.log(`[TERMINAL_DEBUG_BACKEND] scheduling agent command for terminalId=${terminalId} delay=${delay} cmd=${cmd.trim()}`)
           setTimeout(() => {
             if (this.terminalMux.hasTerminal(terminalId)) {
+              console.log(`[TERMINAL_DEBUG_BACKEND] sending agent command to terminalId=${terminalId}`)
               this.terminalMux.sendToTerminal(terminalId, cmd)
             }
           }, delay)

@@ -20,7 +20,12 @@ export class TerminalMultiplexer extends EventEmitter {
   private readonly BUFFER_LIMIT = 5000
 
   createTerminal(terminalId: string, sessionId: string, cwd: string): void {
-    if (this.terminals.has(terminalId)) return
+    if (this.terminals.has(terminalId)) {
+      console.log(`[TERMINAL_DEBUG_BACKEND] createTerminal skipped: ${terminalId} already exists`)
+      return
+    }
+
+    console.log(`[TERMINAL_DEBUG_BACKEND] createTerminal terminalId=${terminalId} sessionId=${sessionId} cwd=${cwd}`)
 
     const isWindows = process.platform === 'win32'
     // Prefer PowerShell 7+ (pwsh.exe); fall back to built-in Windows PowerShell 5.x
@@ -67,6 +72,7 @@ export class TerminalMultiplexer extends EventEmitter {
     })
 
     this.terminals.set(terminalId, entry)
+    console.log(`[TERMINAL_DEBUG_BACKEND] terminal ready terminalId=${terminalId} cols=${cols} rows=${rows}`)
     this.emit('terminal:ready', { sessionId, terminalId })
   }
 
@@ -80,6 +86,7 @@ export class TerminalMultiplexer extends EventEmitter {
   resizeTerminal(terminalId: string, cols: number, rows: number): void {
     const entry = this.terminals.get(terminalId)
     if (entry?.status === 'running') {
+      console.log(`[TERMINAL_DEBUG_BACKEND] resizeTerminal terminalId=${terminalId} cols=${cols} rows=${rows}`)
       entry.resizing = true
       entry.pty.resize(cols, rows)
       setImmediate(() => {
