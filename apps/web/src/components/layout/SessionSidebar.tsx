@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session-store'
 import { Button } from '@/components/ui/button'
@@ -44,44 +44,44 @@ function StatusIcon({ status }: { status: string }) {
 interface SessionItemProps {
   session: AgentSession
   isActive: boolean
-  contextMenu: { x: number; y: number; sessionId: string } | null
   onContextMenu: (e: React.MouseEvent, sessionId: string) => void
-  onCloseContextMenu: () => void
 }
 
-function SessionItem({ session, isActive, contextMenu, onContextMenu, onCloseContextMenu }: SessionItemProps) {
+const SessionItem = memo(function SessionItem({
+  session,
+  isActive,
+  onContextMenu,
+}: SessionItemProps) {
   const selectSession = useSessionStore(s => s.selectSession)
   const archiveSession = useSessionStore(s => s.archiveSession)
   const deleteSession = useSessionStore(s => s.deleteSession)
   const restoreSession = useSessionStore(s => s.restoreSession)
-  const pendingOps = useSessionStore(s => s.pendingOps)
+  const isPending = useSessionStore(s => s.pendingOps.has(session.id))
   const [confirmDelete, setConfirmDelete] = useState(false)
-
-  const isPending = pendingOps.has(session.id)
   const isTerminal = ['archived', 'merged'].includes(session.status)
   const additions = session.diffSummary?.additions ?? 0
   const deletions = session.diffSummary?.deletions ?? 0
   const isMain = session.isMain ?? false
 
-  const handleArchive = (e: React.MouseEvent) => {
+  const handleArchive = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     archiveSession(session.id)
-  }
+  }, [archiveSession, session.id])
 
-  const handleRestore = (e: React.MouseEvent) => {
+  const handleRestore = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     restoreSession(session.id)
-  }
+  }, [restoreSession, session.id])
 
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     setConfirmDelete(true)
-  }
+  }, [])
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     onContextMenu(e, session.id)
-  }
+  }, [onContextMenu, session.id])
 
   return (
     <>
@@ -197,11 +197,11 @@ export function SessionSidebar() {
   const activeSessions = regularSessions.filter(s => s.status !== 'archived')
   const archivedSessions = regularSessions.filter(s => s.status === 'archived')
 
-  const handleContextMenu = (e: React.MouseEvent, sessionId: string) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string) => {
     setContextMenu({ x: e.clientX, y: e.clientY, sessionId })
-  }
+  }, [])
 
-  const closeContextMenu = () => setContextMenu(null)
+  const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
   const ctxSession = contextMenu ? sessions.find(s => s.id === contextMenu.sessionId) : null
 
@@ -234,9 +234,7 @@ export function SessionSidebar() {
               <SessionItem
                 session={mainSession}
                 isActive={mainSession.id === activeSessionId}
-                contextMenu={contextMenu}
                 onContextMenu={handleContextMenu}
-                onCloseContextMenu={closeContextMenu}
               />
             </div>
           )}
@@ -250,9 +248,7 @@ export function SessionSidebar() {
                 key={session.id}
                 session={session}
                 isActive={session.id === activeSessionId}
-                contextMenu={contextMenu}
                 onContextMenu={handleContextMenu}
-                onCloseContextMenu={closeContextMenu}
               />
             ))}
           </div>
@@ -274,9 +270,7 @@ export function SessionSidebar() {
                     key={session.id}
                     session={session}
                     isActive={session.id === activeSessionId}
-                    contextMenu={contextMenu}
                     onContextMenu={handleContextMenu}
-                    onCloseContextMenu={closeContextMenu}
                   />
                 ))}
               </div>

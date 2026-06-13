@@ -27,12 +27,9 @@ export function TopNav({
   rightCollapsed,
   onToggleRight: toggleRight,
 }: TopNavProps) {
-  const {
-    globalViewMode,
-    setGlobalViewMode,
-    toggleCommandCenter,
-    sessions,
-  } = useSessionStore()
+  const globalViewMode = useSessionStore(s => s.globalViewMode)
+  const setGlobalViewMode = useSessionStore(s => s.setGlobalViewMode)
+  const toggleCommandCenter = useSessionStore(s => s.toggleCommandCenter)
   const { theme, setTheme } = useTheme()
 
   return (

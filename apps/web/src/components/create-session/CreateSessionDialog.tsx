@@ -29,15 +29,16 @@ interface RepoBranch {
 }
 
 export function CreateSessionDialog() {
-  const { createDialogOpen, toggleCreateDialog, addSession, sessions } = useSessionStore()
+  const createDialogOpen = useSessionStore(s => s.createDialogOpen)
+  const toggleCreateDialog = useSessionStore(s => s.toggleCreateDialog)
+  const addSession = useSessionStore(s => s.addSession)
+  const mainSession = useSessionStore(s => s.sessions.find(s => s.isMain) ?? null)
   const [name, setName] = useState('')
   const [task, setTask] = useState('')
   const [baseBranch, setBaseBranch] = useState('')
   const [agentType, setAgentType] = useState<AgentType>('claude')
   const [branches, setBranches] = useState<RepoBranch[]>([])
   const [branchesLoading, setBranchesLoading] = useState(false)
-
-  const mainSession = sessions.find(s => s.isMain)
 
   useEffect(() => {
     if (!createDialogOpen) return

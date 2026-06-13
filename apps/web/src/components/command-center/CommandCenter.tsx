@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { useSessionStore } from '@/stores/session-store'
+import { useShallow } from 'zustand/react/shallow'
 import { cn } from '@/lib/utils'
 import {
   Radio,
@@ -140,13 +141,10 @@ function StatCard({
 }
 
 export function CommandCenter() {
-  const {
-    commandCenterOpen,
-    toggleCommandCenter,
-    sessions,
-    openTab,
-    addTerminalLine,
-  } = useSessionStore()
+  const commandCenterOpen = useSessionStore(s => s.commandCenterOpen)
+  const toggleCommandCenter = useSessionStore(s => s.toggleCommandCenter)
+  const addTerminalLine = useSessionStore(s => s.addTerminalLine)
+  const sessions = useSessionStore(s => s.sessions, useShallow)
 
   const [broadcastMsg, setBroadcastMsg] = useState('')
   const [selectedTargets, setSelectedTargets] = useState<Set<string>>(
