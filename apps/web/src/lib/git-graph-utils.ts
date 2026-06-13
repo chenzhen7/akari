@@ -14,25 +14,6 @@ export const PAD_TOP = ROW_H / 2
 
 const CORNER_R = 3
 
-export interface LaneInfo {
-  lane: number
-  color: string
-}
-
-export interface GraphEdge {
-  fromRow: number
-  toRow: number
-  fromLane: number
-  toLane: number
-  color: string
-}
-
-export interface GraphResult {
-  laneInfo: Map<string, LaneInfo>
-  edges: GraphEdge[]
-  maxLane: number
-}
-
 export interface IdeaGraphNode {
   lane: number
   color: string
@@ -52,70 +33,12 @@ export interface OrthogonalEdge {
   d: string
 }
 
-export interface BranchPath {
-  branch: string
-  color: string
-  rows: number[]
-  laneSegments: Array<{ startRow: number; endRow: number; lane: number }>
-}
-
 export interface IdeaGraphResult {
   positions: Map<string, IdeaGraphNode>
   edges: OrthogonalEdge[]
-  branchPaths: Map<string, BranchPath>
   graphWidth: number
   svgHeight: number
   maxLane: number
-}
-
-export function buildGraph(commits: GitCommit[]): GraphResult {
-  const laneInfo = new Map<string, LaneInfo>()
-  const edges: GraphEdge[] = []
-  const openLanes: (string | null)[] = []
-  const rowOf = new Map<string, number>()
-
-  for (let i = 0; i < commits.length; i++) rowOf.set(commits[i]!.hash, i)
-
-  const freeSlot = (): number => {
-    const idx = openLanes.findIndex(h => h === null)
-    if (idx >= 0) return idx
-    openLanes.push(null)
-    return openLanes.length - 1
-  }
-
-  for (let rowIdx = 0; rowIdx < commits.length; rowIdx++) {
-    const commit = commits[rowIdx]!
-
-    const existingLane = openLanes.findIndex(h => h === commit.hash)
-    const lane = existingLane >= 0 ? existingLane : freeSlot()
-    openLanes[lane] = null
-
-    const color = LANE_COLORS[lane % LANE_COLORS.length]!
-    laneInfo.set(commit.hash, { lane, color })
-
-    for (let pIdx = 0; pIdx < commit.parents.length; pIdx++) {
-      const parentHash = commit.parents[pIdx]!
-      const alreadyOpen = openLanes.findIndex(h => h === parentHash)
-
-      let targetLane: number
-      if (alreadyOpen >= 0) {
-        targetLane = alreadyOpen
-      } else if (pIdx === 0) {
-        targetLane = lane
-        openLanes[lane] = parentHash
-      } else {
-        targetLane = freeSlot()
-        openLanes[targetLane] = parentHash
-      }
-
-      const parentRow = rowOf.get(parentHash) ?? rowIdx + 1
-      const edgeColor = pIdx === 0 ? color : LANE_COLORS[targetLane % LANE_COLORS.length]!
-      edges.push({ fromRow: rowIdx, toRow: parentRow, fromLane: lane, toLane: targetLane, color: edgeColor })
-    }
-  }
-
-  const maxLane = Math.max(...Array.from(laneInfo.values()).map(l => l.lane), 0)
-  return { laneInfo, edges, maxLane }
 }
 
 function collectBranchNames(commits: GitCommit[]): Set<string> {
@@ -224,44 +147,6 @@ function buildOrthogonalPath(fromRow: number, toRow: number, fromLane: number, t
   ].join(' ')
 }
 
-function buildBranchPaths(
-  commits: GitCommit[],
-  positions: Map<string, IdeaGraphNode>,
-  edges: OrthogonalEdge[],
-  colors: Map<string, string>,
-): Map<string, BranchPath> {
-  const map = new Map<string, BranchPath>()
-  const rowsByBranch = new Map<string, Set<number>>()
-
-  for (const edge of edges) {
-    if (!edge.branch) continue
-    const set = rowsByBranch.get(edge.branch) ?? new Set<number>()
-    set.add(edge.fromRow)
-    set.add(edge.toRow)
-    rowsByBranch.set(edge.branch, set)
-  }
-
-  for (const [branch, color] of colors.entries()) {
-    const set = rowsByBranch.get(branch) ?? new Set<number>()
-    const rows = Array.from(set).sort((a, b) => a - b)
-    const laneSegments: Array<{ startRow: number; endRow: number; lane: number }> = []
-
-    for (const row of rows) {
-      const lane = positions.get(commits[row]!.hash)?.lane ?? 0
-      const last = laneSegments[laneSegments.length - 1]
-      if (last && last.lane === lane && last.endRow === row - 1) {
-        last.endRow = row
-      } else {
-        laneSegments.push({ startRow: row, endRow: row, lane })
-      }
-    }
-
-    map.set(branch, { branch, color, rows, laneSegments })
-  }
-
-  return map
-}
-
 export function computeIdeaGraphLayout(
   commits: GitCommit[],
   _head: string,
@@ -309,11 +194,10 @@ export function computeIdeaGraphLayout(
     }
   }
 
-  const branchPaths = buildBranchPaths(commits, positions, edges, colors)
   const graphWidth = Math.max(PAD_LEFT + (maxLane + 1) * LANE_W + DOT_R + 8, 80)
   const svgHeight = commits.length * ROW_H
 
-  return { positions, edges, branchPaths, graphWidth, svgHeight, maxLane }
+  return { positions, edges, graphWidth, svgHeight, maxLane }
 }
 
 export function graphColWidth(maxLane: number): number {

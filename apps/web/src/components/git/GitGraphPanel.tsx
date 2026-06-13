@@ -14,13 +14,15 @@ import {
 } from '@/components/ui/dialog'
 import type { GitCommit, GitLogResponse } from '@akari/shared-types'
 import { useSessionStore } from '@/stores/session-store'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { computeIdeaGraphLayout } from '@/lib/git-graph-utils'
 import { GitGraphSvg } from './GitGraphSvg'
 import { GitGraphRow } from './GitGraphRow'
 import { cn } from '@/lib/utils'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
-const FULL_LOAD_LIMIT = 100000
+const FULL_LOAD_LIMIT = 2000
+const SEARCH_DEBOUNCE_MS = 200
 
 interface NewBranchDialogState {
   open: boolean
@@ -42,7 +44,8 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   const [loading, setLoading] = useState(false)
   const [commits, setCommits] = useState<GitCommit[]>([])
   const [branchFilter, setBranchFilter] = useState<string>('__all__')
-  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS)
   const [newBranch, setNewBranch] = useState<NewBranchDialogState>({ open: false, hash: '', name: '' })
 
   const logData: GitLogResponse | null = gitLogs[sessionId] ?? null
@@ -73,7 +76,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
 
   // 初始化 / 切换会话 / 切换分支筛选时全量加载
   useEffect(() => {
-    setSearch('')
+    setSearchInput('')
     const branch = branchFilter === '__all__' ? undefined : branchFilter
     fetchLog(branch)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,8 +193,8 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
         </select>
         <Input
           placeholder="搜索提交..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
           className="h-6 min-w-0 flex-1 text-xs"
         />
         <span className="ml-auto text-[11px] text-muted-foreground">
