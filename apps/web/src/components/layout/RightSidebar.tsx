@@ -79,33 +79,25 @@ export function RightSidebar({ session }: RightSidebarProps) {
         ))}
       </div>
 
-      {/* Content */}
+      {/* Content: keep-alive with display:none so panels don't remount on tab switch */}
       <div className="relative flex-1 overflow-hidden">
         {session ? (
           <>
-            {activeRightTab === 'explorer' && (
-              <div className="absolute inset-0 overflow-hidden">
-                <ExplorerPanel session={session} onOpenFile={handleOpenFile} />
-              </div>
-            )}
-            {activeRightTab === 'diff' && (
-              <div className="absolute inset-0 overflow-hidden">
-                <DiffFileList
-                  session={session}
-                  onSelectFile={handleSelectFile}
-                />
-              </div>
-            )}
-            {activeRightTab === 'git-graph' && (
-              <div className="absolute inset-0">
-                <GitGraphPanel sessionId={session.id} />
-              </div>
-            )}
-            {activeRightTab === 'info' && (
-              <div className="absolute inset-0 overflow-hidden">
-                <SessionInfoPanel session={session} />
-              </div>
-            )}
+            <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'explorer' && 'hidden')}>
+              <ExplorerPanel session={session} onOpenFile={handleOpenFile} />
+            </div>
+            <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'diff' && 'hidden')}>
+              <DiffFileList
+                session={session}
+                onSelectFile={handleSelectFile}
+              />
+            </div>
+            <div className={cn('absolute inset-0', activeRightTab !== 'git-graph' && 'hidden')}>
+              <GitGraphPanel sessionId={session.id} />
+            </div>
+            <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'info' && 'hidden')}>
+              <SessionInfoPanel session={session} />
+            </div>
           </>
         ) : (
           <div className="flex h-full items-center justify-center text-muted-foreground">
