@@ -36,7 +36,6 @@ interface SessionStore {
   moveToColumn: (id: string, column: KanbanColumn) => void
   updateCanvasPosition: (id: string, pos: { x: number; y: number }) => void
   openTab: (id: string) => void
-  closeTab: (id: string) => void
   setActiveTab: (id: string | null) => void
   selectSession: (id: string) => void
   setGlobalViewMode: (mode: 'canvas' | 'kanban' | null) => void
@@ -59,7 +58,8 @@ interface SessionStore {
   handleServerMessage: (msg: ServerMessage) => void
 }
 
-export const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
+import { API_BASE } from '@/lib/api'
+export { API_BASE }
 
 /** 功能开关：临时关闭画布视图 */
 export const CANVAS_ENABLED = false
@@ -173,15 +173,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set(state => {
       const tabs = state.openTabs.includes(id) ? state.openTabs : [...state.openTabs, id]
       return { openTabs: tabs, activeTabId: id }
-    }),
-
-  closeTab: (id) =>
-    set(state => {
-      const tabs = state.openTabs.filter(t => t !== id)
-      const newActive = state.activeTabId === id
-        ? (tabs.length > 0 ? tabs[tabs.length - 1] : null)
-        : state.activeTabId
-      return { openTabs: tabs, activeTabId: newActive }
     }),
 
   setActiveTab: (id) => set({ activeTabId: id }),

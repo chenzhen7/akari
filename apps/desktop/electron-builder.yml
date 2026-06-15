@@ -1,0 +1,25 @@
+appId: com.akari.app
+productName: Akari
+copyright: Copyright © 2026 Akari
+directories:
+  output: dist-electron
+electronDist: node_modules/electron/dist
+files:
+  - dist/**/*
+extraResources:
+  - from: ../server/dist
+    to: server/dist
+    filter: '**/*'
+  - from: ../server/node_modules
+    to: server/node_modules
+    filter: '**/*'
+  - from: ../web/dist
+    to: web/dist
+    filter: '**/*'
+win:
+  target:
+    - nsis
+    - portable
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

@@ -23,7 +23,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 |------|----------|------|
 | 核心类型 | `packages/shared-types/src/index.ts` | `AgentSession` / `ServerMessage` / `ClientMessage` 等 |
 | pnpm Monorepo | `pnpm-workspace.yaml` | apps/* + packages/* |
-| Fastify 后端骨架 | `apps/server/src/index.ts` | port 3001，REST + WebSocket，使用 SessionManager |
+| Fastify 后端骨架 | `apps/server/src/index.ts` | port 39321，REST + WebSocket，使用 SessionManager |
 | WorktreeManager | `apps/server/src/worktree-manager.ts` | git worktree 创建/删除/diff/watch，分支自动回退 |
 | TerminalMultiplexer | `apps/server/src/terminal-mux.ts` | node-pty 真实 PTY（PowerShell 7）；环形 Buffer 5000 行；支持 resize 同步；魔法字符串**已全部移除** |
 | HookDispatcher | `apps/server/src/hook-dispatcher.ts` | ApprovalRegistry（Promise 挂起）+ dispatchHookEvent；PermissionRequest 同步阻塞审批 |
@@ -48,6 +48,8 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 | Diff 视图 | `apps/web/src/components/diff/DiffViewer.tsx` | Monaco DiffEditor（side-by-side）、DiffFileList、resolvedBase 修复 |
 | 审批 UI | `apps/web/src/components/session/SessionInfoPanel.tsx` | ApprovalRequest 渲染、选项按钮、批量审批 |
 | 画布节点 Handle | `apps/web/src/components/canvas/SessionNode.tsx` | source/target Handle（hover 显现）；claude-orchestrator 图标 |
+| Electron 桌面端 | `apps/desktop/` | 独立 Electron 封装层，生产环境由后端 serve 前端 dist，输出 NSIS / portable |
+| 后端静态资源服务 | `apps/server/src/index.ts` | `WEB_DIST_PATH` 存在时 serve `apps/web/dist`，支持 `PORT=0` 随机端口 |
 
 ### 🔄 已回退（Phase-7 多 Agent 协作）
 
@@ -117,7 +119,7 @@ akari/
 │   ├── server/
 │   │   ├── data/akari.db          # ✅ SQLite 持久化数据库
 │   │   └── src/
-│   │       ├── index.ts           # ✅ Fastify 入口，端口 3001
+│   │       ├── index.ts           # ✅ Fastify 入口，端口 39321
 │   │       ├── session-manager.ts # ✅ SessionManager（SQLite + 状态机）
 │   │       ├── worktree-manager.ts# ✅ WorktreeManager（git worktree + chokidar diff）
 │   │       ├── terminal-mux.ts    # ✅ TerminalMultiplexer（node-pty + 环形 Buffer）
@@ -127,6 +129,11 @@ akari/
 │   │           ├── base.ts        # AgentAdapter 接口 + PtyCommand 类型
 │   │           ├── claude.ts      # ClaudeAdapter（--append-system-prompt）
 │   │           └── index.ts       # createAgentAdapter() 工厂
+│   ├── desktop/                 # ✅ Electron 桌面端封装（主进程 + 打包配置）
+│   │   ├── src/main.ts          # Electron 主进程，启动后端并加载前端
+│   │   ├── src/preload.ts       # 预加载脚本（暴露最小 API）
+│   │   ├── electron-builder.yml # NSIS / portable 打包配置
+│   │   └── package.json
 │   └── web/src/
 │       ├── components/            # ✅ 全部前端组件
 │       │   ├── canvas/            # CanvasView + SessionNode + FlowEdge + ContextMenu

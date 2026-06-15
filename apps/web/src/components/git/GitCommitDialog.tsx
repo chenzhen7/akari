@@ -11,8 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import type { DiffFile } from '@akari/shared-types'
-
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
+import { API_BASE } from '@/lib/api'
 
 interface GitCommitDialogProps {
   open: boolean

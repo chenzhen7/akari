@@ -3,11 +3,13 @@
   "private": true,
   "version": "0.0.1",
   "scripts": {
-    "dev": "pnpm --filter @akari/web dev",
-    "dev:server": "pnpm --filter @akari/server dev",
-    "dev:all": "pnpm exec concurrently \"pnpm dev:server\" \"pnpm dev\"",
+    "dev": "cross-env VITE_API_URL=http://127.0.0.1:39321 pnpm --filter @akari/web dev -- --port 57123 --strictPort",
+    "dev:server": "cross-env HOST=127.0.0.1 pnpm --filter @akari/server dev",
+    "dev:all": "pnpm exec concurrently \"pnpm dev:server\" \"cross-env VITE_API_URL=http://127.0.0.1:39321 pnpm --filter @akari/web dev -- --port 57123 --strictPort\"",
+    "dev:desktop": "node apps/desktop/scripts/dev.mjs",
     "build": "pnpm --filter @akari/web build",
     "build:server": "pnpm --filter @akari/server build",
+    "build:desktop": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ pnpm build && pnpm build:server && pnpm --filter @akari/desktop build && pnpm --filter @akari/desktop dist",
     "lint": "pnpm -r lint",
     "format": "prettier --write \"**/*.{ts,tsx}\" --ignore-path .prettierignore",
     "typecheck": "pnpm -r typecheck"
@@ -18,14 +20,11 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
-    "typescript": "~5.9.3"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3"
-    ]
+    "typescript": "~5.9.3",
+    "wait-on": "^8.0.3"
   },
   "dependencies": {
     "@radix-ui/react-collapsible": "^1.1.12"

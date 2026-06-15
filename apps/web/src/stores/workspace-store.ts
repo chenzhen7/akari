@@ -1,8 +1,7 @@
 import { create } from 'zustand'
 import { toast } from 'sonner'
-import type { Workspace, FsEntry } from '@akari/shared-types'
-
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
+import type { Workspace } from '@akari/shared-types'
+import { API_BASE } from '@/lib/api'
 
 interface WorkspaceStore {
   workspaces: Workspace[]

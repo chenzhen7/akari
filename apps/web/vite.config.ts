@@ -11,15 +11,16 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    host: "127.0.0.1",
+    port: 57123,
     proxy: {
       "/api": {
-        target: "http://localhost:3001",
+        target: "http://127.0.0.1:39321",
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ""),
       },
       "/ws": {
-        target: "ws://localhost:3001",
+        target: "ws://127.0.0.1:39321",
         ws: true,
       },
     },

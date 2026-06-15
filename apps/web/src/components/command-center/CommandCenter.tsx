@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { useSessionStore } from '@/stores/session-store'
 import { useShallow } from 'zustand/react/shallow'
-import { cn } from '@/lib/utils'
+import { API_BASE } from '@/lib/api'
 import {
   Radio,
   Send,
@@ -144,7 +144,7 @@ export function CommandCenter() {
   const commandCenterOpen = useSessionStore(s => s.commandCenterOpen)
   const toggleCommandCenter = useSessionStore(s => s.toggleCommandCenter)
   const addTerminalLine = useSessionStore(s => s.addTerminalLine)
-  const sessions = useSessionStore(s => s.sessions, useShallow)
+  const sessions = useSessionStore(useShallow(s => s.sessions))
 
   const [broadcastMsg, setBroadcastMsg] = useState('')
   const [selectedTargets, setSelectedTargets] = useState<Set<string>>(
@@ -174,7 +174,6 @@ export function CommandCenter() {
     setBroadcasting(true)
     const targets =
       selectedTargets.size > 0 ? Array.from(selectedTargets) : undefined
-    const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
     try {
       const res = await fetch(`${API_BASE}/broadcast`, {
         method: 'POST',

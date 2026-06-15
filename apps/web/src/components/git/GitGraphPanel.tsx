@@ -19,8 +19,8 @@ import { computeIdeaGraphLayout } from '@/lib/git-graph-utils'
 import { GitGraphSvg } from './GitGraphSvg'
 import { GitGraphRow } from './GitGraphRow'
 import { cn } from '@/lib/utils'
+import { API_BASE } from '@/lib/api'
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 const FULL_LOAD_LIMIT = 2000
 const SEARCH_DEBOUNCE_MS = 200
 

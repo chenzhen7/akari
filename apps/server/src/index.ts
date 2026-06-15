@@ -1,5 +1,6 @@
 import Fastify from 'fastify'
 import fastifyCors from '@fastify/cors'
+import fastifyStatic from '@fastify/static'
 import fastifyWebsocket from '@fastify/websocket'
 import Database from 'better-sqlite3'
 import { fileURLToPath } from 'node:url'
@@ -9,16 +10,31 @@ import { createSessionManager, validateTransition } from './session-manager.js'
 import { WorkspaceManager } from './workspace-manager.js'
 import { CanvasEdgeStore } from './canvas-edge-store.js'
 import { dispatchHookEvent } from './hook-dispatcher.js'
+import { DEFAULT_PORT, DEFAULT_HOST } from './constants.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const REPO_ROOT = resolve(__dirname, '../../..')
-const DATA_DIR = join(__dirname, '..', 'data')
+const REPO_ROOT = process.env.REPO_ROOT ? resolve(process.env.REPO_ROOT) : resolve(__dirname, '../../..')
+const DATA_DIR = process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(__dirname, '..', 'data')
 
 const fastify = Fastify({ logger: { level: 'info' } })
 
 await fastify.register(fastifyCors, { origin: true })
 await fastify.register(fastifyWebsocket)
+
+const webDistPath = process.env.WEB_DIST_PATH
+if (webDistPath) {
+  await fastify.register(fastifyStatic, {
+    root: resolve(webDistPath),
+    wildcard: false,
+  })
+  fastify.setNotFoundHandler(async (request, reply) => {
+    if (request.method === 'GET' && !request.url.startsWith('/api/') && !request.url.startsWith('/ws')) {
+      return reply.sendFile('index.html')
+    }
+    return reply.status(404).send({ error: 'Not Found' })
+  })
+}
 
 const clients = new Set<WebSocket>()
 
@@ -655,12 +671,15 @@ function handleClientMessage(msg: ClientMessage): void {
   }
 }
 
-const PORT = Number(process.env.PORT ?? 3001)
-const HOST = process.env.HOST ?? '0.0.0.0'
+const PORT = Number(process.env.PORT ?? DEFAULT_PORT)
+const HOST = process.env.HOST ?? DEFAULT_HOST
 
 try {
   await fastify.listen({ port: PORT, host: HOST })
-  console.log(`🚀 Akari server running on http://localhost:${PORT}`)
+  const address = fastify.server.address()
+  const actualPort = typeof address === 'object' && address ? address.port : PORT
+  console.log(`AKARI_PORT=${actualPort}`)
+  console.log(`🚀 Akari server running on http://localhost:${actualPort}`)
 } catch (err) {
   fastify.log.error(err)
   process.exit(1)

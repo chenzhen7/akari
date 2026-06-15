@@ -3,6 +3,7 @@ export type {
   KanbanColumn,
   AgentType,
   AgentSession,
+  SessionTab,
   DiffFile,
   GitDiff,
   ServerMessage,

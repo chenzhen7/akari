@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Check, FolderOpen, ChevronDown } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 export function WorkspaceSelector() {
   const {

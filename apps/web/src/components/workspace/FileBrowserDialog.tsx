@@ -8,9 +8,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Folder, File, ChevronUp, HardDrive } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { API_BASE } from '@/lib/api'
 import type { FsEntry } from '@akari/shared-types'
-
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 interface FileBrowserDialogProps {
   open: boolean

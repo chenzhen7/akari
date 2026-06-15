@@ -14,6 +14,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { GitCommit, Trash2, GitMerge, GitPullRequest, Loader2, FileIcon } from 'lucide-react'
 import { toast } from 'sonner'
+import { API_BASE } from '@/lib/api'
 
 function statusColor(s: DiffFile['status']) {
   return s === 'A' ? 'text-green-500' : s === 'D' ? 'text-red-500' : s === 'R' ? 'text-blue-400' : 'text-amber-400'
@@ -25,8 +26,6 @@ function splitPath(filePath: string): { dir: string; name: string } {
   const dir = parts.join('/')
   return { dir, name }
 }
-
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 interface DiffFileListProps {
   session: AgentSession

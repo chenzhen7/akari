@@ -117,7 +117,7 @@ export function useResizablePanels(
     }
   }, [onMouseMove, onMouseUp])
 
-  const onLeftHandleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const onLeftHandleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     setIsDraggingLeft(true)
     const container = containerRef.current
@@ -133,7 +133,7 @@ export function useResizablePanels(
     }
   }, [leftWidth])
 
-  const onRightHandleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const onRightHandleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     setIsDraggingRight(true)
     const container = containerRef.current

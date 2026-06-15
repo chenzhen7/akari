@@ -1,6 +1,5 @@
 import { memo, useState, useRef } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { Button } from '@/components/ui/button'
 import { DeleteSessionDialog } from '@/components/session/DeleteSessionDialog'
 import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Plus, RotateCcw, Loader2, HardDrive } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'

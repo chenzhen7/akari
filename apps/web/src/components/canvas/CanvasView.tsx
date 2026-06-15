@@ -12,7 +12,6 @@ import {
   type Edge,
   type Connection,
   type Viewport,
-  MarkerType,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useSessionStore } from '@/stores/session-store'
@@ -21,11 +20,10 @@ import FlowEdge from './FlowEdge'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import { Loader2, ServerOff, LayoutGrid } from 'lucide-react'
 import { toast } from 'sonner'
+import { API_BASE } from '@/lib/api'
 
 /** 模块级：跨组件挂载/卸载周期持久化 viewport，不写入 store */
 let _savedViewport: Viewport | null = null
-
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
 
 const nodeTypes = {
   sessionNode: SessionNode as any,
@@ -225,7 +223,6 @@ function CanvasViewContent() {
         onNodeDragStop={onNodeDragStop}
         onPaneContextMenu={onPaneContextMenu}
         onPaneClick={closeMenu}
-        onPaneMouseDown={closeMenu}
         defaultViewport={_savedViewport ?? undefined}
         fitView={fitOnMount}
         fitViewOptions={{ padding: 0.2 }}
@@ -276,8 +273,6 @@ function CanvasViewContent() {
 
 /** 导出的 CanvasView：提供 ReactFlowProvider */
 export function CanvasView() {
-  const [fitOnMount] = useState(() => _savedViewport === null)
-
   return (
     <ReactFlowProvider>
       <CanvasViewContent />

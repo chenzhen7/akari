@@ -2,7 +2,16 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useSessionStore, setWebSocket } from '@/stores/session-store'
 import type { ServerMessage, ClientMessage } from '@akari/shared-types'
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:3001/ws'
+function getWsUrl(): string {
+  if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}/ws`
+  }
+  return 'ws://127.0.0.1:39321/ws'
+}
+
+const WS_URL = getWsUrl()
 const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30000
 const RECONNECT_MAX_ATTEMPTS = 10

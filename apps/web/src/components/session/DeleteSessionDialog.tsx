@@ -20,7 +20,6 @@ interface DeleteSessionDialogProps {
 export function DeleteSessionDialog({
   open,
   onOpenChange,
-  sessionId,
   branchName,
   worktreePath,
   onConfirm,

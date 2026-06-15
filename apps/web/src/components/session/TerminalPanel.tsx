@@ -8,8 +8,7 @@ import '@xterm/xterm/css/xterm.css'
 import type { ClientMessage } from '@akari/shared-types'
 import { terminalBus } from '@/lib/terminalBus'
 import { resizeMutex } from '@/lib/ptyResizeMutex'
-
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001'
+import { API_BASE } from '@/lib/api'
 
 interface TerminalPanelProps {
   sessionId: string

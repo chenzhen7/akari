@@ -209,7 +209,7 @@ Worktree 初始化时自动写入 `.claude/settings.local.json`，注入以下 H
 ```powershell
 # 终端 A：启动全栈
 pnpm dev:all
-# 前端 http://localhost:5173  后端 http://localhost:3001
+# 前端 http://localhost:57123  后端 http://localhost:39321
 ```
 
 ### 步骤 1：检查 settings.local.json（验 F2）
@@ -225,7 +225,7 @@ cat "G:\Study_Data\VSCode\akari\.agent-worktrees\$id\.claude\settings.local.json
 
 ```powershell
 $id = "<SESSION_ID>"
-Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/hooks" `
+Invoke-RestMethod -Uri "http://localhost:39321/sessions/$id/hooks" `
   -Method POST -ContentType "application/json" `
   -Body '{"hook_event_name":"SessionStart","session_id":"'"$id"'"}'
 ```
@@ -238,7 +238,7 @@ Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/hooks" `
 
 ```powershell
 $id = "<SESSION_ID>"
-Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/hooks" `
+Invoke-RestMethod -Uri "http://localhost:39321/sessions/$id/hooks" `
   -Method POST -ContentType "application/json" `
   -Body '{
     "hook_event_name": "PermissionRequest",
@@ -252,7 +252,7 @@ Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/hooks" `
 
 ```powershell
 $id = "<SESSION_ID>"
-Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/approval" `
+Invoke-RestMethod -Uri "http://localhost:39321/sessions/$id/approval" `
   -Method POST -ContentType "application/json" `
   -Body '{"decision":"approved"}'
 ```
@@ -263,7 +263,7 @@ Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/approval" `
 
 ```powershell
 $id = "<SESSION_ID>"
-Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/hooks" `
+Invoke-RestMethod -Uri "http://localhost:39321/sessions/$id/hooks" `
   -Method POST -ContentType "application/json" `
   -Body '{
     "hook_event_name": "Stop",
@@ -278,7 +278,7 @@ Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/hooks" `
 
 ```powershell
 $id = "<SESSION_ID>"
-Invoke-RestMethod -Uri "http://localhost:3001/sessions/$id/hooks" `
+Invoke-RestMethod -Uri "http://localhost:39321/sessions/$id/hooks" `
   -Method POST -ContentType "application/json" `
   -Body '{
     "hook_event_name": "StopFailure",
