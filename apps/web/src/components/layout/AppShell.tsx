@@ -37,17 +37,11 @@ function ResizeHandle({
       className={cn(
         'group relative flex w-px shrink-0 items-center justify-center',
         disabled ? 'cursor-not-allowed opacity-30' : 'cursor-col-resize',
-        isDragging && 'bg-primary',
         className,
       )}
       onMouseDown={disabled ? undefined : onMouseDown}
     >
-      <div
-        className={cn(
-          'absolute inset-y-0 w-1 -translate-x-1/2 transition-colors',
-          !disabled && !isDragging && 'bg-transparent group-hover:bg-primary/30',
-        )}
-      />
+      <div className="absolute inset-y-0 w-1 -translate-x-1/2" />
       {!disabled && (
         <div className="z-10 flex h-6 w-3 items-center justify-center rounded-sm border bg-border opacity-0 transition-opacity group-hover:opacity-100">
           <GripVertical className="h-2.5 w-2.5" />
@@ -150,7 +144,7 @@ export function AppShell() {
           />
 
           {/* Middle */}
-          <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl border bg-background">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl border bg-background shadow-sm">
             {globalViewMode === 'canvas' && CANVAS_ENABLED ? (
               <CanvasView />
             ) : globalViewMode === 'kanban' ? (
