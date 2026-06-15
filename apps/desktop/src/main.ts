@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import { app, BrowserWindow, dialog, shell, Menu } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -40,6 +40,8 @@ function createWindow(loadUrl: string): void {
     void shell.openExternal(url)
     return { action: 'deny' }
   })
+
+  Menu.setApplicationMenu(null)
 
   void mainWindow.loadURL(loadUrl)
 
