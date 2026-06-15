@@ -91,7 +91,6 @@ async function startServer(): Promise<number> {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PORT: '0',
-    HOST: '127.0.0.1',
     REPO_ROOT: userData,
     DATA_DIR: path.join(userData, 'data'),
     WEB_DIST_PATH: webDistPath,
@@ -160,11 +159,11 @@ async function main(): Promise<void> {
   await app.whenReady()
 
   if (isDev) {
-    createWindow('http://127.0.0.1:57123')
+    createWindow('http://localhost:5173')
   } else {
     try {
       const port = await startServer()
-      createWindow(`http://127.0.0.1:${port}`)
+      createWindow(`http://localhost:${port}`)
     } catch (err) {
       dialog.showErrorBox('启动失败', err instanceof Error ? err.message : String(err))
       app.quit()
@@ -174,7 +173,7 @@ async function main(): Promise<void> {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      const url = isDev ? 'http://127.0.0.1:57123' : `http://127.0.0.1:${serverPort ?? 39321}`
+      const url = isDev ? 'http://localhost:5173' : `http://localhost:${serverPort ?? 3001}`
       createWindow(url)
     }
   })

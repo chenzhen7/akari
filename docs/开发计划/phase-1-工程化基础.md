@@ -15,7 +15,7 @@
 
 文件：`apps/server/src/index.ts`
 
-- [x] Fastify 服务启动（端口 39321）
+- [x] Fastify 服务启动（端口 3001）
 - [x] WebSocket 插件（`@fastify/websocket`）
 - [x] 基础路由：`GET /health`、`GET /sessions`、`POST /sessions`、`PATCH /sessions/:id/status`、`POST /sessions/:id/approval`、`POST /broadcast`
 - [x] WebSocket 事件协议定义

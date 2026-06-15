@@ -23,7 +23,7 @@ Akari 是一个 **AI Agent 并行开发管理平台**：用户在无限画布 / 
 |------|----------|------|
 | 核心类型 | `packages/shared-types/src/index.ts` | `AgentSession` / `ServerMessage` / `ClientMessage` 等 |
 | pnpm Monorepo | `pnpm-workspace.yaml` | apps/* + packages/* |
-| Fastify 后端骨架 | `apps/server/src/index.ts` | port 39321，REST + WebSocket，使用 SessionManager |
+| Fastify 后端骨架 | `apps/server/src/index.ts` | port 3001，REST + WebSocket，使用 SessionManager |
 | WorktreeManager | `apps/server/src/worktree-manager.ts` | git worktree 创建/删除/diff/watch，分支自动回退 |
 | TerminalMultiplexer | `apps/server/src/terminal-mux.ts` | node-pty 真实 PTY（PowerShell 7）；环形 Buffer 5000 行；支持 resize 同步；魔法字符串**已全部移除** |
 | HookDispatcher | `apps/server/src/hook-dispatcher.ts` | ApprovalRegistry（Promise 挂起）+ dispatchHookEvent；PermissionRequest 同步阻塞审批 |
@@ -119,7 +119,7 @@ akari/
 │   ├── server/
 │   │   ├── data/akari.db          # ✅ SQLite 持久化数据库
 │   │   └── src/
-│   │       ├── index.ts           # ✅ Fastify 入口，端口 39321
+│   │       ├── index.ts           # ✅ Fastify 入口，端口 3001
 │   │       ├── session-manager.ts # ✅ SessionManager（SQLite + 状态机）
 │   │       ├── worktree-manager.ts# ✅ WorktreeManager（git worktree + chokidar diff）
 │   │       ├── terminal-mux.ts    # ✅ TerminalMultiplexer（node-pty + 环形 Buffer）

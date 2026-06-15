@@ -10,7 +10,6 @@ import { createSessionManager, validateTransition } from './session-manager.js'
 import { WorkspaceManager } from './workspace-manager.js'
 import { CanvasEdgeStore } from './canvas-edge-store.js'
 import { dispatchHookEvent } from './hook-dispatcher.js'
-import { DEFAULT_PORT, DEFAULT_HOST } from './constants.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -671,8 +670,8 @@ function handleClientMessage(msg: ClientMessage): void {
   }
 }
 
-const PORT = Number(process.env.PORT ?? DEFAULT_PORT)
-const HOST = process.env.HOST ?? DEFAULT_HOST
+const PORT = Number(process.env.PORT ?? 3001)
+const HOST = process.env.HOST ?? '0.0.0.0'
 
 try {
   await fastify.listen({ port: PORT, host: HOST })

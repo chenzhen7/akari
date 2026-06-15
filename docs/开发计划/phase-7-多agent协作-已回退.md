@@ -469,7 +469,7 @@ export type AgentType = 'claude' | 'aider' | 'shell' | 'claude-orchestrator'
 pnpm dev:all
 
 # 2. 确认 WS 已连接（TopNav 连接指示灯绿色）
-# 3. 确认 devtools Network WS 标签可见 ws://localhost:39321/ws
+# 3. 确认 devtools Network WS 标签可见 ws://localhost:3001/ws
 
 # 4. 确认数据库存在（首次运行后端会自动创建）
 ls apps/server/data/akari.db   # 应存在
@@ -499,7 +499,7 @@ pnpm --filter @akari/server typecheck
   - 新建会话 → 创建 Session-A 和 Session-B（均不启动）
 
 步骤 2：创建群组（curl）
-  curl -X POST http://localhost:39321/api/collaboration/groups \
+  curl -X POST http://localhost:3001/api/collaboration/groups \
     -H "Content-Type: application/json" \
     -d '{"name":"test-pipeline","sessionIds":["<A-id>","<B-id>"]}'
   （群组创建 UI 完成后可替代此步）
@@ -519,7 +519,7 @@ pnpm --filter @akari/server typecheck
   - F5 刷新 → 边仍在（DB 持久化验证）
 
 步骤 6：验证环路检测（预期拒绝）
-  curl -X POST http://localhost:39321/api/collaboration/groups/<groupId>/edges \
+  curl -X POST http://localhost:3001/api/collaboration/groups/<groupId>/edges \
     -H "Content-Type: application/json" \
     -d '{"fromSessionId":"<B-id>","toSessionId":"<A-id>","trigger":"on-complete","injectContext":false}'
   预期：HTTP 400，body 含 "cycle"
@@ -543,13 +543,13 @@ pnpm --filter @akari/server typecheck
   - 若父节点在某个 group 中，子节点自动出现在同一 group（画布边框验证）
 
 步骤 3：DELEGATE 消息传递
-  curl -X POST http://localhost:39321/api/collaboration/delegate \
+  curl -X POST http://localhost:3001/api/collaboration/delegate \
     -H "Content-Type: application/json" \
     -d '{"fromSessionId":"<A-id>","toSessionId":"<B-id>","message":"请检查 lint"}'
   预期：Session-B 终端在 1s 内收到青色 delegation 消息
 
 步骤 4：AWAIT_SESSION
-  curl -X POST http://localhost:39321/api/collaboration/await \
+  curl -X POST http://localhost:3001/api/collaboration/await \
     -H "Content-Type: application/json" \
     -d '{"waitingSessionId":"<A-id>","targetSessionId":"<B-id>","timeoutSeconds":30}'
   预期：看板上 Session-A 状态变为 waiting（橙色脉冲）
@@ -641,12 +641,12 @@ pnpm --filter @akari/server typecheck
 步骤 1：删除测试群组
   - 协作面板 → 找到测试群组 → 点击删除按钮
   或 curl：
-curl -X DELETE http://localhost:39321/api/collaboration/groups/<test-group-id>
+curl -X DELETE http://localhost:3001/api/collaboration/groups/<test-group-id>
 
 步骤 2：删除测试 session
   - 画布上选中测试节点 → hover 右上角删除按钮 → 确认 Dialog
   或 curl：
-curl -X DELETE http://localhost:39321/api/sessions/<test-session-id>
+curl -X DELETE http://localhost:3001/api/sessions/<test-session-id>
 ```
 
 ---

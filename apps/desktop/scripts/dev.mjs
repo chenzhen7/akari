@@ -6,13 +6,12 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const rootDir = path.resolve(__dirname, '../..')
 
-const BACKEND_URL = 'http://127.0.0.1:39321/health'
-const FRONTEND_URL = 'http://127.0.0.1:57123'
+const BACKEND_URL = 'http://localhost:3001/health'
+const FRONTEND_URL = 'http://localhost:5173'
 
 function startBackend() {
   return spawn('pnpm', ['--filter', '@akari/server', 'dev'], {
     cwd: rootDir,
-    env: { ...process.env, HOST: '127.0.0.1' },
     stdio: 'inherit',
     shell: true,
   })
@@ -21,10 +20,10 @@ function startBackend() {
 function startFrontend() {
   return spawn(
     'pnpm',
-    ['--filter', '@akari/web', 'dev', '--', '--port', '57123', '--strictPort'],
+    ['--filter', '@akari/web', 'dev', '--', '--port', '5173', '--strictPort'],
     {
       cwd: rootDir,
-      env: { ...process.env, VITE_API_URL: 'http://127.0.0.1:39321' },
+      env: { ...process.env, VITE_API_URL: 'http://localhost:3001' },
       stdio: 'inherit',
       shell: true,
     }
@@ -34,6 +33,7 @@ function startFrontend() {
 function startElectron() {
   return spawn('pnpm', ['--filter', '@akari/desktop', 'dev'], {
     cwd: rootDir,
+    env: { ...process.env, NODE_ENV: 'development' },
     stdio: 'inherit',
     shell: true,
   })

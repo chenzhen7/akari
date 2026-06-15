@@ -3,9 +3,9 @@
   "private": true,
   "version": "0.0.1",
   "scripts": {
-    "dev": "cross-env VITE_API_URL=http://127.0.0.1:39321 pnpm --filter @akari/web dev -- --port 57123 --strictPort",
-    "dev:server": "cross-env HOST=127.0.0.1 pnpm --filter @akari/server dev",
-    "dev:all": "pnpm exec concurrently \"pnpm dev:server\" \"cross-env VITE_API_URL=http://127.0.0.1:39321 pnpm --filter @akari/web dev -- --port 57123 --strictPort\"",
+    "dev": "cross-env VITE_API_URL=http://localhost:3001 pnpm --filter @akari/web dev -- --port 5173 --strictPort",
+    "dev:server": "pnpm --filter @akari/server dev",
+    "dev:all": "pnpm exec concurrently \"pnpm dev:server\" \"cross-env VITE_API_URL=http://localhost:3001 pnpm --filter @akari/web dev -- --port 5173 --strictPort\"",
     "dev:desktop": "node apps/desktop/scripts/dev.mjs",
     "build": "pnpm --filter @akari/web build",
     "build:server": "pnpm --filter @akari/server build",

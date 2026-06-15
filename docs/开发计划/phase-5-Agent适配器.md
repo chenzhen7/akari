@@ -123,7 +123,7 @@ claude --version
 
 # 确认项目服务可正常启动
 pnpm dev:all
-# 前端 http://localhost:57123，后端 http://localhost:39321
+# 前端 http://localhost:5173，后端 http://localhost:3001
 ```
 
 ### Step 1：验证工厂函数（单元级）
@@ -198,7 +198,7 @@ Write-Output "[APPROVAL_REQUIRED] type=destructive-op command=del /tmp/test.txt"
 2. WS 帧中出现 `approval:required` 事件，`command === 'del /tmp/test.txt'`
 3. 通过 REST API 审批：
    ```bash
-   curl -X POST http://localhost:39321/sessions/<id>/approval \
+   curl -X POST http://localhost:3001/sessions/<id>/approval \
      -H "Content-Type: application/json" \
      -d '{"decision":"approved"}'
    ```

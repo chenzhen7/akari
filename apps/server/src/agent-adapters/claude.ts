@@ -8,10 +8,8 @@ import type { AgentAdapter, PtyCommand } from './base.js'
  */
 const SHELL_STARTUP_DELAY_MS = 800
 
-import { DEFAULT_PORT } from '../constants.js'
-
 const HOOK_URL = (sessionId: string): string => {
-  const port = process.env['PORT'] ?? String(DEFAULT_PORT)
+  const port = process.env['PORT'] ?? '3001'
   return `http://localhost:${port}/sessions/${sessionId}/hooks`
 }
 

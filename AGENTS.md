@@ -12,7 +12,7 @@
 
 **当前状态（阶段八已完成）**：
 - Monorepo 改造完成（pnpm workspaces）
-- 后端 Fastify 骨架已运行（port 39321，WebSocket + REST）
+- 后端 Fastify 骨架已运行（port 3001，WebSocket + REST）
 - 前端已迁移至 `apps/web/`，通过 WebSocket 与后端实时通信
 - Session Store 由 WebSocket 事件驱动，TopNav 显示连接状态指示灯
 - 审批工作流完整闭环（后端 HookDispatcher + 前端审批 UI）
@@ -42,7 +42,7 @@ Diff: @monaco-editor/react（懒加载）
 终端复用: node-pty（PTY，Shell: PowerShell 7 / pwsh.exe）
 Git 操作: simple-git
 文件监听: chokidar
-通信: WebSocket（ws://localhost:39321/ws）
+通信: WebSocket（ws://localhost:3001/ws）
 数据库: SQLite - better-sqlite3
 
 共享类型: packages/shared-types（workspace:*）
@@ -59,7 +59,7 @@ akari/
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   └── src/
-│   │       ├── index.ts               # 入口，端口 39321（REST + WebSocket）
+│   │       ├── index.ts               # 入口，端口 3001（REST + WebSocket）
 │   │       ├── session-manager.ts     # SessionManager（SQLite + 状态机）
 │   │       ├── worktree-manager.ts    # WorktreeManager（git worktree + chokidar diff）
 │   │       ├── terminal-mux.ts        # TerminalMultiplexer（node-pty + 环形 Buffer）
@@ -134,8 +134,8 @@ pnpm dev:all
 pnpm dev:desktop
 
 # 单独启动
-pnpm --filter @akari/server dev   # 后端 http://localhost:39321
-pnpm --filter @akari/web   dev    # 前端 http://localhost:57123
+pnpm --filter @akari/server dev   # 后端 http://localhost:3001
+pnpm --filter @akari/web   dev    # 前端 http://localhost:5173
 
 # 类型检查
 pnpm --filter @akari/web    typecheck
@@ -198,7 +198,7 @@ pnpm build:desktop
 |------|------|------|
 | POST | `/broadcast` | 广播消息（body: `{message, targets?}`） |
 | POST | `/sessions/:id/hooks` | HTTP Hook 入口（body: `HookEvent`） |
-| GET | `/ws` | WebSocket 端点（`ws://localhost:39321/ws`） |
+| GET | `/ws` | WebSocket 端点（`ws://localhost:3001/ws`） |
 
 ---
 

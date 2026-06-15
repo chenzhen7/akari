@@ -6,7 +6,7 @@
   "author": "Akari Team",
   "main": "dist/main.js",
   "scripts": {
-    "dev": "cross-env NODE_ENV=development tsc && electron .",
+    "dev": "tsc && electron .",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "postinstall": "electron-builder install-app-deps",

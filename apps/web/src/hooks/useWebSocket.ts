@@ -8,7 +8,7 @@ function getWsUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     return `${protocol}//${window.location.host}/ws`
   }
-  return 'ws://127.0.0.1:39321/ws'
+  return 'ws://localhost:3001/ws'
 }
 
 const WS_URL = getWsUrl()
