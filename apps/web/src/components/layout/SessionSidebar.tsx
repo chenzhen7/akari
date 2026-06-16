@@ -92,17 +92,17 @@ const SessionItem = memo(function SessionItem({
         onClick={() => selectSession(session.id)}
         onContextMenu={handleContextMenu}
         className={cn(
-          'group flex w-full flex-col gap-0.5 rounded-lg border px-2.5 py-2 text-left transition-all',
+          'group flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-1.5 text-left transition-colors',
           isActive
-            ? 'border-primary/40 bg-primary/5 shadow-sm'
-            : 'border-transparent hover:bg-muted/60 hover:border-border/30',
+            ? 'bg-zinc-200 text-foreground hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-700'
+            : 'text-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700',
         )}
       >
         {/* 第一行：状态 + 名称 + 右上角 diff */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2 min-w-0">
             <StatusIcon status={session.status} />
-            <p className={cn('truncate text-xs font-medium', isActive && 'text-primary')}>
+            <p className="truncate text-xs font-medium">
               {session.name}
             </p>
             {isMain && (
@@ -117,15 +117,21 @@ const SessionItem = memo(function SessionItem({
           )}
         </div>
 
-        {/* 第二行：branchName + 右下角操作按钮 */}
+        {/* 第二行：task 描述 / branch + 右下角操作按钮 */}
         <div className="flex items-center justify-between gap-1 pl-4">
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground min-w-0">
-            <GitBranch className="h-2.5 w-2.5 shrink-0" />
-            <span className="truncate">{session.branchName}</span>
-            {!isMain && (
+            {session.task ? (
+              <span className="truncate">{session.task}</span>
+            ) : (
               <>
-                <span className="opacity-50 shrink-0">→</span>
-                <span className="truncate">{session.baseBranch}</span>
+                <GitBranch className="h-2.5 w-2.5 shrink-0" />
+                <span className="truncate">{session.branchName}</span>
+                {!isMain && (
+                  <>
+                    <span className="opacity-50 shrink-0">→</span>
+                    <span className="truncate">{session.baseBranch}</span>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -303,7 +309,7 @@ export function SessionSidebar() {
     
 
           {/* Active session list */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-1.5 min-h-0">
+          <div className="flex-1 overflow-y-auto p-2 space-y-0.5 min-h-0">
             {activeSessions.map(session => (
               <SessionItem
                 key={session.id}
@@ -325,7 +331,7 @@ export function SessionSidebar() {
                   {archivedSessions.length}
                 </span>
               </div>
-              <div className="shrink-0 overflow-y-auto p-2 space-y-1.5 max-h-[35%]">
+              <div className="shrink-0 overflow-y-auto p-2 space-y-0.5 max-h-[35%]">
                 {archivedSessions.map(session => (
                   <SessionItem
                     key={session.id}
