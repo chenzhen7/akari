@@ -36,12 +36,15 @@ export function WorkspaceSelector() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 gap-1 px-2 text-xs font-normal max-w-[200px]"
+            className="h-8 w-full justify-between rounded-lg px-2.5 text-sm font-normal text-foreground hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100 transition-none"
           >
-            <span className="truncate">
-              {currentWorkspace?.name ?? '选择工作区'}
-            </span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <div className="flex items-center gap-3 min-w-0">
+              <FolderOpen className="h-4 w-4 shrink-0" />
+              <span className="truncate">
+                {currentWorkspace?.name ?? '选择工作区'}
+              </span>
+            </div>
+            <ChevronDown className="h-4 w-4 shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">

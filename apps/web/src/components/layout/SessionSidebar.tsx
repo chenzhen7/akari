@@ -1,6 +1,6 @@
 import { memo, useCallback, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { useSessionStore } from '@/stores/session-store'
+import { useSessionStore, CANVAS_ENABLED } from '@/stores/session-store'
 import { Button } from '@/components/ui/button'
 import {
   GitBranch,
@@ -16,12 +16,15 @@ import {
   PauseCircle,
   Eye,
   Settings,
+  LayoutGrid,
+  Columns3,
   type LucideIcon,
 } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { DeleteSessionDialog } from '@/components/session/DeleteSessionDialog'
 import { SessionContextMenu } from './SessionContextMenu'
 import { SettingsDialog } from '@/components/settings/SettingsDialog'
+import { WorkspaceSelector } from '@/components/workspace/WorkspaceSelector'
 
 const statusIconMap: Record<string, { Icon: LucideIcon; color: string }> = {
   running: { Icon: Loader2, color: 'text-green-500' },
@@ -185,9 +188,74 @@ const SessionItem = memo(function SessionItem({
   )
 })
 
+interface SidebarActionButtonProps {
+  icon: LucideIcon
+  label: string
+  active?: boolean
+  shortcut?: string
+  onClick: () => void
+}
+
+function SidebarActionButton({ icon: Icon, label, active, shortcut, onClick }: SidebarActionButtonProps) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={cn(
+        'h-8 w-full justify-between rounded-lg px-2.5 text-sm font-normal transition-none',
+        active
+          ? 'bg-zinc-200 text-zinc-900 hover:bg-zinc-200 hover:text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+          : 'text-foreground hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100',
+      )}
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-3">
+        <Icon className="h-4 w-4 shrink-0" />
+        <span>{label}</span>
+      </div>
+      {shortcut && (
+        <kbd className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-sans text-muted-foreground">
+          {shortcut}
+        </kbd>
+      )}
+    </Button>
+  )
+}
+
+function SidebarActions() {
+  const globalViewMode = useSessionStore(s => s.globalViewMode)
+  const setGlobalViewMode = useSessionStore(s => s.setGlobalViewMode)
+  const openCreateDialog = useSessionStore(s => s.openCreateDialog)
+
+  return (
+    <div className="space-y-0.5 border-b border-border/50 p-2">
+      <WorkspaceSelector />
+      <SidebarActionButton
+        icon={Plus}
+        label="新建会话"
+  
+        onClick={() => openCreateDialog()}
+      />
+      {CANVAS_ENABLED && (
+        <SidebarActionButton
+          icon={LayoutGrid}
+          label="画布"
+          active={globalViewMode === 'canvas'}
+          onClick={() => setGlobalViewMode('canvas')}
+        />
+      )}
+      <SidebarActionButton
+        icon={Columns3}
+        label="看板"
+        active={globalViewMode === 'kanban'}
+        onClick={() => setGlobalViewMode('kanban')}
+      />
+    </div>
+  )
+}
+
 export function SessionSidebar() {
   const sessions = useSessionStore(s => s.sessions)
-  const openCreateDialog = useSessionStore(s => s.openCreateDialog)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -209,23 +277,16 @@ export function SessionSidebar() {
     <>
       <aside className="flex h-full w-full flex-col bg-panel">
         <div className="flex h-full w-full flex-col">
+          <SidebarActions />
+
           {/* Header */}
-          <div className="flex h-9 shrink-0 items-center px-2 gap-2">
+          <div className="flex h-9 shrink-0 items-center gap-2 px-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               会话列表
             </span>
             <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
               {activeSessions.length}
             </span>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-6 w-6 p-0"
-              onClick={() => openCreateDialog()}
-              title="添加会话"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
           </div>
 
           {/* Main session */}
@@ -282,7 +343,7 @@ export function SessionSidebar() {
             <Button
               variant="ghost"
               size="xs"
-              className='h-6 w-6 p-0 text-muted-foreg round hover:text-foreground'
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
               onClick={() => setSettingsOpen(true)}
               title="设置"
             >

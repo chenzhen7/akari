@@ -1,12 +1,8 @@
-import { useSessionStore, CANVAS_ENABLED } from '@/stores/session-store'
+import { useSessionStore } from '@/stores/session-store'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { WorkspaceSelector } from '@/components/workspace/WorkspaceSelector'
 import { useTheme } from '@/components/theme-provider'
 import {
-  LayoutGrid,
-  Columns3,
   Radio,
   PanelLeft,
   PanelRight,
@@ -27,23 +23,19 @@ export function TopNav({
   rightCollapsed,
   onToggleRight: toggleRight,
 }: TopNavProps) {
-  const globalViewMode = useSessionStore(s => s.globalViewMode)
-  const setGlobalViewMode = useSessionStore(s => s.setGlobalViewMode)
   const toggleCommandCenter = useSessionStore(s => s.toggleCommandCenter)
   const { theme, setTheme } = useTheme()
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-0 border-b border-transparent bg-panel px-3">
 
-      {/* Brand + Workspace */}
+      {/* Brand */}
       <div className="flex items-center gap-2 px-1 pr-3">
         <svg viewBox="0 0 512 512" className="h-6 w-6">
           <rect x="117" y="106" width="62" height="300" rx="8" className="fill-foreground" />
           <rect x="225" y="106" width="62" height="300" rx="8" className="fill-foreground" />
           <rect x="333" y="106" width="62" height="300" rx="8" className="fill-foreground" />
         </svg>
-        <div className="h-4 w-px bg-border mx-1" />
-        <WorkspaceSelector />
       </div>
 
       {/* Session sidebar toggle */}
@@ -62,32 +54,6 @@ export function TopNav({
           {leftCollapsed ? '展开会话列表' : '收起会话列表'}
         </TooltipContent>
       </Tooltip>
-
-
-      {/* View mode switcher */}
-      <div className="px-2">
-        <Tabs
-          value={globalViewMode ?? ''}
-          onValueChange={v => {
-            if (!v) return
-            setGlobalViewMode(v as 'canvas' | 'kanban')
-          }}
-        >
-          <TabsList className="h-7">
-            {CANVAS_ENABLED && (
-              <TabsTrigger value="canvas" className="gap-1.5 px-2.5 text-xs">
-                <LayoutGrid className="h-3.5 w-3.5" />
-                画布
-              </TabsTrigger>
-            )}
-            <TabsTrigger value="kanban" className="gap-1.5 px-2.5 text-xs">
-              <Columns3 className="h-3.5 w-3.5" />
-              看板
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
-
 
       {/* Right: actions */}
       <div className="ml-auto flex items-center gap-1.5">
