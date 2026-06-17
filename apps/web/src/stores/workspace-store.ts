@@ -8,7 +8,7 @@ interface WorkspaceStore {
   currentWorkspace: Workspace | null
 
   fetchWorkspaces: () => void
-  addWorkspace: (name: string, path: string) => void
+  addWorkspace: (name: string, path: string) => Promise<Workspace | undefined>
   switchWorkspace: (id: string) => void
   deleteWorkspace: (id: string) => void
   setCurrentWorkspace: (workspace: Workspace) => void
