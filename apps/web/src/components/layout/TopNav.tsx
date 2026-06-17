@@ -1,9 +1,56 @@
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   PanelLeft,
   PanelRight,
+  Minus,
+  Square,
+  Copy,
+  X,
 } from 'lucide-react'
+
+function WindowControls() {
+  const [isMaximized, setIsMaximized] = useState(false)
+  const electron = window.electron
+
+  useEffect(() => {
+    if (!electron?.windowControls) return
+    void electron.windowControls.isMaximized().then(setIsMaximized)
+    return electron.windowControls.onMaximizedChange(setIsMaximized)
+  }, [])
+
+  if (!electron?.windowControls) return null
+
+  return (
+    <div className="flex h-full items-center" style={{ WebkitAppRegion: 'no-drag' }}>
+      <button
+        className="flex h-full w-12 items-center justify-center text-muted-foreground transition-colors hover:bg-zinc-200 dark:hover:bg-zinc-700"
+        style={{ WebkitAppRegion: 'no-drag' }}
+        onClick={() => electron.windowControls?.minimize()}
+        title="最小化"
+      >
+        <Minus className="h-4 w-4" />
+      </button>
+      <button
+        className="flex h-full w-12 items-center justify-center text-muted-foreground transition-colors hover:bg-zinc-200 dark:hover:bg-zinc-700"
+        style={{ WebkitAppRegion: 'no-drag' }}
+        onClick={() => electron.windowControls?.maximize()}
+        title={isMaximized ? '还原' : '最大化'}
+      >
+        {isMaximized ? <Copy className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+      </button>
+      <button
+        className="flex h-full w-12 items-center justify-center text-muted-foreground transition-colors hover:bg-red-600 hover:text-white"
+        style={{ WebkitAppRegion: 'no-drag' }}
+        onClick={() => electron.windowControls?.close()}
+        title="关闭"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  )
+}
 
 interface TopNavProps {
   leftCollapsed: boolean
@@ -19,7 +66,10 @@ export function TopNav({
   onToggleRight: toggleRight,
 }: TopNavProps) {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-0 border-b border-transparent bg-panel px-3">
+    <header
+      className="flex h-10 shrink-0 items-center gap-0 border-b border-transparent bg-panel pl-3 pr-0"
+      style={{ WebkitAppRegion: 'drag' }}
+    >
 
       {/* Brand */}
       <div className="flex items-center gap-2 px-1 pr-3">
@@ -37,6 +87,7 @@ export function TopNav({
             variant={leftCollapsed ? 'ghost' : 'secondary'}
             size="xs"
             className="h-7 w-7 p-0"
+            style={{ WebkitAppRegion: 'no-drag' }}
             onClick={onToggleLeft}
           >
             <PanelLeft className="h-3.5 w-3.5" />
@@ -48,13 +99,14 @@ export function TopNav({
       </Tooltip>
 
       {/* Right: actions */}
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex h-full items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' }}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant={rightCollapsed ? 'ghost' : 'secondary'}
               size="xs"
               className="h-7 w-7 p-0"
+              style={{ WebkitAppRegion: 'no-drag' }}
               onClick={toggleRight}
             >
               <PanelRight className="h-3.5 w-3.5" />
@@ -64,6 +116,8 @@ export function TopNav({
             {rightCollapsed ? '展开详情' : '收起详情'}
           </TooltipContent>
         </Tooltip>
+
+        <WindowControls />
       </div>
     </header>
   )

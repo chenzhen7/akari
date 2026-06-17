@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell, Menu } from 'electron'
+import { app, BrowserWindow, dialog, shell, Menu, ipcMain } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -15,6 +15,7 @@ function createWindow(loadUrl: string): void {
     height: 900,
     minWidth: 900,
     minHeight: 600,
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -42,6 +43,35 @@ function createWindow(loadUrl: string): void {
   })
 
   Menu.setApplicationMenu(null)
+
+  // Window control IPC handlers
+  ipcMain.handle('window-minimize', () => {
+    mainWindow?.minimize()
+  })
+
+  ipcMain.handle('window-maximize', () => {
+    if (mainWindow?.isMaximized()) {
+      mainWindow?.unmaximize()
+    } else {
+      mainWindow?.maximize()
+    }
+  })
+
+  ipcMain.handle('window-close', () => {
+    mainWindow?.close()
+  })
+
+  ipcMain.handle('window-is-maximized', () => {
+    return mainWindow?.isMaximized() ?? false
+  })
+
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window-maximized-change', true)
+  })
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window-maximized-change', false)
+  })
 
   void mainWindow.loadURL(loadUrl)
 
