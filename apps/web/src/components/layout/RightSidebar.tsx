@@ -65,9 +65,9 @@ export function RightSidebar({ session }: RightSidebarProps) {
                 size="icon-sm"
                 onClick={() => setActiveRightTab(id)}
                 className={cn(
-                  'rounded',
+                  'hover:bg-zinc-200 dark:hover:bg-zinc-800',
                   activeRightTab === id
-                    ? 'bg-muted/50 text-foreground'
+                    ? 'bg-zinc-200 text-foreground dark:bg-zinc-700'
                     : 'text-muted-foreground',
                 )}
               >
