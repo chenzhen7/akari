@@ -31,46 +31,52 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       .catch(err => console.warn('[fetchWorkspaces] failed:', err))
   },
 
-  addWorkspace: (name, path) => {
-    fetch(`${API_BASE}/workspaces`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, path }),
-    })
-      .then(r => {
-        if (!r.ok) return r.json().then(body => Promise.reject(body?.error ?? r.statusText))
-        return r.json()
+  addWorkspace: async (name, path) => {
+    try {
+      const r = await fetch(`${API_BASE}/workspaces`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, path }),
       })
-      .then((workspace: Workspace) => {
-        set(state => ({ workspaces: [...state.workspaces, workspace] }))
-        toast.success(`已添加工作区：${workspace.name}`)
-      })
-      .catch(err => {
-        console.error('[addWorkspace] failed:', err)
-        toast.error(`添加工作区失败：${err}`)
-      })
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}))
+        throw new Error(body?.error ?? r.statusText)
+      }
+      const workspace = (await r.json()) as Workspace
+      toast.success(`已添加工作区：${workspace.name}`)
+      return workspace
+    } catch (err) {
+      console.error('[addWorkspace] failed:', err)
+      toast.error(`添加工作区失败：${err instanceof Error ? err.message : String(err)}`)
+      return undefined
+    }
   },
 
   switchWorkspace: (id) => {
     fetch(`${API_BASE}/workspaces/${id}/switch`, { method: 'POST' })
-      .then(r => {
-        if (!r.ok) return r.json().then(body => Promise.reject(body?.error ?? r.statusText))
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}))
+          throw new Error(body?.error ?? r.statusText)
+        }
       })
-      .catch(err => {
+      .catch((err) => {
         console.error('[switchWorkspace] failed:', err)
-        toast.error(`切换工作区失败：${err}`)
+        toast.error(`切换工作区失败：${err instanceof Error ? err.message : String(err)}`)
       })
   },
 
   deleteWorkspace: (id) => {
     fetch(`${API_BASE}/workspaces/${id}`, { method: 'DELETE' })
-      .then(r => {
-        if (!r.ok) return r.json().then(body => Promise.reject(body?.error ?? r.statusText))
-        set(state => ({ workspaces: state.workspaces.filter(w => w.id !== id) }))
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}))
+          throw new Error(body?.error ?? r.statusText)
+        }
       })
-      .catch(err => {
+      .catch((err) => {
         console.error('[deleteWorkspace] failed:', err)
-        toast.error(`删除工作区失败：${err}`)
+        toast.error(`删除工作区失败：${err instanceof Error ? err.message : String(err)}`)
       })
   },
 

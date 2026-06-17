@@ -21,13 +21,15 @@ export function WorkspaceSelector() {
 
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false)
 
-  const handleSelectPath = useCallback((path: string) => {
-    // Derive name from path
+  const handleSelectPath = useCallback(async (path: string) => {
     const parts = path.replace(/\\/g, '/').split('/').filter(Boolean)
     const name = parts[parts.length - 1] || 'workspace'
-    addWorkspace(name, path)
-    setFileBrowserOpen(false)
-  }, [addWorkspace])
+    const workspace = await addWorkspace(name, path)
+    if (workspace) {
+      setFileBrowserOpen(false)
+      switchWorkspace(workspace.id)
+    }
+  }, [addWorkspace, switchWorkspace])
 
   return (
     <>
