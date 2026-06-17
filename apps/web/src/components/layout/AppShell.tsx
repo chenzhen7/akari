@@ -24,7 +24,7 @@ function WebSocketProvider() {
 function ResizeHandle({
   onMouseDown,
   disabled,
-  isDragging,
+  isDragging: _isDragging,
   className,
 }: {
   onMouseDown: (e: React.MouseEvent) => void

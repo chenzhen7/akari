@@ -212,3 +212,12 @@
   font-size: 8px;
   line-height: 1;
 }
+
+/* Electron window drag regions */
+.app-region-drag {
+  -webkit-app-region: drag;
+}
+
+.app-region-no-drag {
+  -webkit-app-region: no-drag;
+}
