@@ -25,7 +25,7 @@ export function GitGraphSvg({ commits, layout, head }: GitGraphSvgProps) {
           y={0}
           width={LANE_W}
           height={svgHeight}
-          fill={lane % 2 === 0 ? 'hsl(var(--foreground) / 0.02)' : 'transparent'}
+          fill={lane % 2 === 0 ? 'oklch(var(--foreground) / 0.02)' : 'transparent'}
         />
       ))}
 
@@ -56,7 +56,7 @@ export function GitGraphSvg({ commits, layout, head }: GitGraphSvgProps) {
               cx={node.x}
               cy={node.y}
               r={DOT_R}
-              fill={isHead ? 'hsl(var(--background))' : node.color}
+              fill={isHead ? 'oklch(var(--background))' : node.color}
               stroke={node.color}
               strokeWidth={isHead ? 2.5 : 1.5}
             />

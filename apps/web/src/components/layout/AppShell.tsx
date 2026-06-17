@@ -144,13 +144,13 @@ export function AppShell() {
           />
 
           {/* Middle */}
-          <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl border bg-background shadow-sm">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl border bg-[var(--terminal-background)] shadow-sm">
             {globalViewMode === 'canvas' && CANVAS_ENABLED ? (
               <CanvasView />
             ) : globalViewMode === 'kanban' ? (
               <KanbanView />
             ) : activeSessionId && session ? (
-              <div className="flex h-full flex-col px-2">
+              <div className="flex h-full flex-col px-2 ">
                 <MiddleTabBar session={session} />
                 <div className="flex-1 overflow-hidden">
                   <TabContent session={session} send={send} />

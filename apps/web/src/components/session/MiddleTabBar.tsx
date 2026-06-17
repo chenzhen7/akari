@@ -178,7 +178,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
   }, [createTerminal, session.id])
 
   return (
-    <div className="flex h-10 shrink-0 items-center bg-background dark:bg-[#1e1e1e]">
+    <div className="flex h-10 shrink-0 items-center bg-[var(--terminal-background)]">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
