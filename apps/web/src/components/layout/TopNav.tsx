@@ -1,13 +1,8 @@
-import { useSessionStore } from '@/stores/session-store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useTheme } from '@/components/theme-provider'
 import {
-  Radio,
   PanelLeft,
   PanelRight,
-  Sun,
-  Moon,
 } from 'lucide-react'
 
 interface TopNavProps {
@@ -23,9 +18,6 @@ export function TopNav({
   rightCollapsed,
   onToggleRight: toggleRight,
 }: TopNavProps) {
-  const toggleCommandCenter = useSessionStore(s => s.toggleCommandCenter)
-  const { theme, setTheme } = useTheme()
-
   return (
     <header className="flex h-12 shrink-0 items-center gap-0 border-b border-transparent bg-panel px-3">
 
@@ -57,41 +49,6 @@ export function TopNav({
 
       {/* Right: actions */}
       <div className="ml-auto flex items-center gap-1.5">
-        {/* Theme toggle */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-7 w-7 p-0"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            >
-              {theme === 'dark' ? (
-                <Sun className="h-3.5 w-3.5" />
-              ) : (
-                <Moon className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {theme === 'dark' ? '切换浅色模式' : '切换深色模式'}
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              className="h-7 gap-1.5 text-xs relative"
-              onClick={toggleCommandCenter}
-            >
-              <Radio className="h-3.5 w-3.5" />
-              指挥中心
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">指挥中心</TooltipContent>
-        </Tooltip>
-
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

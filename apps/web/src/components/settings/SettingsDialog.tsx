@@ -10,8 +10,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, FolderOpen } from 'lucide-react'
+import { Loader2, FolderOpen, Sun, Moon } from 'lucide-react'
 import { FileBrowserDialog } from '@/components/workspace/FileBrowserDialog'
+import { useTheme } from '@/components/theme-provider'
 
 interface SettingsDialogProps {
   open: boolean
@@ -19,6 +20,7 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
+  const { theme, setTheme } = useTheme()
   const [worktreeBaseDir, setWorktreeBaseDir] = useState('')
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -72,6 +74,32 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>外观</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={theme === 'light' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setTheme('light')}
+                >
+                  <Sun className="mr-2 h-4 w-4" />
+                  浅色
+                </Button>
+                <Button
+                  type="button"
+                  variant={theme === 'dark' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setTheme('dark')}
+                >
+                  <Moon className="mr-2 h-4 w-4" />
+                  深色
+                </Button>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="worktree-dir">工作树目录</Label>
               <div className="flex gap-2">

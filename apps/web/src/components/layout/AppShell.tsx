@@ -150,7 +150,7 @@ export function AppShell() {
             ) : globalViewMode === 'kanban' ? (
               <KanbanView />
             ) : activeSessionId && session ? (
-              <div className="flex h-full flex-col">
+              <div className="flex h-full flex-col px-2">
                 <MiddleTabBar session={session} />
                 <div className="flex-1 overflow-hidden">
                   <TabContent session={session} send={send} />

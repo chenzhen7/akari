@@ -18,6 +18,7 @@ import {
   Settings,
   LayoutGrid,
   Columns3,
+  Radio,
   type LucideIcon,
 } from 'lucide-react'
 import type { AgentSession } from '@/types'
@@ -232,6 +233,7 @@ function SidebarActions() {
   const globalViewMode = useSessionStore(s => s.globalViewMode)
   const setGlobalViewMode = useSessionStore(s => s.setGlobalViewMode)
   const openCreateDialog = useSessionStore(s => s.openCreateDialog)
+  const toggleCommandCenter = useSessionStore(s => s.toggleCommandCenter)
 
   return (
     <div className="space-y-0.5 border-b border-border/50 p-2">
@@ -255,6 +257,11 @@ function SidebarActions() {
         label="看板"
         active={globalViewMode === 'kanban'}
         onClick={() => setGlobalViewMode('kanban')}
+      />
+      <SidebarActionButton
+        icon={Radio}
+        label="指挥中心"
+        onClick={toggleCommandCenter}
       />
     </div>
   )
@@ -345,16 +352,12 @@ export function SessionSidebar() {
           )}
 
           {/* Footer: Settings */}
-          <div className="flex h-8 shrink-0 items-center justify-end  border-border/50 px-2">
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+          <div className="shrink-0 border-t border-border/50 p-2">
+            <SidebarActionButton
+              icon={Settings}
+              label="设置"
               onClick={() => setSettingsOpen(true)}
-              title="设置"
-            >
-              <Settings className="h-3.5 w-3.5" />
-            </Button>
+            />
           </div>
         </div>
       </aside>

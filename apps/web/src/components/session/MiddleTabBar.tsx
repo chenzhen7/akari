@@ -112,10 +112,11 @@ const SortableTab = memo(function SortableTab({
           {...listeners}
           onClick={handleActivate}
           className={cn(
-            'group relative flex h-full shrink-0 items-center gap-1.5 px-2.5 text-xs transition-colors select-none focus:outline-none',
-            isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+            'group relative flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors select-none focus:outline-none',
+            isActive
+              ? 'bg-zinc-100 text-foreground dark:bg-zinc-800 dark:text-zinc-100'
+              : 'text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800',
             isDragging && 'opacity-60',
-            isActive && 'after:absolute after:bottom-0 after:left-2 after:right-2 after:h-[2px] after:rounded-full after:bg-primary',
           )}
         >
           {tab.type === 'claude' ? (
@@ -187,7 +188,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
           items={tabs.map(t => t.id)}
           strategy={horizontalListSortingStrategy}
         >
-          <div className="flex h-full flex-1 items-center overflow-x-auto no-scrollbar">
+          <div className="flex h-full flex-1 items-center gap-1 overflow-x-auto no-scrollbar px-2">
             {tabs.map(tab => (
               <SortableTab
                 key={tab.id}
