@@ -8,14 +8,18 @@ files:
   - dist/**/*
 extraResources:
   - from: ../server/dist
-    to: server/dist
-    filter: '**/*'
-  - from: ../server/node_modules
+    to: server
+    filter:
+      - '**/*'
+      - '!node_modules'
+  - from: ../server/dist/node_modules
     to: server/node_modules
-    filter: '**/*'
+    filter:
+      - '**/*'
   - from: ../web/dist
     to: web/dist
-    filter: '**/*'
+    filter:
+      - '**/*'
 win:
   target:
     - nsis

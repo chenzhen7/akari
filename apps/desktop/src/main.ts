@@ -82,9 +82,9 @@ function createWindow(loadUrl: string): void {
 
 function findServerEntry(): string | null {
   const candidates = [
-    path.join(process.resourcesPath, 'server', 'dist', 'index.js'),
-    path.join(__dirname, '..', '..', 'server', 'dist', 'index.js'),
-    path.join(__dirname, '..', 'server', 'dist', 'index.js'),
+    path.join(process.resourcesPath, 'server', 'index.js'),
+    path.join(__dirname, '..', '..', 'server', 'index.js'),
+    path.join(__dirname, '..', 'server', 'index.js'),
   ]
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) {

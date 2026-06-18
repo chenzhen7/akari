@@ -9,7 +9,7 @@
     "dev:desktop": "node apps/desktop/scripts/dev.mjs",
     "build": "pnpm --filter @akari/web build",
     "build:server": "pnpm --filter @akari/server build",
-    "build:desktop": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ pnpm build && pnpm build:server && pnpm --filter @akari/desktop build && pnpm --filter @akari/desktop dist",
+    "build:desktop": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ pnpm build && pnpm --filter @akari/server build:bundle && pnpm --filter @akari/desktop build && pnpm --filter @akari/desktop dist",
     "lint": "pnpm -r lint",
     "format": "prettier --write \"**/*.{ts,tsx}\" --ignore-path .prettierignore",
     "typecheck": "pnpm -r typecheck"

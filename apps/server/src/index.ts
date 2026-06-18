@@ -5,6 +5,7 @@ import fastifyWebsocket from '@fastify/websocket'
 import Database from 'better-sqlite3'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
+import fs from 'node:fs'
 import type { AgentType, ClientMessage, HookEvent, ServerMessage, SessionStatus } from '@akari/shared-types'
 import { createSessionManager, validateTransition } from './session-manager.js'
 import { WorkspaceManager } from './workspace-manager.js'
@@ -15,6 +16,9 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const REPO_ROOT = process.env.REPO_ROOT ? resolve(process.env.REPO_ROOT) : resolve(__dirname, '../../..')
 const DATA_DIR = process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(__dirname, '..', 'data')
+
+fs.mkdirSync(DATA_DIR, { recursive: true })
+fs.mkdirSync(REPO_ROOT, { recursive: true })
 
 const fastify = Fastify({ logger: { level: 'info' } })
 
