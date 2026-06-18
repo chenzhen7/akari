@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Loader2, FolderOpen, Sun, Moon } from 'lucide-react'
 import { FileBrowserDialog } from '@/components/workspace/FileBrowserDialog'
 import { useTheme } from '@/components/theme-provider'
+import { API_BASE } from '@/lib/api'
 
 interface SettingsDialogProps {
   open: boolean
@@ -29,7 +30,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   useEffect(() => {
     if (!open) return
     setLoading(true)
-    fetch('/api/settings')
+    fetch(`${API_BASE}/settings`)
       .then(async res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
@@ -45,7 +46,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetch(`${API_BASE}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ worktreeBaseDir: worktreeBaseDir.trim() }),

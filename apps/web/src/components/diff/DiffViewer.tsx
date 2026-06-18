@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import type { AgentSession } from '@akari/shared-types'
 import { useTheme } from '@/components/theme-provider'
 import { detectLanguage } from '@/lib/language-utils'
+import { API_BASE } from '@/lib/api'
 
 const MonacoDiffEditor = lazy(() =>
   import('@monaco-editor/react').then(m => ({ default: m.DiffEditor }))
@@ -26,7 +27,7 @@ export function DiffViewer({ session, filePath }: DiffViewerProps) {
     setLoading(true)
     setError(null)
     setContent(null)
-    fetch(`/api/sessions/${sessionId}/diff-content?file=${encodeURIComponent(filePath)}`)
+    fetch(`${API_BASE}/sessions/${sessionId}/diff-content?file=${encodeURIComponent(filePath)}`)
       .then(r => r.ok ? r.json() as Promise<{ original: string; modified: string }> : Promise.reject(r.statusText))
       .then(data => setContent(data))
       .catch((e: unknown) => setError(String(e)))
