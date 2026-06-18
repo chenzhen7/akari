@@ -65,6 +65,14 @@ function createWindow(loadUrl: string): void {
     return mainWindow?.isMaximized() ?? false
   })
 
+  // Native file/folder picker IPC handler
+  ipcMain.handle('dialog:showOpenDialog', async (_event, options) => {
+    if (!mainWindow) {
+      throw new Error('Main window is not ready')
+    }
+    return dialog.showOpenDialog(mainWindow, options)
+  })
+
   mainWindow.on('maximize', () => {
     mainWindow?.webContents.send('window-maximized-change', true)
   })

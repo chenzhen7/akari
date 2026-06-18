@@ -13,4 +13,8 @@ contextBridge.exposeInMainWorld('electron', {
       return () => ipcRenderer.off('window-maximized-change', listener)
     },
   },
+  dialog: {
+    showOpenDialog: (options: Electron.OpenDialogOptions) =>
+      ipcRenderer.invoke('dialog:showOpenDialog', options),
+  },
 })

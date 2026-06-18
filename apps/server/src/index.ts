@@ -480,24 +480,6 @@ fastify.delete<{ Params: { id: string } }>('/workspaces/:id', async (request, re
   return { ok: true }
 })
 
-// ─── Filesystem endpoints ─────────────────────────────────────────────────────
-
-fastify.get<{ Querystring: { path?: string } }>('/fs/list', async (request, reply) => {
-  const { path: dirPath } = request.query
-  if (!dirPath) {
-    // Return drives on Windows, root on other platforms
-    const drives = await workspaceManager.listDrives()
-    return {
-      entries: drives.map(d => ({ name: d.name, path: d.path, type: 'directory' as const })),
-      currentPath: '',
-      parentPath: null,
-    }
-  }
-  return workspaceManager.listDirectory(dirPath)
-})
-
-fastify.get('/fs/drives', async () => workspaceManager.listDrives())
-
 // ─── Tab endpoints ────────────────────────────────────────────────────────────
 
 fastify.get<{ Params: { id: string } }>(

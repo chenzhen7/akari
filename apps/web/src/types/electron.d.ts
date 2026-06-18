@@ -1,3 +1,17 @@
+interface OpenDialogOptions {
+  title?: string
+  defaultPath?: string
+  buttonLabel?: string
+  properties?: Array<'openFile' | 'openDirectory' | 'multiSelections' | 'showHiddenFiles' | 'createDirectory' | 'promptToCreate' | 'noResolveAliases' | 'treatPackageAsDirectory' | 'dontAddToRecent'>
+  filters?: Array<{ name: string; extensions: string[] }>
+}
+
+interface OpenDialogReturnValue {
+  canceled: boolean
+  filePaths: string[]
+  bookmarks?: string[]
+}
+
 interface Window {
   electron?: {
     platform: string
@@ -7,6 +21,9 @@ interface Window {
       close: () => Promise<void>
       isMaximized: () => Promise<boolean>
       onMaximizedChange: (callback: (isMaximized: boolean) => void) => () => void
+    }
+    dialog?: {
+      showOpenDialog: (options: OpenDialogOptions) => Promise<OpenDialogReturnValue>
     }
   }
 }

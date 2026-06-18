@@ -1,8 +1,8 @@
 import Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
-import { readdir, access } from 'node:fs/promises'
-import { resolve, dirname, join, parse, sep } from 'node:path'
-import type { Workspace, FsListResponse } from '@akari/shared-types'
+import { access } from 'node:fs/promises'
+import { resolve, parse } from 'node:path'
+import type { Workspace } from '@akari/shared-types'
 import { getGitRoot } from './git-utils.js'
 
 function normalizePath(p: string): string {
@@ -157,55 +157,6 @@ export class WorkspaceManager {
   deleteWorkspace(id: string): boolean {
     const info = this.db.prepare('DELETE FROM workspaces WHERE id = ?').run(id)
     return info.changes > 0
-  }
-
-  async listDirectory(dirPath: string): Promise<FsListResponse> {
-    const currentPath = normalizePath(resolve(dirPath))
-    const parent = dirname(currentPath)
-    const parentPath = parent === currentPath ? null : parent
-
-    try {
-      const entries = await readdir(currentPath, { withFileTypes: true })
-      const filtered = entries.filter(entry => {
-        if (entry.name.startsWith('.')) return false
-        return true
-      })
-
-      const items = filtered.map(entry => ({
-        name: entry.name,
-        path: normalizePath(join(currentPath, entry.name)),
-        type: (entry.isDirectory() ? 'directory' : 'file') as 'file' | 'directory',
-      }))
-
-      items.sort((a, b) => {
-        if (a.type === b.type) return a.name.localeCompare(b.name)
-        return a.type === 'directory' ? -1 : 1
-      })
-
-      return { entries: items, currentPath, parentPath }
-    } catch {
-      return { entries: [], currentPath, parentPath }
-    }
-  }
-
-  async listDrives(): Promise<{ name: string; path: string }[]> {
-    if (process.platform !== 'win32') {
-      return [{ name: 'Root', path: '/' }]
-    }
-    // Windows 11 deprecated wmic; use fs.access to probe drive letters instead.
-    const { access } = await import('node:fs/promises')
-    const letters = 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
-    const drives: { name: string; path: string }[] = []
-    for (const letter of letters) {
-      const path = letter + ':\\'
-      try {
-        await access(path)
-        drives.push({ name: letter + ':', path })
-      } catch {
-        // drive doesn't exist, skip
-      }
-    }
-    return drives.length > 0 ? drives : [{ name: 'C:', path: 'C:\\' }]
   }
 
   async validatePath(path: string): Promise<{ valid: boolean; error?: string }> {

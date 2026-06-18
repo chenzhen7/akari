@@ -134,18 +134,6 @@ export interface Workspace {
   lastOpenedAt: Date
 }
 
-export interface FsEntry {
-  name: string
-  path: string
-  type: 'file' | 'directory'
-}
-
-export interface FsListResponse {
-  entries: FsEntry[]
-  currentPath: string
-  parentPath: string | null
-}
-
 export type ServerMessage =
   | { event: 'session:created'; payload: AgentSession }
   | { event: 'session:updated'; payload: AgentSession }
