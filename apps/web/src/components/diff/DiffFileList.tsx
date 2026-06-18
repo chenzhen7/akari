@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { GitCommit, Trash2, GitMerge, GitPullRequest, Loader2, FileIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { API_BASE } from '@/lib/api'
+import { useSessionStore } from '@/stores/session-store'
 
 function statusColor(s: DiffFile['status']) {
   return s === 'A' ? 'text-green-500' : s === 'D' ? 'text-red-500' : s === 'R' ? 'text-blue-400' : 'text-amber-400'
@@ -97,20 +98,8 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
     }
   }
 
-  async function handleOpenFile(file: DiffFile) {
-    try {
-      const res = await fetch(`${API_BASE}/sessions/${session.id}/open-file`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath: file.path }),
-      })
-      if (!res.ok) {
-        const body = await res.json() as { error?: string }
-        throw new Error(body.error ?? res.statusText)
-      }
-    } catch (e) {
-      toast.error(`打开文件失败: ${String(e)}`)
-    }
+  function handleOpenFile(file: DiffFile) {
+    useSessionStore.getState().createTab(session.id, 'file', file.path)
   }
 
   async function handleDiscardFile(file: DiffFile) {
@@ -296,13 +285,13 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
                         className="h-6 w-6"
                         onClick={e => {
                           e.stopPropagation()
-                          void handleOpenFile(f)
+                          handleOpenFile(f)
                         }}
                       >
                         <FileIcon className="h-3 w-3" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom">打开文件</TooltipContent>
+                    <TooltipContent side="bottom">在编辑器中打开</TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>

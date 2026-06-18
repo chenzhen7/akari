@@ -1,12 +1,8 @@
 import { execa } from 'execa'
 import { watch, type FSWatcher } from 'chokidar'
 import { mkdir, symlink, rm, access, constants, readFile, readdir, writeFile } from 'node:fs/promises'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import { join, resolve, dirname, basename, sep, relative } from 'node:path'
 import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileNode, FileDiffLine } from '@akari/shared-types'
-
-const execFileAsync = promisify(execFile)
 
 export class WorktreeManager {
   private readonly repoRoot: string
@@ -362,20 +358,6 @@ export class WorktreeManager {
     const gitCwd = this.isAgentWorktree(worktreePath) ? worktreePath : this.repoRoot
     await this.git(['checkout', '--', filePath], gitCwd)
     await this.git(['clean', '-fd', '--', filePath], gitCwd)
-  }
-
-  async openFile(sessionId: string, filePath: string, cwd?: string): Promise<void> {
-    const worktreePath = cwd ?? this.getWorktreePath(sessionId)
-    const absolutePath = await this.resolveFilePath(filePath, worktreePath)
-    this.assertPathInWorktree(worktreePath, absolutePath)
-    const platform = process.platform
-    if (platform === 'win32') {
-      await execFileAsync('cmd', ['/c', 'start', '', absolutePath], { windowsHide: true })
-    } else if (platform === 'darwin') {
-      await execFileAsync('open', [absolutePath])
-    } else {
-      await execFileAsync('xdg-open', [absolutePath])
-    }
   }
 
   private assertPathInWorktree(worktreePath: string, filePath: string): string {

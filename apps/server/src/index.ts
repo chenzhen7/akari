@@ -424,23 +424,6 @@ fastify.post<{ Params: { id: string }; Body: { filePath: string } }>(
   },
 )
 
-fastify.post<{ Params: { id: string }; Body: { filePath: string } }>(
-  '/sessions/:id/open-file',
-  async (request, reply) => {
-    const { id } = request.params
-    const { filePath } = request.body
-    if (!filePath?.trim()) return reply.status(400).send({ error: 'filePath is required' })
-    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-    try {
-      await sessionManager.openFile(id, filePath.trim())
-      return { ok: true }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return reply.status(422).send({ error: msg })
-    }
-  },
-)
-
 // ─── Workspace endpoints ──────────────────────────────────────────────────────
 
 fastify.get('/workspaces', async () => workspaceManager.listWorkspaces())
