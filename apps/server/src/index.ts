@@ -50,12 +50,14 @@ function broadcast(message: ServerMessage): void {
 
 const db = new Database(join(DATA_DIR, 'akari.db'))
 const workspaceManager = new WorkspaceManager(db)
-workspaceManager.ensureDefaultWorkspace(REPO_ROOT)
+await workspaceManager.migrate()
+await workspaceManager.ensureDefaultWorkspace(REPO_ROOT)
 
 const currentWorkspace = workspaceManager.getCurrentWorkspace()!
 
 const sessionManager = await createSessionManager({
-  repoPath: currentWorkspace.path,
+  workspacePath: currentWorkspace.path,
+  repoRoot: currentWorkspace.repoRoot,
   db,
   broadcast,
   workspaceId: currentWorkspace.id,
@@ -452,7 +454,7 @@ fastify.post<{ Body: { name: string; path: string } }>('/workspaces', async (req
   if (!validation.valid) {
     return reply.status(400).send({ error: validation.error })
   }
-  const workspace = workspaceManager.addWorkspace(name.trim(), path.trim())
+  const workspace = await workspaceManager.addWorkspace(name.trim(), path.trim())
   broadcast({ event: 'workspace:list', payload: workspaceManager.listWorkspaces() })
   return reply.status(201).send(workspace)
 })
@@ -461,7 +463,7 @@ fastify.post<{ Params: { id: string } }>('/workspaces/:id/switch', async (reques
   const { id } = request.params
   const workspace = workspaceManager.switchWorkspace(id)
   if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
-  sessionManager.setWorkspace(workspace.id, workspace.path)
+  sessionManager.setWorkspace(workspace.id, workspace.path, workspace.repoRoot)
   await sessionManager.restoreSessions()
   await sessionManager.ensureMainSession(workspace.path)
   broadcast({ event: 'workspace:current', payload: workspace })

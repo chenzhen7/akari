@@ -128,6 +128,7 @@ export interface Workspace {
   id: string
   name: string
   path: string
+  repoRoot: string
   isCurrent: boolean
   createdAt: Date
   lastOpenedAt: Date

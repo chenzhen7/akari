@@ -99,11 +99,11 @@ export class SessionManager {
   private workspaceId: string
   private readonly settingsStore: SettingsStore
 
-  constructor(opts: { repoPath: string; db: Database.Database; broadcast: (msg: ServerMessage) => void; workspaceId: string }) {
+  constructor(opts: { workspacePath: string; repoRoot: string; db: Database.Database; broadcast: (msg: ServerMessage) => void; workspaceId: string }) {
     this.db = opts.db
     this.workspaceId = opts.workspaceId
     this.settingsStore = new SettingsStore(opts.db)
-    this.worktreeManager = new WorktreeManager(opts.repoPath, this.settingsStore.getWorktreeBaseDir())
+    this.worktreeManager = new WorktreeManager(opts.repoRoot, opts.workspacePath, this.settingsStore.getWorktreeBaseDir())
     this.terminalMux = new TerminalMultiplexer()
     this.broadcast = opts.broadcast
     this.initDb()
@@ -257,9 +257,9 @@ export class SessionManager {
   }
 
   /** Expose db for CanvasEdgeStore — only used within the same process */
-  setWorkspace(workspaceId: string, repoPath: string): void {
+  setWorkspace(workspaceId: string, workspacePath: string, repoRoot: string): void {
     this.workspaceId = workspaceId
-    this.worktreeManager = new WorktreeManager(repoPath, this.settingsStore.getWorktreeBaseDir())
+    this.worktreeManager = new WorktreeManager(repoRoot, workspacePath, this.settingsStore.getWorktreeBaseDir())
   }
 
   getSettings(): { worktreeBaseDir: string } {
@@ -908,7 +908,8 @@ function rowToSession(r: DbRow): AgentSession {
 }
 
 export async function createSessionManager(opts: {
-  repoPath: string
+  workspacePath: string
+  repoRoot: string
   db: Database.Database
   broadcast: (msg: ServerMessage) => void
   workspaceId: string

@@ -3,19 +3,46 @@ import { watch, type FSWatcher } from 'chokidar'
 import { mkdir, symlink, rm, access, constants, readFile, readdir, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { join, resolve, dirname, basename, sep } from 'node:path'
+import { join, resolve, dirname, basename, sep, relative } from 'node:path'
 import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileNode, FileDiffLine } from '@akari/shared-types'
 
 const execFileAsync = promisify(execFile)
 
 export class WorktreeManager {
-  private readonly baseRepoPath: string
+  private readonly repoRoot: string
+  private readonly workspacePath: string
+  private readonly workspaceOffset: string
   private readonly worktreeBaseDir: string
   private readonly watchers = new Map<string, FSWatcher>()
 
-  constructor(repoPath: string, worktreeBaseDir: string) {
-    this.baseRepoPath = resolve(repoPath)
+  constructor(repoRoot: string, workspacePath: string, worktreeBaseDir: string) {
+    this.repoRoot = resolve(repoRoot)
+    this.workspacePath = resolve(workspacePath)
+    this.workspaceOffset = relative(this.repoRoot, this.workspacePath).replace(/\\/g, '/')
     this.worktreeBaseDir = resolve(worktreeBaseDir)
+  }
+
+  private isAgentWorktree(cwd: string): boolean {
+    return resolve(cwd).startsWith(this.worktreeBaseDir + sep)
+  }
+
+  private async resolveFilePath(filePath: string, cwd: string): Promise<string> {
+    const normalized = filePath.replace(/\\/g, '/')
+    if (this.isAgentWorktree(cwd)) {
+      return join(cwd, normalized)
+    }
+    const offset = this.workspaceOffset
+    if (offset && (normalized === offset || normalized.startsWith(offset + '/'))) {
+      return join(this.repoRoot, normalized)
+    }
+    // Prefer workspace-relative if the file exists there.
+    const workspaceAbsolute = join(this.workspacePath, normalized)
+    try {
+      await access(workspaceAbsolute, constants.F_OK)
+      return workspaceAbsolute
+    } catch {
+      return join(this.repoRoot, normalized)
+    }
   }
 
   async createWorktree(
@@ -72,7 +99,7 @@ export class WorktreeManager {
     }
   }
 
-  async getCurrentBranch(cwd = this.baseRepoPath): Promise<string> {
+  async getCurrentBranch(cwd = this.repoRoot): Promise<string> {
     try {
       const result = await this.git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
       return result.trim()
@@ -99,14 +126,15 @@ export class WorktreeManager {
       const numStatMap = parseNumStat(numStat)
 
       // git diff only covers tracked files; also capture untracked files
-      const untrackedRaw = await this.git(['ls-files', '--others', '--exclude-standard'], worktreePath).catch(() => '')
+      const gitCwd = this.isAgentWorktree(worktreePath) ? worktreePath : this.repoRoot
+      const untrackedRaw = await this.git(['ls-files', '--others', '--exclude-standard', '--full-name'], gitCwd).catch(() => '')
       const untrackedFiles = untrackedRaw.trim() ? untrackedRaw.trim().split('\n').filter(Boolean) : []
 
       let extraDiff = ''
       const extraFiles: DiffFile[] = []
       for (const file of untrackedFiles) {
         // git diff --no-index exits with code 1 when differences exist (normal, not an error)
-        const fileDiff = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--no-index', '--', '/dev/null', file], { cwd: worktreePath })
+        const fileDiff = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--no-index', '--', '/dev/null', file], { cwd: gitCwd })
           .then(r => r.stdout)
           .catch((e: unknown) => {
             const err = e as { exitCode?: number; stdout?: string }
@@ -137,38 +165,41 @@ export class WorktreeManager {
   }
 
   async getFileDiffContent(worktreePath: string, baseBranch: string, filePath: string): Promise<{ original: string; modified: string }> {
-    const mergeBase = await execa('git', ['-c', 'core.quotepath=false', 'merge-base', 'HEAD', baseBranch], { cwd: worktreePath })
+    const gitCwd = this.isAgentWorktree(worktreePath) ? worktreePath : this.repoRoot
+    const mergeBase = await execa('git', ['-c', 'core.quotepath=false', 'merge-base', 'HEAD', baseBranch], { cwd: gitCwd })
       .then(r => r.stdout.trim())
       .catch(() => '')
     const baseRef = mergeBase || baseBranch
-    const original = await execa('git', ['-c', 'core.quotepath=false', 'show', `${baseRef}:${filePath}`], { cwd: worktreePath })
+    const original = await execa('git', ['-c', 'core.quotepath=false', 'show', `${baseRef}:${filePath}`], { cwd: gitCwd })
       .then(r => r.stdout)
       .catch(() => '')
-    const modified = await readFile(join(worktreePath, filePath), 'utf8').catch(() => '')
+    const absolutePath = await this.resolveFilePath(filePath, worktreePath)
+    const modified = await readFile(absolutePath, 'utf8').catch(() => '')
     return { original, modified }
   }
 
   async getFileDiffLines(worktreePath: string, baseBranch: string, filePath: string): Promise<FileDiffLine[]> {
-    const mergeBase = await execa('git', ['-c', 'core.quotepath=false', 'merge-base', 'HEAD', baseBranch], { cwd: worktreePath })
+    const gitCwd = this.isAgentWorktree(worktreePath) ? worktreePath : this.repoRoot
+    const mergeBase = await execa('git', ['-c', 'core.quotepath=false', 'merge-base', 'HEAD', baseBranch], { cwd: gitCwd })
       .then(r => r.stdout.trim())
       .catch(() => '')
     const baseRef = mergeBase || baseBranch
 
     // For untracked (new) files, use git diff --no-index against /dev/null
-    const isUntracked = await execa('git', ['-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard'], { cwd: worktreePath })
+    const isUntracked = await execa('git', ['-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard', '--full-name'], { cwd: gitCwd })
       .then(r => r.stdout.split('\n').includes(filePath))
       .catch(() => false)
 
     let diffOutput: string
     if (isUntracked) {
-      diffOutput = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--no-index', '--unified=0', '--', '/dev/null', filePath], { cwd: worktreePath })
+      diffOutput = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--no-index', '--unified=0', '--', '/dev/null', filePath], { cwd: gitCwd })
         .then(r => r.stdout)
         .catch((e: unknown) => {
           const err = e as { exitCode?: number; stdout?: string }
           return err.exitCode === 1 ? (err.stdout ?? '') : ''
         })
     } else {
-      diffOutput = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--unified=0', baseRef, '--', filePath], { cwd: worktreePath })
+      diffOutput = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--unified=0', baseRef, '--', filePath], { cwd: gitCwd })
         .then(r => r.stdout)
         .catch(() => '')
     }
@@ -326,28 +357,31 @@ export class WorktreeManager {
 
   async discardFile(sessionId: string, filePath: string, cwd?: string): Promise<void> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
-    this.assertPathInWorktree(worktreePath, filePath)
-    await this.git(['checkout', '--', filePath], worktreePath)
-    await this.git(['clean', '-fd', '--', filePath], worktreePath)
+    const absolutePath = await this.resolveFilePath(filePath, worktreePath)
+    this.assertPathInWorktree(worktreePath, absolutePath)
+    const gitCwd = this.isAgentWorktree(worktreePath) ? worktreePath : this.repoRoot
+    await this.git(['checkout', '--', filePath], gitCwd)
+    await this.git(['clean', '-fd', '--', filePath], gitCwd)
   }
 
   async openFile(sessionId: string, filePath: string, cwd?: string): Promise<void> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
-    const fullPath = this.assertPathInWorktree(worktreePath, filePath)
+    const absolutePath = await this.resolveFilePath(filePath, worktreePath)
+    this.assertPathInWorktree(worktreePath, absolutePath)
     const platform = process.platform
     if (platform === 'win32') {
-      await execFileAsync('cmd', ['/c', 'start', '', fullPath], { windowsHide: true })
+      await execFileAsync('cmd', ['/c', 'start', '', absolutePath], { windowsHide: true })
     } else if (platform === 'darwin') {
-      await execFileAsync('open', [fullPath])
+      await execFileAsync('open', [absolutePath])
     } else {
-      await execFileAsync('xdg-open', [fullPath])
+      await execFileAsync('xdg-open', [absolutePath])
     }
   }
 
   private assertPathInWorktree(worktreePath: string, filePath: string): string {
-    const resolvedWorktree = resolve(worktreePath)
-    const resolvedFile = resolve(worktreePath, filePath)
-    const isInside = resolvedFile === resolvedWorktree || resolvedFile.startsWith(resolvedWorktree + sep)
+    const resolvedFile = resolve(filePath)
+    const allowedBase = this.isAgentWorktree(worktreePath) ? resolve(worktreePath) : this.repoRoot
+    const isInside = resolvedFile === allowedBase || resolvedFile.startsWith(allowedBase + sep)
     if (!isInside) {
       throw new Error(`invalid file path: ${filePath}`)
     }
@@ -388,7 +422,7 @@ export class WorktreeManager {
 
   async readFileContent(sessionId: string, filePath: string, cwd?: string): Promise<string> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
-    const fullPath = join(worktreePath, filePath)
+    const fullPath = await this.resolveFilePath(filePath, worktreePath)
 
     const stats = await access(fullPath, constants.F_OK)
       .then(() => true)
@@ -401,24 +435,36 @@ export class WorktreeManager {
 
   async writeFileContent(sessionId: string, filePath: string, content: string, cwd?: string): Promise<void> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
-    const fullPath = join(worktreePath, filePath)
+    const fullPath = await this.resolveWritePath(filePath, worktreePath)
 
     await mkdir(dirname(fullPath), { recursive: true })
     await writeFile(fullPath, content, 'utf8')
   }
 
+  private async resolveWritePath(filePath: string, cwd: string): Promise<string> {
+    const normalized = filePath.replace(/\\/g, '/')
+    if (this.isAgentWorktree(cwd)) {
+      return join(cwd, normalized)
+    }
+    const offset = this.workspaceOffset
+    if (offset && (normalized === offset || normalized.startsWith(offset + '/'))) {
+      return join(this.repoRoot, normalized)
+    }
+    return join(this.workspacePath, normalized)
+  }
+
   getWorktreePath(sessionId: string): string {
-    const repoSlug = basename(this.baseRepoPath)
+    const repoSlug = basename(this.repoRoot)
     return join(this.worktreeBaseDir, repoSlug, sessionId)
   }
 
-  private async git(args: string[], cwd = this.baseRepoPath): Promise<string> {
-    const result = await execa('git', ['-c', 'core.quotepath=false', '-c', 'core.quotepath=false', ...args], { cwd })
+  private async git(args: string[], cwd = this.repoRoot): Promise<string> {
+    const result = await execa('git', ['-c', 'core.quotepath=false', ...args], { cwd })
     return result.stdout
   }
 
   private async linkNodeModules(worktreePath: string): Promise<void> {
-    const src = join(this.baseRepoPath, 'node_modules')
+    const src = join(this.repoRoot, 'node_modules')
     const dst = join(worktreePath, 'node_modules')
     try {
       await access(src, constants.F_OK)

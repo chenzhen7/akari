@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import { readdir, access } from 'node:fs/promises'
 import { resolve, dirname, join, parse, sep } from 'node:path'
 import type { Workspace, FsListResponse } from '@akari/shared-types'
+import { getGitRoot } from './git-utils.js'
 
 function normalizePath(p: string): string {
   return p.replace(/\\/g, '/')
@@ -22,6 +23,7 @@ export class WorkspaceManager {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         path TEXT NOT NULL UNIQUE,
+        repo_root TEXT,
         is_current INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         last_opened_at TEXT NOT NULL
@@ -29,15 +31,27 @@ export class WorkspaceManager {
     `)
   }
 
-  ensureDefaultWorkspace(defaultPath: string): void {
+  async migrate(): Promise<void> {
+    const rows = this.db
+      .prepare("SELECT id, path FROM workspaces WHERE repo_root IS NULL OR repo_root = ''")
+      .all() as Array<{ id: string; path: string }>
+    for (const row of rows) {
+      const repoRoot = (await getGitRoot(row.path)) ?? row.path
+      this.db.prepare('UPDATE workspaces SET repo_root = ? WHERE id = ?').run(repoRoot, row.id)
+    }
+  }
+
+  async ensureDefaultWorkspace(defaultPath: string): Promise<void> {
     const count = this.db.prepare('SELECT COUNT(*) as count FROM workspaces').get() as { count: number }
     if (count.count === 0) {
       const id = nanoid(8)
       const now = new Date().toISOString()
       const name = parse(defaultPath).base || 'akari'
+      const resolvedPath = normalizePath(resolve(defaultPath))
+      const repoRoot = (await getGitRoot(resolvedPath)) ?? resolvedPath
       this.db.prepare(
-        'INSERT INTO workspaces (id, name, path, is_current, created_at, last_opened_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ).run(id, name, normalizePath(resolve(defaultPath)), 1, now, now)
+        'INSERT INTO workspaces (id, name, path, repo_root, is_current, created_at, last_opened_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ).run(id, name, resolvedPath, repoRoot, 1, now, now)
     }
   }
 
@@ -46,6 +60,7 @@ export class WorkspaceManager {
       id: string
       name: string
       path: string
+      repo_root: string
       is_current: number
       created_at: string
       last_opened_at: string
@@ -54,6 +69,7 @@ export class WorkspaceManager {
       id: r.id,
       name: r.name,
       path: r.path,
+      repoRoot: r.repo_root,
       isCurrent: r.is_current === 1,
       createdAt: new Date(r.created_at),
       lastOpenedAt: new Date(r.last_opened_at),
@@ -66,6 +82,7 @@ export class WorkspaceManager {
           id: string
           name: string
           path: string
+          repo_root: string
           is_current: number
           created_at: string
           last_opened_at: string
@@ -76,6 +93,7 @@ export class WorkspaceManager {
       id: row.id,
       name: row.name,
       path: row.path,
+      repoRoot: row.repo_root,
       isCurrent: row.is_current === 1,
       createdAt: new Date(row.created_at),
       lastOpenedAt: new Date(row.last_opened_at),
@@ -88,6 +106,7 @@ export class WorkspaceManager {
           id: string
           name: string
           path: string
+          repo_root: string
           is_current: number
           created_at: string
           last_opened_at: string
@@ -98,23 +117,26 @@ export class WorkspaceManager {
       id: row.id,
       name: row.name,
       path: row.path,
+      repoRoot: row.repo_root,
       isCurrent: row.is_current === 1,
       createdAt: new Date(row.created_at),
       lastOpenedAt: new Date(row.last_opened_at),
     }
   }
 
-  addWorkspace(name: string, path: string): Workspace {
+  async addWorkspace(name: string, path: string): Promise<Workspace> {
     const id = nanoid(8)
     const now = new Date().toISOString()
     const resolvedPath = normalizePath(resolve(path))
+    const repoRoot = (await getGitRoot(resolvedPath)) ?? resolvedPath
     this.db.prepare(
-      'INSERT INTO workspaces (id, name, path, is_current, created_at, last_opened_at) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(id, name, resolvedPath, 0, now, now)
+      'INSERT INTO workspaces (id, name, path, repo_root, is_current, created_at, last_opened_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(id, name, resolvedPath, repoRoot, 0, now, now)
     return {
       id,
       name,
       path: resolvedPath,
+      repoRoot,
       isCurrent: false,
       createdAt: new Date(now),
       lastOpenedAt: new Date(now),
@@ -189,9 +211,13 @@ export class WorkspaceManager {
   async validatePath(path: string): Promise<{ valid: boolean; error?: string }> {
     try {
       await access(path)
-      return { valid: true }
     } catch {
       return { valid: false, error: '路径不存在或无法访问' }
     }
+    const repoRoot = await getGitRoot(path)
+    if (!repoRoot) {
+      return { valid: false, error: '所选路径不在 Git 仓库内' }
+    }
+    return { valid: true }
   }
 }
