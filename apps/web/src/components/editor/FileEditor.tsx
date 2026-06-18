@@ -5,6 +5,8 @@ import type { editor } from 'monaco-editor'
 import { API_BASE } from '@/stores/session-store'
 import { useTheme } from '@/components/theme-provider'
 import { detectLanguage } from '@/lib/language-utils'
+import { useWorkspaceStore } from '@/stores/workspace-store'
+import { resolveAbsoluteFilePath } from '@/lib/path-utils'
 
 const MonacoEditor = lazy(() =>
   import('@monaco-editor/react').then(m => ({ default: m.Editor }))
@@ -174,11 +176,14 @@ export function FileEditor({ session, filePath }: FileEditorProps) {
     }
   }, [doSave, diffLines, applyDiffDecorations])
 
+  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === session.workspaceId) ?? null)
+  const absoluteFilePath = resolveAbsoluteFilePath(session, filePath, workspace)
+
   return (
     <div className="flex h-full flex-col overflow-hidden bg-card">
       {/* Toolbar */}
       <div className="flex shrink-0 items-center gap-2 bg-muted/30 px-3 py-1.5">
-        <span className="truncate text-[11px] text-muted-foreground font-mono">{filePath}</span>
+        <span className="truncate text-[11px] text-muted-foreground font-mono">{absoluteFilePath}</span>
       </div>
 
       {/* Monaco Editor */}

@@ -4,6 +4,8 @@ import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { cn } from '@/lib/utils'
 import type { AgentSession, SessionTab } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
+import { useWorkspaceStore } from '@/stores/workspace-store'
+import { resolveAbsoluteFilePath } from '@/lib/path-utils'
 import { destroyTerminalInstance } from './TerminalPanel'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -51,18 +53,19 @@ interface MiddleTabBarProps {
 }
 
 const SortableTab = memo(function SortableTab({
-  sessionId,
+  session,
   tab,
   isActive,
   allTabs,
 }: {
-  sessionId: string
+  session: AgentSession
   tab: AgentSession['tabs'][number]
   isActive: boolean
   allTabs: SessionTab[]
 }) {
   const activateTab = useSessionStore(s => s.activateTab)
   const closeTab = useSessionStore(s => s.closeTab)
+  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === session.workspaceId) ?? null)
 
   const {
     attributes,
@@ -88,19 +91,21 @@ const SortableTab = memo(function SortableTab({
         : Terminal
 
   const displayLabel = getTabDisplayLabel(tab, allTabs)
-  const tooltipContent = tab.filePath ?? tab.label
+  const tooltipContent = tab.filePath
+    ? resolveAbsoluteFilePath(session, tab.filePath, workspace)
+    : tab.label
 
   const handleActivate = useCallback(() => {
-    activateTab(sessionId, tab.id)
-  }, [activateTab, sessionId, tab.id])
+    activateTab(session.id, tab.id)
+  }, [activateTab, session.id, tab.id])
 
   const handleClose = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     if ((tab.type === 'terminal' || tab.type === 'claude') && tab.terminalId) {
       destroyTerminalInstance(tab.terminalId)
     }
-    closeTab(sessionId, tab.id)
-  }, [tab.type, tab.terminalId, tab.id, sessionId, closeTab])
+    closeTab(session.id, tab.id)
+  }, [tab.type, tab.terminalId, tab.id, session.id, closeTab])
 
   return (
     <Tooltip delayDuration={500}>
@@ -138,7 +143,7 @@ const SortableTab = memo(function SortableTab({
           </span>
         </button>
       </TooltipTrigger>
-      <TooltipContent side="bottom">
+      <TooltipContent side="bottom" className="max-w-none break-all">
         {tooltipContent}
       </TooltipContent>
     </Tooltip>
@@ -192,7 +197,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
             {tabs.map(tab => (
               <SortableTab
                 key={tab.id}
-                sessionId={session.id}
+                session={session}
                 tab={tab}
                 isActive={tab.id === activeTabId}
                 allTabs={tabs}

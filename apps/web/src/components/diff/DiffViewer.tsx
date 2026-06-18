@@ -4,6 +4,8 @@ import type { AgentSession } from '@akari/shared-types'
 import { useTheme } from '@/components/theme-provider'
 import { detectLanguage } from '@/lib/language-utils'
 import { API_BASE } from '@/lib/api'
+import { useWorkspaceStore } from '@/stores/workspace-store'
+import { resolveAbsoluteFilePath } from '@/lib/path-utils'
 
 const MonacoDiffEditor = lazy(() =>
   import('@monaco-editor/react').then(m => ({ default: m.DiffEditor }))
@@ -36,12 +38,14 @@ export function DiffViewer({ session, filePath }: DiffViewerProps) {
 
   const diffFiles = session.diffFiles ?? []
   const currentFile = diffFiles.find(f => f.path === filePath)
+  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === session.workspaceId) ?? null)
+  const absoluteFilePath = resolveAbsoluteFilePath(session, filePath, workspace)
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-card">
       {/* File path + diff stats */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/30 px-3 py-1.5">
-        <span className="truncate text-[11px] text-muted-foreground font-mono">{filePath}</span>
+        <span className="truncate text-[11px] text-muted-foreground font-mono">{absoluteFilePath}</span>
         {currentFile && (
           <div className="ml-auto flex items-center gap-2 text-[11px]">
             <span className="font-mono text-green-500">+{currentFile.additions}</span>
