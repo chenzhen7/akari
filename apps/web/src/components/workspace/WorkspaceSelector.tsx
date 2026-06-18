@@ -59,7 +59,7 @@ export function WorkspaceSelector() {
             <div className="px-2 py-1.5 text-xs text-muted-foreground">当前工作区</div>
             <DropdownMenuItem
               className="flex items-center gap-2 text-sm"
-              disabled
+              onSelect={e => e.preventDefault()}
               title={`${currentWorkspace.name}\n${currentWorkspace.path}`}
             >
               <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
