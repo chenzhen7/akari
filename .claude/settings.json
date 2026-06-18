@@ -12,6 +12,7 @@
       "Bash(ls *)",
       "Bash(grep *)",
       "Bash(find *)",
+      "Bash(curl *)",
       "Bash(cat *)",
       "Bash(mkdir -p *)",
       "Bash(touch *)",
