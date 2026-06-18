@@ -1,5 +1,5 @@
 import { memo, useCallback } from 'react'
-import { FileCode, FileText, Plus, X, Terminal } from 'lucide-react'
+import { FileText, Plus, X, Terminal, GitCompare } from 'lucide-react'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { cn } from '@/lib/utils'
 import type { AgentSession, SessionTab } from '@/types'
@@ -31,7 +31,7 @@ function getTabDisplayLabel(tab: SessionTab, allTabs: SessionTab[]): string {
   const parts = tab.filePath.split(/[/\\]/)
   const fileName = parts[parts.length - 1] ?? tab.label
   const sameNameTabs = allTabs.filter(
-    t => t.id !== tab.id && t.filePath && t.filePath.split(/[/\\]/).pop() === fileName
+    t => t.id !== tab.id && t.type === tab.type && t.filePath && t.filePath.split(/[/\\]/).pop() === fileName
   )
   if (sameNameTabs.length === 0) {
     return fileName
@@ -83,16 +83,19 @@ const SortableTab = memo(function SortableTab({
   }
 
   const Icon = tab.type === 'diff'
-    ? FileCode
+    ? GitCompare
     : tab.type === 'file'
       ? FileText
       : tab.type === 'claude'
         ? ClaudeIcon
         : Terminal
 
-  const displayLabel = getTabDisplayLabel(tab, allTabs)
+  const rawLabel = getTabDisplayLabel(tab, allTabs)
+  const displayLabel = tab.type === 'diff' ? `(diff) ${rawLabel}` : rawLabel
   const tooltipContent = tab.filePath
-    ? resolveAbsoluteFilePath(session, tab.filePath, workspace)
+    ? tab.type === 'diff'
+      ? `Diff: ${resolveAbsoluteFilePath(session, tab.filePath, workspace)}`
+      : resolveAbsoluteFilePath(session, tab.filePath, workspace)
     : tab.label
 
   const handleActivate = useCallback(() => {
