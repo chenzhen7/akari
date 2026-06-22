@@ -1,6 +1,6 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense, memo } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { AgentSession } from '@akari/shared-types'
+import type { DiffFile } from '@akari/shared-types'
 import { useTheme } from '@/components/theme-provider'
 import { detectLanguage } from '@/lib/language-utils'
 import { API_BASE } from '@/lib/api'
@@ -12,12 +12,14 @@ const MonacoDiffEditor = lazy(() =>
 )
 
 interface DiffViewerProps {
-  session: AgentSession
+  sessionId: string
   filePath: string
+  diffFiles: DiffFile[]
+  workspaceId: string
+  worktreePath: string
 }
 
-export function DiffViewer({ session, filePath }: DiffViewerProps) {
-  const sessionId = session.id
+export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFiles, workspaceId, worktreePath }: DiffViewerProps) {
   const [content, setContent] = useState<{ original: string; modified: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,10 +38,9 @@ export function DiffViewer({ session, filePath }: DiffViewerProps) {
       .finally(() => setLoading(false))
   }, [filePath, sessionId])
 
-  const diffFiles = session.diffFiles ?? []
   const currentFile = diffFiles.find(f => f.path === filePath)
-  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === session.workspaceId) ?? null)
-  const absoluteFilePath = resolveAbsoluteFilePath(session, filePath, workspace)
+  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === workspaceId) ?? null)
+  const absoluteFilePath = resolveAbsoluteFilePath(worktreePath, filePath, workspace)
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-card">
@@ -103,4 +104,4 @@ export function DiffViewer({ session, filePath }: DiffViewerProps) {
       </div>
     </div>
   )
-}
+})

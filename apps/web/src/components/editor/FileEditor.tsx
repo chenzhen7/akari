@@ -1,6 +1,6 @@
-import { useState, useEffect, lazy, Suspense, useCallback, useRef } from 'react'
+import { useState, useEffect, lazy, Suspense, useCallback, useRef, memo } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { AgentSession, FileDiffLine } from '@akari/shared-types'
+import type { FileDiffLine } from '@akari/shared-types'
 import type { editor } from 'monaco-editor'
 import { API_BASE } from '@/stores/session-store'
 import { useTheme } from '@/components/theme-provider'
@@ -15,12 +15,13 @@ const MonacoEditor = lazy(() =>
 const AUTO_SAVE_DELAY = 800
 
 interface FileEditorProps {
-  session: AgentSession
+  sessionId: string
+  workspaceId: string
+  worktreePath: string
   filePath: string
 }
 
-export function FileEditor({ session, filePath }: FileEditorProps) {
-  const sessionId = session.id
+export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, worktreePath, filePath }: FileEditorProps) {
   const [content, setContent] = useState<string>('')
   const [originalContent, setOriginalContent] = useState<string>('')
   const [loading, setLoading] = useState(false)
@@ -176,8 +177,8 @@ export function FileEditor({ session, filePath }: FileEditorProps) {
     }
   }, [doSave, diffLines, applyDiffDecorations])
 
-  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === session.workspaceId) ?? null)
-  const absoluteFilePath = resolveAbsoluteFilePath(session, filePath, workspace)
+  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === workspaceId) ?? null)
+  const absoluteFilePath = resolveAbsoluteFilePath(worktreePath, filePath, workspace)
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-card">
@@ -230,4 +231,4 @@ export function FileEditor({ session, filePath }: FileEditorProps) {
       </div>
     </div>
   )
-}
+})

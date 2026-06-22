@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 import { FileText, Plus, X, Terminal, GitCompare } from 'lucide-react'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { cn } from '@/lib/utils'
@@ -53,19 +53,20 @@ interface MiddleTabBarProps {
 }
 
 const SortableTab = memo(function SortableTab({
-  session,
+  sessionId,
   tab,
   isActive,
-  allTabs,
+  displayLabel,
+  tooltipContent,
 }: {
-  session: AgentSession
+  sessionId: string
   tab: AgentSession['tabs'][number]
   isActive: boolean
-  allTabs: SessionTab[]
+  displayLabel: string
+  tooltipContent: string
 }) {
   const activateTab = useSessionStore(s => s.activateTab)
   const closeTab = useSessionStore(s => s.closeTab)
-  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === session.workspaceId) ?? null)
 
   const {
     attributes,
@@ -90,25 +91,17 @@ const SortableTab = memo(function SortableTab({
         ? ClaudeIcon
         : Terminal
 
-  const rawLabel = getTabDisplayLabel(tab, allTabs)
-  const displayLabel = tab.type === 'diff' ? `(diff) ${rawLabel}` : rawLabel
-  const tooltipContent = tab.filePath
-    ? tab.type === 'diff'
-      ? `Diff: ${resolveAbsoluteFilePath(session, tab.filePath, workspace)}`
-      : resolveAbsoluteFilePath(session, tab.filePath, workspace)
-    : tab.label
-
   const handleActivate = useCallback(() => {
-    activateTab(session.id, tab.id)
-  }, [activateTab, session.id, tab.id])
+    activateTab(sessionId, tab.id)
+  }, [activateTab, sessionId, tab.id])
 
   const handleClose = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     if ((tab.type === 'terminal' || tab.type === 'claude') && tab.terminalId) {
       destroyTerminalInstance(tab.terminalId)
     }
-    closeTab(session.id, tab.id)
-  }, [tab.type, tab.terminalId, tab.id, session.id, closeTab])
+    closeTab(sessionId, tab.id)
+  }, [tab.type, tab.terminalId, tab.id, sessionId, closeTab])
 
   return (
     <Tooltip delayDuration={500}>
@@ -158,6 +151,20 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
   const reorderTabs = useSessionStore(s => s.reorderTabs)
   const tabs = session.tabs
   const activeTabId = session.activeTabId
+  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === session.workspaceId) ?? null)
+
+  const tabMeta = useMemo(() => {
+    return tabs.map(tab => {
+      const rawLabel = getTabDisplayLabel(tab, tabs)
+      const displayLabel = tab.type === 'diff' ? `(diff) ${rawLabel}` : rawLabel
+      const tooltipContent = tab.filePath
+        ? tab.type === 'diff'
+          ? `Diff: ${resolveAbsoluteFilePath(session.worktreePath, tab.filePath, workspace)}`
+          : resolveAbsoluteFilePath(session.worktreePath, tab.filePath, workspace)
+        : tab.label
+      return { tab, displayLabel, tooltipContent }
+    })
+  }, [tabs, session.worktreePath, workspace])
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -197,13 +204,14 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
           strategy={horizontalListSortingStrategy}
         >
           <div className="flex h-full flex-1 items-center gap-1 overflow-x-auto no-scrollbar px-2">
-            {tabs.map(tab => (
+            {tabMeta.map(({ tab, displayLabel, tooltipContent }) => (
               <SortableTab
                 key={tab.id}
-                session={session}
+                sessionId={session.id}
                 tab={tab}
                 isActive={tab.id === activeTabId}
-                allTabs={tabs}
+                displayLabel={displayLabel}
+                tooltipContent={tooltipContent}
               />
             ))}
           </div>

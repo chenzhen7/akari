@@ -3,13 +3,73 @@ import { TerminalPanel } from './TerminalPanel'
 import { DiffViewer } from '@/components/diff/DiffViewer'
 import { FileEditor } from '@/components/editor/FileEditor'
 import { cn } from '@/lib/utils'
-import type { AgentSession } from '@/types'
+import type { AgentSession, DiffFile, SessionTab } from '@/types'
 import type { ClientMessage } from '@akari/shared-types'
+
+const EMPTY_DIFF_FILES: DiffFile[] = []
 
 interface TabContentProps {
   session: AgentSession
   send: (msg: ClientMessage) => void
 }
+
+interface TabPaneProps {
+  sessionId: string
+  type: SessionTab['type']
+  terminalId?: string
+  filePath?: string
+  isActive: boolean
+  send: (msg: ClientMessage) => void
+  diffFiles?: DiffFile[]
+  workspaceId: string
+  worktreePath: string
+}
+
+const TabPane = memo(function TabPane({
+  sessionId,
+  type,
+  terminalId,
+  filePath,
+  isActive,
+  send,
+  diffFiles,
+  workspaceId,
+  worktreePath,
+}: TabPaneProps) {
+  return (
+    <div
+      className={cn(
+        'absolute inset-0',
+        !isActive && 'hidden',
+      )}
+    >
+      {(type === 'terminal' || type === 'claude') && terminalId && (
+        <TerminalPanel
+          sessionId={sessionId}
+          terminalId={terminalId}
+          send={send}
+        />
+      )}
+      {type === 'diff' && filePath && (
+        <DiffViewer
+          sessionId={sessionId}
+          filePath={filePath}
+          diffFiles={diffFiles}
+          workspaceId={workspaceId}
+          worktreePath={worktreePath}
+        />
+      )}
+      {type === 'file' && filePath && (
+        <FileEditor
+          sessionId={sessionId}
+          filePath={filePath}
+          workspaceId={workspaceId}
+          worktreePath={worktreePath}
+        />
+      )}
+    </div>
+  )
+})
 
 export const TabContent = memo(function TabContent({ session, send }: TabContentProps) {
   const activeTabId = session.activeTabId
@@ -26,33 +86,18 @@ export const TabContent = memo(function TabContent({ session, send }: TabContent
   return (
     <div className="relative h-full w-full">
       {session.tabs.map(tab => (
-        <div
+        <TabPane
           key={tab.id}
-          className={cn(
-            'absolute inset-0',
-            tab.id !== activeTabId && 'hidden',
-          )}
-        >
-          {(tab.type === 'terminal' || tab.type === 'claude') && (
-            <TerminalPanel
-              sessionId={session.id}
-              terminalId={tab.terminalId!}
-              send={send}
-            />
-          )}
-          {tab.type === 'diff' && (
-            <DiffViewer
-              session={session}
-              filePath={tab.filePath!}
-            />
-          )}
-          {tab.type === 'file' && (
-            <FileEditor
-              session={session}
-              filePath={tab.filePath!}
-            />
-          )}
-        </div>
+          sessionId={session.id}
+          type={tab.type}
+          terminalId={tab.terminalId}
+          filePath={tab.filePath}
+          isActive={tab.id === activeTabId}
+          send={send}
+          diffFiles={tab.type === 'diff' ? session.diffFiles ?? EMPTY_DIFF_FILES : undefined}
+          workspaceId={session.workspaceId}
+          worktreePath={session.worktreePath}
+        />
       ))}
     </div>
   )

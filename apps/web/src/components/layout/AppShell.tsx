@@ -52,9 +52,8 @@ function ResizeHandle({
 }
 
 export function AppShell() {
-  const activeSessionId = useSessionStore(s => s.activeSessionId)
+  const session = useSessionStore(s => s.activeSessionId ? s.sessions.find(ses => ses.id === s.activeSessionId) : undefined)
   const globalViewMode = useSessionStore(s => s.globalViewMode)
-  const sessions = useSessionStore(s => s.sessions)
   const { send } = useWebSocket()
 
   const {
@@ -79,8 +78,6 @@ export function AppShell() {
     minRightWidth: 12,
     maxRightWidth: 30,
   })
-
-  const session = activeSessionId ? sessions.find(s => s.id === activeSessionId) : undefined
 
   // 初始加载时展开右侧
   useEffect(() => {
@@ -149,7 +146,7 @@ export function AppShell() {
               <CanvasView />
             ) : globalViewMode === 'kanban' ? (
               <KanbanView />
-            ) : activeSessionId && session ? (
+            ) : session ? (
               <div className="flex h-full flex-col px-2 ">
                 <MiddleTabBar session={session} />
                 <div className="flex-1 overflow-hidden">

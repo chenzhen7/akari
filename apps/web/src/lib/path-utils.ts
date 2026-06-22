@@ -1,22 +1,23 @@
-import type { AgentSession, Workspace } from '@akari/shared-types'
+import type { Workspace } from '@akari/shared-types'
 
 export function resolveAbsoluteFilePath(
-  session: AgentSession,
+  worktreePath: string,
   filePath: string,
   workspace: Workspace | null,
 ): string {
   const normalizedFilePath = filePath.replace(/\\/g, '/')
+  const normalizedWorktreePath = worktreePath.replace(/\\/g, '/')
+
   if (!workspace) {
-    return `${session.worktreePath.replace(/\\/g, '/')}/${normalizedFilePath}`
+    return `${normalizedWorktreePath}/${normalizedFilePath}`
   }
 
   const repoRoot = workspace.repoRoot.replace(/\\/g, '/')
   const workspacePath = workspace.path.replace(/\\/g, '/')
-  const worktreePath = session.worktreePath.replace(/\\/g, '/')
 
   // Agent sessions: worktreePath is a full checkout of the repo root.
-  if (worktreePath !== workspacePath) {
-    return `${worktreePath}/${normalizedFilePath}`
+  if (normalizedWorktreePath !== workspacePath) {
+    return `${normalizedWorktreePath}/${normalizedFilePath}`
   }
 
   // Main session: workspacePath may be a subdirectory of the git root.
