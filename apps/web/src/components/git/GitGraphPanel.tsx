@@ -21,7 +21,7 @@ import { GitGraphRow } from './GitGraphRow'
 import { cn } from '@/lib/utils'
 import { API_BASE } from '@/lib/api'
 
-const FULL_LOAD_LIMIT = 2000
+const FULL_LOAD_LIMIT = 100
 const SEARCH_DEBOUNCE_MS = 200
 
 interface NewBranchDialogState {
