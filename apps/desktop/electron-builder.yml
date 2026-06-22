@@ -1,11 +1,14 @@
 appId: com.akari.app
 productName: Akari
 copyright: Copyright © 2026 Akari
+icon: build/icon.ico
 directories:
   output: dist-electron
 electronDist: node_modules/electron/dist
 files:
   - dist/**/*
+  - build/icon.ico
+  - build/icon.png
 extraResources:
   - from: ../server/dist
     to: server

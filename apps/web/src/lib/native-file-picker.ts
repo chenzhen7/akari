@@ -2,6 +2,7 @@ export interface NativeOpenDialogOptions {
   title?: string
   defaultPath?: string
   properties?: Array<'openFile' | 'openDirectory' | 'multiSelections' | 'showHiddenFiles'>
+  filters?: Array<{ name: string; extensions: string[] }>
 }
 
 export interface NativeOpenDialogResult {

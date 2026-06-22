@@ -54,7 +54,7 @@ const TabPane = memo(function TabPane({
         <DiffViewer
           sessionId={sessionId}
           filePath={filePath}
-          diffFiles={diffFiles}
+          diffFiles={diffFiles ?? EMPTY_DIFF_FILES}
           workspaceId={workspaceId}
           worktreePath={worktreePath}
         />

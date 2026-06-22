@@ -9,6 +9,19 @@ let mainWindow: BrowserWindow | null = null
 let serverProcess: ChildProcess | null = null
 let serverPort: number | null = null
 
+function resolveIconPath(): string | undefined {
+  const candidates = [
+    path.join(__dirname, '..', 'build', 'icon.ico'),
+    path.join(process.resourcesPath, 'icon.ico'),
+  ]
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate
+    }
+  }
+  return undefined
+}
+
 function createWindow(loadUrl: string): void {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -16,6 +29,7 @@ function createWindow(loadUrl: string): void {
     minWidth: 900,
     minHeight: 600,
     frame: false,
+    icon: resolveIconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
