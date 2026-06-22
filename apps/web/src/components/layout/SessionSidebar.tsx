@@ -118,21 +118,15 @@ const SessionItem = memo(function SessionItem({
           )}
         </div>
 
-        {/* 第二行：task 描述 / branch + 右下角操作按钮 */}
+        {/* 第二行：branch + 源分支 + 右下角操作按钮 */}
         <div className="flex items-center justify-between gap-1 pl-4">
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground min-w-0">
-            {session.task ? (
-              <span className="truncate">{session.task}</span>
-            ) : (
+            <GitBranch className="h-2.5 w-2.5 shrink-0" />
+            <span className="truncate">{session.branchName}</span>
+            {!isMain && (
               <>
-                <GitBranch className="h-2.5 w-2.5 shrink-0" />
-                <span className="truncate">{session.branchName}</span>
-                {!isMain && (
-                  <>
-                    <span className="opacity-50 shrink-0">→</span>
-                    <span className="truncate">{session.baseBranch}</span>
-                  </>
-                )}
+                <span className="opacity-50 shrink-0">→</span>
+                <span className="truncate">{session.baseBranch}</span>
               </>
             )}
           </div>
