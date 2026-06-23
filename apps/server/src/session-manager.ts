@@ -687,9 +687,15 @@ export class SessionManager {
         baseBranch,
       )
 
+      session.worktreePath = worktreePath
+      session.branchName = branchName
+      session.baseBranch = resolvedBase
+
       this.db
         .prepare('UPDATE sessions SET worktree_path = ?, branch_name = ?, base_branch = ? WHERE id = ?')
         .run(worktreePath, branchName, resolvedBase, id)
+
+      this.broadcast({ event: 'session:updated', payload: session })
 
       this.pushTerminalDisplay(id, `> Branch: ${branchName}\r\n`)
       this.pushTerminalDisplay(id, `> Worktree: ${worktreePath}\r\n`)
