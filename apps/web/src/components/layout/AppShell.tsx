@@ -85,6 +85,18 @@ export function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 后台预加载 Monaco 编辑器，减少首次打开文件/Diff 的等待时间
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void import('@monaco-editor/react')
+        .then(m => m.loader?.init?.())
+        .catch(() => {
+          // 预加载失败不影响主流程，打开文件时会再次尝试加载
+        })
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [])
+
   const toggleLeft = () => {
     if (leftCollapsed) {
       expandLeft()
