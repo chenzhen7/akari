@@ -21,6 +21,7 @@ import { Plus, Sparkles, Loader2, Bot, Code2, Terminal } from 'lucide-react'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { useSessionStore } from '@/stores/session-store'
 import { API_BASE } from '@/stores/session-store'
+import { useWorkspaceStore } from '@/stores/workspace-store'
 
 interface RepoBranch {
   name: string
@@ -32,6 +33,8 @@ export function CreateSessionDialog() {
   const toggleCreateDialog = useSessionStore(s => s.toggleCreateDialog)
   const addSession = useSessionStore(s => s.addSession)
   const mainSession = useSessionStore(s => s.sessions.find(s => s.isMain) ?? null)
+  const currentWorkspace = useWorkspaceStore(s => s.currentWorkspace)
+  const isGitWorkspace = currentWorkspace?.isGit !== false
   const [name, setName] = useState('')
   const [task, setTask] = useState('')
   const [baseBranch, setBaseBranch] = useState('')
@@ -41,6 +44,12 @@ export function CreateSessionDialog() {
 
   useEffect(() => {
     if (!createDialogOpen) return
+    if (!isGitWorkspace) {
+      setBranches([])
+      setBaseBranch('')
+      setBranchesLoading(false)
+      return
+    }
     setBranchesLoading(true)
     fetch(`${API_BASE}/repo/branches`)
       .then(async res => {
@@ -58,10 +67,11 @@ export function CreateSessionDialog() {
         setBaseBranch(mainSession?.branchName ?? '')
       })
       .finally(() => setBranchesLoading(false))
-  }, [createDialogOpen, mainSession])
+  }, [createDialogOpen, mainSession, isGitWorkspace])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!isGitWorkspace) return
     if (!name.trim() || !task.trim() || !baseBranch.trim()) return
     addSession(name.trim(), task.trim(), baseBranch, agentType)
     setName('')
@@ -209,14 +219,19 @@ export function CreateSessionDialog() {
           <div className="h-px bg-border" />
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 px-5 py-3">
-            <Button type="button" variant="ghost" className="h-8 text-xs" onClick={toggleCreateDialog}>
-              取消
-            </Button>
-            <Button type="submit"  className="h-8 gap-1.5 text-xs">
-              <Plus className="h-3.5 w-3.5" />
-              创建会话
-            </Button>
+          <div className="flex items-center justify-between gap-2 px-5 py-3">
+            {!isGitWorkspace && (
+              <span className="text-xs text-destructive">当前工作区不是 Git 仓库，无法创建会话</span>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              <Button type="button" variant="ghost" className="h-8 text-xs" onClick={toggleCreateDialog}>
+                取消
+              </Button>
+              <Button type="submit" disabled={!isGitWorkspace} className="h-8 gap-1.5 text-xs">
+                <Plus className="h-3.5 w-3.5" />
+                创建会话
+              </Button>
+            </div>
           </div>
         </form>
 

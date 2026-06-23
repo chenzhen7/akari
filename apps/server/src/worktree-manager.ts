@@ -70,6 +70,11 @@ export class WorktreeManager {
       await watcher.close()
       this.watchers.delete(sessionId)
     }
+    const branchWatcher = this.watchers.get(`${sessionId}:branch`)
+    if (branchWatcher) {
+      await branchWatcher.close()
+      this.watchers.delete(`${sessionId}:branch`)
+    }
     try {
       await this.git(['worktree', 'remove', '--force', worktreePath])
     } catch {
@@ -227,6 +232,19 @@ export class WorktreeManager {
     void this.getDiff(sessionId, baseBranch, cwd).then(callback)
 
     return watcher
+  }
+
+  watchBranchHead(sessionId: string, repoRoot: string, callback: () => void): FSWatcher | null {
+    const headPath = join(resolve(repoRoot), '.git', 'HEAD')
+    try {
+      const watcher = watch(headPath, { persistent: true, ignoreInitial: true })
+      watcher.on('change', callback).on('add', callback)
+      this.watchers.set(`${sessionId}:branch`, watcher)
+      return watcher
+    } catch {
+      // Not a git repo or HEAD missing — ignore
+      return null
+    }
   }
 
   async mergeToBase(
@@ -438,6 +456,13 @@ export class WorktreeManager {
   getWorktreePath(sessionId: string): string {
     const repoSlug = basename(this.repoRoot)
     return join(this.worktreeBaseDir, repoSlug, sessionId)
+  }
+
+  async dispose(): Promise<void> {
+    for (const watcher of this.watchers.values()) {
+      await watcher.close()
+    }
+    this.watchers.clear()
   }
 
   private async git(args: string[], cwd = this.repoRoot): Promise<string> {

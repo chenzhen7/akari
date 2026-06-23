@@ -97,11 +97,13 @@ export class SessionManager {
   private readonly terminalMux: TerminalMultiplexer
   private readonly broadcast: (msg: ServerMessage) => void
   private workspaceId: string
+  private isGitWorkspace: boolean
   private readonly settingsStore: SettingsStore
 
-  constructor(opts: { workspacePath: string; repoRoot: string; db: Database.Database; broadcast: (msg: ServerMessage) => void; workspaceId: string }) {
+  constructor(opts: { workspacePath: string; repoRoot: string; db: Database.Database; broadcast: (msg: ServerMessage) => void; workspaceId: string; isGitWorkspace?: boolean }) {
     this.db = opts.db
     this.workspaceId = opts.workspaceId
+    this.isGitWorkspace = opts.isGitWorkspace ?? true
     this.settingsStore = new SettingsStore(opts.db)
     this.worktreeManager = new WorktreeManager(opts.repoRoot, opts.workspacePath, this.settingsStore.getWorktreeBaseDir())
     this.terminalMux = new TerminalMultiplexer()
@@ -111,6 +113,9 @@ export class SessionManager {
   }
 
   async createSession(params: CreateSessionParams): Promise<AgentSession> {
+    if (!this.isGitWorkspace) {
+      throw new Error('当前工作区不是 Git 仓库，无法创建 Agent 会话')
+    }
     const id = nanoid(8)
     const mainSession = this.getMainSession()
     const baseBranch = params.baseBranch ?? mainSession?.branchName ?? 'main'
@@ -191,14 +196,49 @@ export class SessionManager {
   }
 
   async ensureMainSession(workspacePath: string): Promise<AgentSession> {
+    const workspaceName = workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? '主工作区'
     const existing = this.getMainSession()
-    if (existing) return existing
+    if (existing) {
+      if (this.isGitWorkspace) {
+        this.watchMainBranch(existing.id, workspacePath)
+        // Re-read current branch in case it changed while this workspace was not active
+        const currentBranch = await this.worktreeManager.getCurrentBranch()
+        if (currentBranch !== existing.branchName || currentBranch !== existing.name) {
+          this.db
+            .prepare('UPDATE sessions SET branch_name = ?, base_branch = ?, name = ? WHERE id = ?')
+            .run(currentBranch, currentBranch, currentBranch, existing.id)
+          const updated = this.getSession(existing.id)
+          if (updated) {
+            this.broadcast({ event: 'session:updated', payload: updated })
+          }
+        }
+      } else {
+        // Non-git workspace: clear branch/diff from the main session
+        const needsClear =
+          existing.branchName !== '' ||
+          existing.baseBranch !== '' ||
+          existing.diffSummary.additions !== 0 ||
+          existing.diffSummary.deletions !== 0 ||
+          existing.name !== workspaceName
+        if (needsClear) {
+          this.db
+            .prepare('UPDATE sessions SET branch_name = ?, base_branch = ?, diff_summary = ?, name = ? WHERE id = ?')
+            .run('', '', '{"additions":0,"deletions":0,"files":0}', workspaceName, existing.id)
+          const updated = this.getSession(existing.id)
+          if (updated) {
+            this.broadcast({ event: 'session:updated', payload: updated })
+          }
+        }
+      }
+      return this.getMainSession()!
+    }
 
-    const currentBranch = await this.worktreeManager.getCurrentBranch()
+    const currentBranch = this.isGitWorkspace ? await this.worktreeManager.getCurrentBranch() : ''
+    const sessionName = currentBranch || workspaceName
     const id = nanoid(8)
     const session: AgentSession = {
       id,
-      name: currentBranch,
+      name: sessionName,
       task: '主分支',
       status: 'idle',
       agentType: 'shell',
@@ -234,6 +274,10 @@ export class SessionManager {
       session.worktreePath,
     )
 
+    if (this.isGitWorkspace) {
+      this.watchMainBranch(session.id, workspacePath)
+    }
+
     return session
   }
 
@@ -257,8 +301,10 @@ export class SessionManager {
   }
 
   /** Expose db for CanvasEdgeStore — only used within the same process */
-  setWorkspace(workspaceId: string, workspacePath: string, repoRoot: string): void {
+  async setWorkspace(workspaceId: string, workspacePath: string, repoRoot: string, isGitWorkspace = true): Promise<void> {
+    await this.worktreeManager.dispose()
     this.workspaceId = workspaceId
+    this.isGitWorkspace = isGitWorkspace
     this.worktreeManager = new WorktreeManager(repoRoot, workspacePath, this.settingsStore.getWorktreeBaseDir())
   }
 
@@ -541,7 +587,7 @@ export class SessionManager {
     for (const session of sessions) {
       if (session.isMain) {
         // 主会话：不需要恢复终端，只需启动文件监听（监听仓库根目录）
-        if (session.worktreePath) {
+        if (session.worktreePath && this.isGitWorkspace) {
           this.worktreeManager.watchDiff(
             session.id,
             session.baseBranch,
@@ -760,6 +806,22 @@ export class SessionManager {
     }
   }
 
+  private watchMainBranch(sessionId: string, repoRoot: string): void {
+    this.worktreeManager.watchBranchHead(sessionId, repoRoot, () => {
+      void (async () => {
+        const session = this.getSession(sessionId)
+        if (!session || !session.isMain) return
+        const branch = await this.worktreeManager.getCurrentBranch(repoRoot)
+        if (branch === session.branchName) return
+        this.db.prepare('UPDATE sessions SET branch_name = ?, base_branch = ? WHERE id = ?').run(branch, branch, sessionId)
+        const updated = this.getSession(sessionId)
+        if (updated) {
+          this.broadcast({ event: 'session:updated', payload: updated })
+        }
+      })()
+    })
+  }
+
   private initDb(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
@@ -907,6 +969,7 @@ export async function createSessionManager(opts: {
   db: Database.Database
   broadcast: (msg: ServerMessage) => void
   workspaceId: string
+  isGitWorkspace?: boolean
 }): Promise<SessionManager> {
   const manager = new SessionManager(opts)
   await manager.restoreSessions()

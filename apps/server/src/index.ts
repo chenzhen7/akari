@@ -61,6 +61,7 @@ const sessionManager = await createSessionManager({
   db,
   broadcast,
   workspaceId: currentWorkspace.id,
+  isGitWorkspace: currentWorkspace.isGit,
 })
 
 // 迁移旧数据：将无 workspace_id 的 session 关联到默认工作区
@@ -105,8 +106,13 @@ fastify.post<{ Body: CreateSessionBody }>('/sessions', async (request, reply) =>
   if (!name?.trim() || !task?.trim()) {
     return reply.status(400).send({ error: 'name and task are required' })
   }
-  const session = await sessionManager.createSession({ name, task, baseBranch, agentType, tags, canvasPosition })
-  return reply.status(201).send(session)
+  try {
+    const session = await sessionManager.createSession({ name, task, baseBranch, agentType, tags, canvasPosition })
+    return reply.status(201).send(session)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return reply.status(400).send({ error: msg })
+  }
 })
 
 fastify.patch<{ Params: { id: string }; Body: { status: SessionStatus } }>(
@@ -446,7 +452,7 @@ fastify.post<{ Params: { id: string } }>('/workspaces/:id/switch', async (reques
   const { id } = request.params
   const workspace = workspaceManager.switchWorkspace(id)
   if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
-  sessionManager.setWorkspace(workspace.id, workspace.path, workspace.repoRoot)
+  sessionManager.setWorkspace(workspace.id, workspace.path, workspace.repoRoot, workspace.isGit)
   await sessionManager.restoreSessions()
   await sessionManager.ensureMainSession(workspace.path)
   broadcast({ event: 'workspace:current', payload: workspace })

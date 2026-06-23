@@ -101,7 +101,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body,
     })
-      .then(r => r.json())
+      .then(async r => {
+        const data = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(data?.error ?? `HTTP ${r.status}`)
+        return data as AgentSession
+      })
       .then((session: AgentSession) => {
         set(state => ({
           sessions: [...state.sessions.filter(s => s.id !== session.id), session],
