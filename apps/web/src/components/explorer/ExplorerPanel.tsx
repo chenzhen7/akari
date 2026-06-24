@@ -19,7 +19,7 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | undefined>()
-  const lastSessionIdRef = useRef(session.id)
+  const lastSessionIdRef = useRef<string | null>(null)
 
   const fetchDir = useCallback(async (path: string, key: string): Promise<FileNode[]> => {
     const res = await fetch(`${API_BASE}/sessions/${session.id}/files?path=${encodeURIComponent(path)}`)
