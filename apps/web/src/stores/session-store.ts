@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { AgentSession, AgentType, CanvasEdge, GitLogResponse, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
 import type { ConnectionStatus } from '@/hooks/useWebSocket'
 import { terminalBus } from '@/lib/terminalBus'
+import { fileUpdateBus } from '@/lib/fileUpdateBus'
 import { useWorkspaceStore } from './workspace-store'
 
 interface SessionStore {
@@ -417,6 +418,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ),
         }))
         break
+      case 'file:update': {
+        const { sessionId } = msg.payload
+        fileUpdateBus.emit(sessionId, msg.payload)
+        break
+      }
       case 'git:log-updated': {
         const { sessionId, commits, branches, head } = msg.payload
         set(state => ({

@@ -269,7 +269,7 @@ export class SessionManager {
     this.worktreeManager.watchDiff(
       session.id,
       session.baseBranch,
-      this.createDiffCallback(session.id, session.worktreePath),
+      this.createDiffCallbacks(session.id, session.worktreePath),
       session.worktreePath,
       session.worktreePath,
     )
@@ -591,7 +591,7 @@ export class SessionManager {
           this.worktreeManager.watchDiff(
             session.id,
             session.baseBranch,
-            this.createDiffCallback(session.id, session.worktreePath),
+            this.createDiffCallbacks(session.id, session.worktreePath),
             session.worktreePath,
             session.worktreePath,
           )
@@ -652,7 +652,7 @@ export class SessionManager {
       this.worktreeManager.watchDiff(
         session.id,
         session.baseBranch,
-        this.createDiffCallback(session.id),
+        this.createDiffCallbacks(session.id),
       )
     }
   }
@@ -735,7 +735,7 @@ export class SessionManager {
         }
       }
 
-      this.worktreeManager.watchDiff(id, resolvedBase, this.createDiffCallback(id))
+      this.worktreeManager.watchDiff(id, resolvedBase, this.createDiffCallbacks(id))
 
       this.updateStatus(id, 'idle')
     } catch (err) {
@@ -800,15 +800,23 @@ export class SessionManager {
     }
   }
 
-  private createDiffCallback(sessionId: string, cwd?: string): (diff: GitDiff) => void {
-    return (diff: GitDiff) => {
-      this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(JSON.stringify(diff.summary), sessionId)
-      this.broadcast({ event: 'diff:update', payload: { sessionId, diff } })
-      this.worktreeManager.getGitLog(sessionId, 100, 0, cwd).then(log => {
-        this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
-      }).catch(() => {
-        // git log failure is non-fatal
-      })
+  private createDiffCallbacks(sessionId: string, cwd?: string): {
+    onDiff: (diff: GitDiff) => void
+    onFileChange: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void
+  } {
+    return {
+      onDiff: (diff: GitDiff) => {
+        this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(JSON.stringify(diff.summary), sessionId)
+        this.broadcast({ event: 'diff:update', payload: { sessionId, diff } })
+        this.worktreeManager.getGitLog(sessionId, 100, 0, cwd).then(log => {
+          this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+        }).catch((err: unknown) => {
+          console.warn(`[SessionManager] git log failure after diff update for ${sessionId}:`, err)
+        })
+      },
+      onFileChange: (filePath: string, changeType: 'add' | 'change' | 'unlink') => {
+        this.broadcast({ event: 'file:update', payload: { sessionId, filePath, changeType } })
+      },
     }
   }
 

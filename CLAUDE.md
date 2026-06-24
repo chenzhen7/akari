@@ -1,30 +1,10 @@
 # CLAUDE.md
 
-本文件为 AI Coding Agent（Windsurf Cascade、Claude Code 等）提供在本仓库工作的上下文。
-
-> **接手前必读**：[docs/progress.md](docs/progress.md) — 当前开发进度快照，含已完成模块、正在进行的任务和前置依赖关系。
-
 ---
 
 ## 项目概述
 
 **Akari** 是一个 AI Agent 并行开发管理平台。完整产品架构见 [docs/设计文档.md](docs/设计文档.md)，开发计划见 [docs/开发计划.md](docs/开发计划.md)。
-
-**当前状态（阶段八已完成）**：
-- Monorepo 改造完成（pnpm workspaces）
-- 后端 Fastify 骨架已运行（port 3001，WebSocket + REST）
-- 前端已迁移至 `apps/web/`，通过 WebSocket 与后端实时通信
-- Session Store 由 WebSocket 事件驱动，TopNav 显示连接状态指示灯
-- 审批工作流完整闭环（后端 HookDispatcher + 前端审批 UI）
-- Git 可视化已完成（提交图、Commit、Merge、Checkout、Discard）
-- HTTP Hook 单轨驱动上线（魔法字符串机制已废弃）
-
-**核心理念：「指挥中心」模式**
-- 用户是指挥官，Agent 是并行执行的士兵
-- 无限画布 = 战场全局视图
-- 看板 = 任务状态流转
-- Tab = 快速聚焦单个战场
-- Worktree = 物理隔离的并行战线
 
 ---
 
@@ -320,8 +300,6 @@ interface AgentAdapter {
 
 ## 文档索引
 
-- [docs/progress.md](docs/progress.md) — **开发进度快照**（接手新任务前必读）
 - [docs/设计文档.md](docs/设计文档.md) — 完整产品架构、数据模型、视图设计、代码示例
-- [docs/开发计划/phase-N-*.md](docs/开发计划/) — 各阶段详细任务拆解（已合并索引到 progress.md）
 - [.claude/rules/error-handling.md](.claude/rules/error-handling.md) — **异常处理规范**：禁止吞异常、前端用 toast 暴露错误、状态机用守卫代替 try/catch
 - [docs/claude code 的hook参考.md](docs/claude%20code%20%E7%9A%84hook%E5%8F%82%E8%80%83.md) — Claude Code 的 hook 参考

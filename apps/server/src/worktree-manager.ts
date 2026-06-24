@@ -4,6 +4,11 @@ import { mkdir, symlink, rm, access, constants, readFile, readdir, writeFile } f
 import { join, resolve, dirname, basename, sep, relative } from 'node:path'
 import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileNode, FileDiffLine } from '@akari/shared-types'
 
+interface WatchDiffCallbacks {
+  onDiff: (diff: GitDiff) => void
+  onFileChange?: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void
+}
+
 export class WorktreeManager {
   private readonly repoRoot: string
   private readonly workspacePath: string
@@ -209,8 +214,8 @@ export class WorktreeManager {
     return parseDiffLines(diffOutput)
   }
 
-  watchDiff(sessionId: string, baseBranch: string, callback: (diff: GitDiff) => void, watchPath?: string, cwd?: string): FSWatcher {
-    const resolvedPath = watchPath ?? this.getWorktreePath(sessionId)
+  watchDiff(sessionId: string, baseBranch: string, callbacks: WatchDiffCallbacks, watchPath?: string, cwd?: string): FSWatcher {
+    const resolvedPath = resolve(watchPath ?? this.getWorktreePath(sessionId))
     const watcher = watch(resolvedPath, {
       ignored: /(node_modules|\.git)/,
       persistent: true,
@@ -218,18 +223,28 @@ export class WorktreeManager {
     })
 
     let debounce: ReturnType<typeof setTimeout> | null = null
-    const trigger = () => {
+    const scheduleDiff = () => {
       if (debounce) clearTimeout(debounce)
       debounce = setTimeout(() => {
-        void this.getDiff(sessionId, baseBranch, cwd).then(callback)
+        void this.getDiff(sessionId, baseBranch, cwd).then(callbacks.onDiff)
       }, 500)
     }
 
-    watcher.on('add', trigger).on('change', trigger).on('unlink', trigger)
+    const handleChange = (absolutePath: string, changeType: 'add' | 'change' | 'unlink') => {
+      const relativePath = relative(resolvedPath, absolutePath).replace(/\\/g, '/')
+      if (!relativePath || relativePath.startsWith('..')) return
+      callbacks.onFileChange?.(relativePath, changeType)
+      scheduleDiff()
+    }
+
+    watcher
+      .on('add', (path) => handleChange(path, 'add'))
+      .on('change', (path) => handleChange(path, 'change'))
+      .on('unlink', (path) => handleChange(path, 'unlink'))
     this.watchers.set(sessionId, watcher)
 
     // Push initial diff immediately so the client sees the starting state.
-    void this.getDiff(sessionId, baseBranch, cwd).then(callback)
+    void this.getDiff(sessionId, baseBranch, cwd).then(callbacks.onDiff)
 
     return watcher
   }

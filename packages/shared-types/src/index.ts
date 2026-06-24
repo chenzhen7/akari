@@ -55,6 +55,12 @@ export interface GitDiff {
   summary: { additions: number; deletions: number; files: number }
 }
 
+export interface FileChangeEvent {
+  sessionId: string
+  filePath: string
+  changeType: 'add' | 'change' | 'unlink'
+}
+
 export interface SessionTab {
   id: string
   type: 'terminal' | 'claude' | 'diff' | 'file'
@@ -143,6 +149,7 @@ export type ServerMessage =
   | { event: 'terminal:ready'; payload: { sessionId: string; terminalId: string } }
   | { event: 'terminal:resized'; payload: { sessionId: string; terminalId: string } }
   | { event: 'diff:update'; payload: { sessionId: string; diff: GitDiff } }
+  | { event: 'file:update'; payload: FileChangeEvent }
   | { event: 'sessions:list'; payload: AgentSession[] }
   | { event: 'git:log-updated'; payload: { sessionId: string } & GitLogResponse }
   | { event: 'session:lastMessage'; payload: { id: string; lastAiMessage: string } }

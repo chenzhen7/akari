@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense, useCallback, useRef, memo } from 'react'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import type { FileDiffLine } from '@akari/shared-types'
 import type { editor } from 'monaco-editor'
 import { API_BASE } from '@/stores/session-store'
@@ -7,6 +8,7 @@ import { useTheme } from '@/components/theme-provider'
 import { detectLanguage } from '@/lib/language-utils'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { resolveAbsoluteFilePath } from '@/lib/path-utils'
+import { fileUpdateBus } from '@/lib/fileUpdateBus'
 
 const MonacoEditor = lazy(() =>
   import('@monaco-editor/react').then(m => ({ default: m.Editor }))
@@ -33,6 +35,10 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null)
   const decorationsRef = useRef<ReturnType<editor.IStandaloneCodeEditor['createDecorationsCollection']> | null>(null)
   const isDirty = content !== originalContent
+  const contentRef = useRef(content)
+  const isDirtyRef = useRef(isDirty)
+  contentRef.current = content
+  isDirtyRef.current = isDirty
   const { theme: appTheme } = useTheme()
   const monacoTheme = appTheme === 'dark' ? 'vs-dark' : 'light'
 
@@ -117,6 +123,29 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
       monacoRef.current = null
     }
   }, [])
+
+  // Listen for external file changes broadcast from the shared watcher
+  useEffect(() => {
+    return fileUpdateBus.on(sessionId, (event) => {
+      if (event.filePath !== filePath) return
+
+      fetch(`${API_BASE}/sessions/${sessionId}/file-content?path=${encodeURIComponent(filePath)}`)
+        .then(r => r.ok ? r.json() as Promise<{ content: string }> : Promise.reject(r.statusText))
+        .then(data => {
+          if (data.content === contentRef.current) return // own save or no real change
+          if (isDirtyRef.current) {
+            toast.warning(`文件已在外部被修改：${filePath}`, {
+              description: '您有未保存的更改，请手动保存或放弃修改后刷新。',
+            })
+            return
+          }
+          setContent(data.content)
+          setOriginalContent(data.content)
+          void fetchDiffLines()
+        })
+        .catch((e: unknown) => toast.error(`重新加载文件失败: ${String(e)}`))
+    })
+  }, [sessionId, filePath, fetchDiffLines])
 
   const doSave = useCallback(async () => {
     if (!isDirty || saving) return

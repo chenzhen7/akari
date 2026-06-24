@@ -1,11 +1,13 @@
 import { useState, useEffect, lazy, Suspense, memo } from 'react'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import type { DiffFile } from '@akari/shared-types'
 import { useTheme } from '@/components/theme-provider'
 import { detectLanguage } from '@/lib/language-utils'
 import { API_BASE } from '@/lib/api'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { resolveAbsoluteFilePath } from '@/lib/path-utils'
+import { fileUpdateBus } from '@/lib/fileUpdateBus'
 
 const MonacoDiffEditor = lazy(() =>
   import('@monaco-editor/react').then(m => ({ default: m.DiffEditor }))
@@ -37,6 +39,21 @@ export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFi
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setLoading(false))
   }, [filePath, sessionId])
+
+  // Listen for external file changes broadcast from the shared watcher
+  useEffect(() => {
+    return fileUpdateBus.on(sessionId, (event) => {
+      if (event.filePath !== filePath) return
+      setLoading(true)
+      setError(null)
+      setContent(null)
+      fetch(`${API_BASE}/sessions/${sessionId}/diff-content?file=${encodeURIComponent(filePath)}`)
+        .then(r => r.ok ? r.json() as Promise<{ original: string; modified: string }> : Promise.reject(r.statusText))
+        .then(data => setContent(data))
+        .catch((e: unknown) => toast.error(`重新加载 diff 失败: ${String(e)}`))
+        .finally(() => setLoading(false))
+    })
+  }, [sessionId, filePath])
 
   const currentFile = diffFiles.find(f => f.path === filePath)
   const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === workspaceId) ?? null)
