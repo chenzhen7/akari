@@ -452,10 +452,11 @@ fastify.post<{ Params: { id: string } }>('/workspaces/:id/switch', async (reques
   const { id } = request.params
   const workspace = workspaceManager.switchWorkspace(id)
   if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
-  sessionManager.setWorkspace(workspace.id, workspace.path, workspace.repoRoot, workspace.isGit)
+  await sessionManager.setWorkspace(workspace.id, workspace.path, workspace.repoRoot, workspace.isGit)
   await sessionManager.restoreSessions()
-  await sessionManager.ensureMainSession(workspace.path)
+  // 先通知客户端清空旧状态，再创建/更新主会话并推送完整列表
   broadcast({ event: 'workspace:current', payload: workspace })
+  await sessionManager.ensureMainSession(workspace.path)
   broadcast({ event: 'sessions:list', payload: sessionManager.listSessions() })
   broadcast({ event: 'workspace:list', payload: workspaceManager.listWorkspaces() })
   return { ok: true }
