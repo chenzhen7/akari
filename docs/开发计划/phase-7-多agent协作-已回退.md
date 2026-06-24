@@ -1,6 +1,9 @@
 # 阶段七：多 Agent 协作模式（MultiAgent Collaboration）
 
-**状态**：🔲 待开始 | **前置**：阶段一 ～ 六（阶段四/五关键依赖）
+**状态**：⛔ 已回退 / 废弃 | **前置**：阶段一 ～ 六（阶段四/五关键依赖）
+
+> **重要提示**：本阶段描述的完整多 Agent 协作架构（CollaborationManager、Pipeline 触发、扇入扇出、Agent 间消息、协作面板等）**已回退，当前不可参考**。代码中仅保留 `CanvasEdge` 类型与 `/canvas/edges` REST API（用于画布连线持久化），以及 `AgentType` 中的 `'claude-orchestrator'` 类型定义。其余 API、数据库表、前端组件均未实现。
+>
 
 ---
 

@@ -1,6 +1,8 @@
 # 阶段六：Git 可视化 + 会话布局重构
 
-**状态**：🔲 待开始 | **预计工时**：3~4 天 | **前置**：阶段二（WorktreeManager）、阶段三（前端框架）
+**状态**：✅ 已完成（布局实现有差异） | **预计工时**：3~4 天 | **前置**：阶段二（WorktreeManager）、阶段三（前端框架）
+
+> **说明**：Git Graph 可视化、Git Log API、Git 操作弹窗（Commit / Merge / Checkout / Discard）均已实现。实际会话详情布局采用 `MiddleTabBar` + `TabContent` 切换，而非本阶段原计划 Activity Bar 图标侧边栏；`SessionSidebar` 已拆分为 `SessionInfoPanel` / `TaskPanel` / `MiddleTabBar` / `TabContent` 等组件。
 
 ---
 
