@@ -1,30 +1,35 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, type ReactNode } from 'react'
 import { ChevronRight, ChevronDown, Folder, FolderOpen, File } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { FileNode } from '@akari/shared-types'
+import { useFileTreeChildren } from '@/lib/file-tree-store'
 
 interface FileTreeNodeProps {
+  sessionId: string
   node: FileNode
   level: number
   selectedPath?: string
   onSelectFile: (path: string) => void
-  onToggleDir: (path: string) => Promise<FileNode[]>
-  childrenCache: Map<string, FileNode[]>
+  onToggleDir: (path: string) => Promise<void>
+  defaultExpanded?: boolean
+  actions?: ReactNode
 }
 
 export function FileTreeNode({
+  sessionId,
   node,
   level,
   selectedPath,
   onSelectFile,
   onToggleDir,
-  childrenCache,
+  defaultExpanded = false,
+  actions,
 }: FileTreeNodeProps) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const [loading, setLoading] = useState(false)
   const isDirectory = node.type === 'directory'
   const isSelected = selectedPath === node.path
-  const children = childrenCache.get(node.path)
+  const children = useFileTreeChildren(sessionId, node.path)
 
   const handleToggle = useCallback(async () => {
     if (!isDirectory) {
@@ -37,7 +42,7 @@ export function FileTreeNode({
       return
     }
 
-    if (!children) {
+    if (children === undefined) {
       setLoading(true)
       try {
         await onToggleDir(node.path)
@@ -82,19 +87,27 @@ export function FileTreeNode({
           </>
         )}
         <span className={cn('truncate', isSelected && 'font-medium text-foreground')}>{node.name}</span>
+        {actions && (
+          <span
+            className="ml-auto flex items-center"
+            onClick={e => e.stopPropagation()}
+          >
+            {actions}
+          </span>
+        )}
       </div>
 
-      {isDirectory && expanded && children && (
+      {isDirectory && expanded && children !== undefined && (
         <div>
           {children.map(child => (
             <FileTreeNode
               key={child.path}
+              sessionId={sessionId}
               node={child}
               level={level + 1}
               selectedPath={selectedPath}
               onSelectFile={onSelectFile}
               onToggleDir={onToggleDir}
-              childrenCache={childrenCache}
             />
           ))}
         </div>
