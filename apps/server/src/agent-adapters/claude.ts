@@ -62,6 +62,15 @@ async function writeClaudeSettings(worktreePath: string, sessionId: string): Pro
     }
   }
 
+  // 允许 HTTP hook 回调到 Akari 后端，否则 Claude Code 会静默阻止本地 HTTP hooks
+  if (!Array.isArray(existingSettings.allowedHttpHookUrls)) {
+    existingSettings.allowedHttpHookUrls = []
+  }
+  const allowedUrlPattern = `http://localhost:${process.env['PORT'] ?? '3001'}/*`
+  if (!existingSettings.allowedHttpHookUrls.includes(allowedUrlPattern)) {
+    existingSettings.allowedHttpHookUrls.push(allowedUrlPattern)
+  }
+
   await mkdir(claudeDir, { recursive: true })
   await writeFile(settingsPath, JSON.stringify(existingSettings, null, 2))
 }

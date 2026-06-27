@@ -5,14 +5,16 @@ import type {
 } from '@akari/shared-types'
 import type { SessionManager } from './session-manager.js'
 
+import { validateTransition } from './session-manager.js'
+
 export async function dispatchHookEvent(
   sessionId: string,
   event: HookEvent,
   sessionManager: SessionManager,
 ): Promise<HookResponse> {
-
   switch (event.hook_event_name) {
     case 'SessionStart': {
+      console.log('[claude-hook-debug] handling SessionStart:', { sessionId })
       const session = sessionManager.getSession(sessionId)
       if (session && session.status === 'initializing') {
         sessionManager.updateStatus(sessionId, 'idle')
@@ -21,6 +23,7 @@ export async function dispatchHookEvent(
     }
 
     case 'PermissionRequest': {
+      console.log('[claude-hook-debug] handling PermissionRequest:', { sessionId })
       const { tool_name, tool_input } = event as { hook_event_name: 'PermissionRequest'; tool_name: string; tool_input: Record<string, unknown> }
       const command = typeof tool_input?.['command'] === 'string' ? tool_input['command'] : undefined
       console.log(`[PermissionRequest] session=${sessionId} tool=${tool_name}${command ? ` command=${command}` : ''}`)
@@ -29,6 +32,7 @@ export async function dispatchHookEvent(
     }
 
     case 'StopFailure': {
+      console.log('[claude-hook-debug] handling StopFailure:', { sessionId })
       const { error } = event as StopFailurePayload
       const session = sessionManager.getSession(sessionId)
       if (session) {
@@ -49,6 +53,7 @@ export async function dispatchHookEvent(
     }
 
     case 'UserPromptSubmit': {
+      console.log('[claude-hook-debug] handling UserPromptSubmit:', { sessionId })
       console.log('[UserPromptSubmit hook]', JSON.stringify(event, null, 2))
       const session = sessionManager.getSession(sessionId)
       if (session && ['paused', 'waiting', 'idle'].includes(session.status)) {
@@ -58,6 +63,7 @@ export async function dispatchHookEvent(
     }
 
     case 'Stop': {
+      console.log('[claude-hook-debug] handling Stop:', { sessionId })
       const { last_assistant_message } = event as import('@akari/shared-types').StopPayload
       const session = sessionManager.getSession(sessionId)
       if (session && ['running', 'waiting'].includes(session.status)) {
