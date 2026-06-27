@@ -182,6 +182,22 @@
   scrollbar-width: none;
 }
 
+/* Utility: thin horizontal scrollbar for tab bars */
+.tabs-scrollbar::-webkit-scrollbar {
+  height: 1px !important;
+}
+.tabs-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tabs-scrollbar::-webkit-scrollbar-thumb {
+  background-color: oklch(0.556 0 0 / 25%);
+  border-radius: 2px;
+}
+.tabs-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.556 0 0 / 25%) transparent;
+}
+
 /* Diff gutter styles for Monaco Editor — placed between line numbers and collapse button */
 .monaco-editor .margin-line-added::after {
   content: '';

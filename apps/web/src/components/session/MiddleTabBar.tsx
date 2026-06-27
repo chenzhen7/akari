@@ -193,7 +193,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
   }, [createTerminal, session.id])
 
   return (
-    <div className="flex h-10 shrink-0 items-center bg-[var(--terminal-background)]">
+    <div className="flex h-12 shrink-0 items-center bg-[var(--terminal-background)]">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -203,7 +203,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
           items={tabs.map(t => t.id)}
           strategy={horizontalListSortingStrategy}
         >
-          <div className="flex h-full flex-1 items-center gap-1 overflow-x-auto no-scrollbar px-2">
+          <div className="flex h-full flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden tabs-scrollbar px-2">
             {tabMeta.map(({ tab, displayLabel, tooltipContent }) => (
               <SortableTab
                 key={tab.id}
