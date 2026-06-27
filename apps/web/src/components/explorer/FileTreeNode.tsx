@@ -11,6 +11,7 @@ interface FileTreeNodeProps {
   selectedPath?: string
   onSelectFile: (path: string) => void
   onToggleDir: (path: string) => Promise<void>
+  onContextMenu?: (e: React.MouseEvent, node: FileNode) => void
   defaultExpanded?: boolean
   actions?: ReactNode
 }
@@ -22,6 +23,7 @@ export function FileTreeNode({
   selectedPath,
   onSelectFile,
   onToggleDir,
+  onContextMenu,
   defaultExpanded = false,
   actions,
 }: FileTreeNodeProps) {
@@ -53,6 +55,11 @@ export function FileTreeNode({
     setExpanded(true)
   }, [isDirectory, expanded, children, node.path, onSelectFile, onToggleDir])
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    onContextMenu?.(e, node)
+  }, [onContextMenu, node])
+
   return (
     <div>
       <div
@@ -62,6 +69,7 @@ export function FileTreeNode({
         )}
         style={{ paddingLeft: `${level * 12 + 4}px` }}
         onClick={handleToggle}
+        onContextMenu={handleContextMenu}
       >
         {isDirectory ? (
           <>
@@ -108,6 +116,7 @@ export function FileTreeNode({
               selectedPath={selectedPath}
               onSelectFile={onSelectFile}
               onToggleDir={onToggleDir}
+              onContextMenu={onContextMenu}
             />
           ))}
         </div>

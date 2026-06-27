@@ -9,6 +9,7 @@ import {
   useFileTreeChildren,
 } from '@/lib/file-tree-store'
 import { FileTreeNode } from './FileTreeNode'
+import { FileTreeContextMenu } from './FileTreeContextMenu'
 
 interface ExplorerPanelProps {
   session: AgentSession
@@ -25,6 +26,7 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | undefined>()
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null)
   const lastSessionIdRef = useRef<string | null>(null)
 
   const loadDir = useCallback(async (path: string): Promise<FileNode[]> => {
@@ -86,6 +88,12 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
     onOpenFile(path)
   }, [onOpenFile])
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
+    setContextMenu({ x: e.clientX, y: e.clientY, node })
+  }, [])
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), [])
+
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
     try {
@@ -138,6 +146,7 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
           selectedPath={selectedPath}
           onSelectFile={handleSelectFile}
           onToggleDir={handleToggleDir}
+          onContextMenu={handleContextMenu}
           actions={
             <button
               type="button"
@@ -151,6 +160,18 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
           }
         />
       </div>
+
+      {contextMenu && (
+        <FileTreeContextMenu
+          sessionId={session.id}
+          terminalId={session.terminalId}
+          worktreePath={session.worktreePath}
+          node={contextMenu.node}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={closeContextMenu}
+        />
+      )}
     </div>
   )
 }

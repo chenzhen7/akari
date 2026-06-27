@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { GitCommit, GitMerge, Copy, Check } from 'lucide-react'
+import { GitCommit, GitMerge, Copy, Check, FolderOpen } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { API_BASE } from '@/stores/session-store'
@@ -102,6 +102,27 @@ export function SessionContextMenu({ session, x, y, onClose }: SessionContextMen
     void copyToClipboard(session.branchName, '分支名')
   }
 
+  const canOpenFolder = typeof window !== 'undefined' && !!window.electron?.shell?.openPath
+
+  const handleOpenFolder = async () => {
+    const openPath = window.electron?.shell?.openPath
+    if (!openPath) {
+      onClose()
+      return
+    }
+    try {
+      const error = await openPath(session.worktreePath)
+      if (error) {
+        throw new Error(error)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[openFolder] failed:', err)
+      toast.error(`打开文件夹失败：${msg}`)
+    }
+    onClose()
+  }
+
   const handleCommit = async () => {
     const message = window.prompt('输入提交信息：')
     if (!message?.trim()) {
@@ -143,9 +164,13 @@ export function SessionContextMenu({ session, x, y, onClose }: SessionContextMen
       className="fixed z-50 min-w-[200px] rounded-md border border-border bg-popover py-1 shadow-lg"
       style={{ left: x, top: y }}
     >
-      <div className="px-2 pb-1.5 pt-1 text-[10px] font-mono text-muted-foreground border-b border-border mb-1 truncate">
-        {session.branchName}
-      </div>
+      {canOpenFolder && (
+        <>
+          <MenuGroup label="系统" />
+          <MenuItem icon={FolderOpen} label="打开文件夹" onClick={handleOpenFolder} />
+          <MenuDivider />
+        </>
+      )}
 
       <MenuGroup label="信息" />
       <MenuItem icon={Copy} label="复制 Session ID" onClick={handleCopySessionId} />

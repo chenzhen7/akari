@@ -25,5 +25,8 @@ interface Window {
     dialog?: {
       showOpenDialog: (options: OpenDialogOptions) => Promise<OpenDialogReturnValue>
     }
+    shell?: {
+      openPath: (path: string) => Promise<string>
+    }
   }
 }

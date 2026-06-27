@@ -17,4 +17,7 @@ contextBridge.exposeInMainWorld('electron', {
     showOpenDialog: (options: Electron.OpenDialogOptions) =>
       ipcRenderer.invoke('dialog:showOpenDialog', options),
   },
+  shell: {
+    openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path),
+  },
 })

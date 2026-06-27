@@ -56,6 +56,7 @@ interface SessionStore {
   activateTab: (sessionId: string, tabId: string) => void
   reorderTabs: (sessionId: string, orderedTabIds: string[]) => void
   createTerminal: (sessionId: string) => void
+  sendTerminalInput: (sessionId: string, terminalId: string, data: string) => boolean
   handleServerMessage: (msg: ServerMessage) => void
 }
 
@@ -357,6 +358,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ event: 'terminal:create', payload: { sessionId } }))
     }
+  },
+
+  sendTerminalInput: (sessionId, terminalId, data) => {
+    const ws = getWebSocket()
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ event: 'terminal:input', payload: { sessionId, terminalId, data } }))
+      return true
+    }
+    return false
   },
 
   handleServerMessage: (msg) => {

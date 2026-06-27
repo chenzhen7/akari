@@ -87,6 +87,11 @@ function createWindow(loadUrl: string): void {
     return dialog.showOpenDialog(mainWindow, options)
   })
 
+  // Open local file/folder in system default application
+  ipcMain.handle('shell:openPath', async (_event, filePath: string) => {
+    return shell.openPath(filePath)
+  })
+
   mainWindow.on('maximize', () => {
     mainWindow?.webContents.send('window-maximized-change', true)
   })
