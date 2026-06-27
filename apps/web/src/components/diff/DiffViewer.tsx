@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense, memo } from 'react'
 import { Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast, toastError } from '@/lib/toast'
 import type { DiffFile } from '@akari/shared-types'
 import { useTheme } from '@/components/theme-provider'
 import { detectLanguage } from '@/lib/language-utils'
@@ -50,7 +50,7 @@ export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFi
       fetch(`${API_BASE}/sessions/${sessionId}/diff-content?file=${encodeURIComponent(filePath)}`)
         .then(r => r.ok ? r.json() as Promise<{ original: string; modified: string }> : Promise.reject(r.statusText))
         .then(data => setContent(data))
-        .catch((e: unknown) => toast.error(`重新加载 diff 失败: ${String(e)}`))
+        .catch((e: unknown) => toastError(`重新加载 diff 失败: ${String(e)}`))
         .finally(() => setLoading(false))
     })
   }, [sessionId, filePath])

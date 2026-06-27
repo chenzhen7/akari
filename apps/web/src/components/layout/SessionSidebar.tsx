@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { DeleteSessionDialog } from '@/components/session/DeleteSessionDialog'
+import { SwitchBranchDialog } from '@/components/session/SwitchBranchDialog'
 import { SessionContextMenu } from './SessionContextMenu'
 import { SettingsDialog } from '@/components/settings/SettingsDialog'
 import { WorkspaceSelector } from '@/components/workspace/WorkspaceSelector'
@@ -320,6 +321,10 @@ export function SessionSidebar() {
   const activeSessionId = useSessionStore(s => s.activeSessionId)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [switchBranchDialog, setSwitchBranchDialog] = useState<{ open: boolean; sessionId: string | null }>({
+    open: false,
+    sessionId: null,
+  })
 
   const mainSession = sessions.find(s => s.isMain)
   const regularSessions = sessions.filter(s => !s.isMain)
@@ -333,6 +338,15 @@ export function SessionSidebar() {
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
   const ctxSession = contextMenu ? sessions.find(s => s.id === contextMenu.sessionId) : null
+
+  const handleOpenSwitchBranch = useCallback(() => {
+    if (!contextMenu?.sessionId) return
+    setSwitchBranchDialog({ open: true, sessionId: contextMenu.sessionId })
+  }, [contextMenu?.sessionId])
+
+  const switchBranchSession = switchBranchDialog.sessionId
+    ? sessions.find(s => s.id === switchBranchDialog.sessionId) ?? null
+    : null
 
   return (
     <>
@@ -416,9 +430,16 @@ export function SessionSidebar() {
           y={contextMenu.y}
           session={ctxSession}
           onClose={closeContextMenu}
+          onSwitchBranch={handleOpenSwitchBranch}
         />
       )}
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SwitchBranchDialog
+        sessionId={switchBranchDialog.sessionId ?? ''}
+        currentBranch={switchBranchSession?.branchName ?? ''}
+        open={switchBranchDialog.open}
+        onOpenChange={open => setSwitchBranchDialog(prev => ({ ...prev, open }))}
+      />
     </>
   )
 }

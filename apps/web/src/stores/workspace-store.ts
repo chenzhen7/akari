@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { toast } from 'sonner'
+import { toast, toastError } from '@/lib/toast'
 import type { Workspace } from '@akari/shared-types'
 import { API_BASE } from '@/lib/api'
 
@@ -47,7 +47,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       return workspace
     } catch (err) {
       console.error('[addWorkspace] failed:', err)
-      toast.error(`添加工作区失败：${err instanceof Error ? err.message : String(err)}`)
+      toastError(`添加工作区失败：${err instanceof Error ? err.message : String(err)}`)
       return undefined
     }
   },
@@ -62,7 +62,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       })
       .catch((err) => {
         console.error('[switchWorkspace] failed:', err)
-        toast.error(`切换工作区失败：${err instanceof Error ? err.message : String(err)}`)
+        toastError(`切换工作区失败：${err instanceof Error ? err.message : String(err)}`)
       })
   },
 
@@ -76,7 +76,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       })
       .catch((err) => {
         console.error('[deleteWorkspace] failed:', err)
-        toast.error(`删除工作区失败：${err instanceof Error ? err.message : String(err)}`)
+        toastError(`删除工作区失败：${err instanceof Error ? err.message : String(err)}`)
       })
   },
 

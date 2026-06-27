@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { toast } from 'sonner'
+import { toast, toastError } from '@/lib/toast'
 import {
   Dialog,
   DialogContent,
@@ -37,7 +37,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       })
       .catch(err => {
         console.error('[SettingsDialog] load failed:', err)
-        toast.error(`加载设置失败：${err instanceof Error ? err.message : String(err)}`)
+        toastError(`加载设置失败：${err instanceof Error ? err.message : String(err)}`)
       })
       .finally(() => setLoading(false))
   }, [open])
@@ -58,7 +58,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       onOpenChange(false)
     } catch (err) {
       console.error('[SettingsDialog] save failed:', err)
-      toast.error(`保存失败：${err instanceof Error ? err.message : String(err)}`)
+      toastError(`保存失败：${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
     }
@@ -71,7 +71,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         setWorktreeBaseDir(path)
       }
     } catch (err) {
-      toast.error(`选择目录失败：${err instanceof Error ? err.message : String(err)}`)
+      toastError(`选择目录失败：${err instanceof Error ? err.message : String(err)}`)
     }
   }, [worktreeBaseDir])
 

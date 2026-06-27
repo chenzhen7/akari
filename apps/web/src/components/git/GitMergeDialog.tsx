@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { toast } from 'sonner'
+import { toast, toastError } from '@/lib/toast'
 import {
   Dialog,
   DialogContent,
@@ -45,7 +45,7 @@ export function GitMergeDialog({ open, onOpenChange, sessionId, currentBranch }:
 
   const handleMerge = async () => {
     if (!sourceBranch) {
-      toast.error('请选择要合并的分支')
+      toastError('请选择要合并的分支')
       return
     }
     setLoading(true)
@@ -62,7 +62,7 @@ export function GitMergeDialog({ open, onOpenChange, sessionId, currentBranch }:
       toast.success(`已将 ${sourceBranch} 合并到 ${currentBranch}`)
       onOpenChange(false)
     } catch (err) {
-      toast.error(`合并失败: ${err instanceof Error ? err.message : String(err)}`)
+      toastError(`合并失败: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLoading(false)
     }

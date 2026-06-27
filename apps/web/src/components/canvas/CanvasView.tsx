@@ -19,7 +19,7 @@ import { SessionNode } from './SessionNode'
 import FlowEdge from './FlowEdge'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import { Loader2, ServerOff, LayoutGrid } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast, toastError } from '@/lib/toast'
 import { API_BASE } from '@/lib/api'
 
 /** 模块级：跨组件挂载/卸载周期持久化 viewport，不写入 store */
@@ -71,13 +71,13 @@ function CanvasViewContent() {
       if (!source || !target) return
 
       if (source === target) {
-        toast.error('不能将会话连接到自身')
+        toastError('不能将会话连接到自身')
         return
       }
 
       const duplicate = edges.some((e: Edge) => e.source === source && e.target === target)
       if (duplicate) {
-        toast.error('该方向的连线已存在')
+        toastError('该方向的连线已存在')
         return
       }
 
@@ -98,7 +98,7 @@ function CanvasViewContent() {
         }
         // canvas:edges WS 事件会自动更新 canvasEdges，触发上面的 useEffect 同步
       } catch (err: any) {
-        toast.error(`创建连线失败: ${err instanceof Error ? err.message : err}`)
+        toastError(`创建连线失败: ${err instanceof Error ? err.message : err}`)
         return
       }
       setEdges(eds => addEdge(connection, eds))
@@ -116,7 +116,7 @@ function CanvasViewContent() {
           })
           if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`)
         } catch (err: any) {
-          toast.error(`删除连线失败: ${err instanceof Error ? err.message : err}`)
+          toastError(`删除连线失败: ${err instanceof Error ? err.message : err}`)
         }
       }
     },

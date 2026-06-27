@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { GitCommit, GitMerge, Copy, Check, FolderOpen } from 'lucide-react'
-import { toast } from 'sonner'
+import { GitCommit, GitMerge, GitBranch, Copy, Check, FolderOpen } from 'lucide-react'
+import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { API_BASE } from '@/stores/session-store'
 import type { AgentSession } from '@/types'
@@ -10,6 +10,7 @@ interface SessionContextMenuProps {
   x: number
   y: number
   onClose: () => void
+  onSwitchBranch: () => void
 }
 
 interface MenuItemProps {
@@ -57,7 +58,7 @@ async function postJson(path: string, body: Record<string, unknown>) {
   }
 }
 
-export function SessionContextMenu({ session, x, y, onClose }: SessionContextMenuProps) {
+export function SessionContextMenu({ session, x, y, onClose, onSwitchBranch }: SessionContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -85,7 +86,7 @@ export function SessionContextMenu({ session, x, y, onClose }: SessionContextMen
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`[copy ${label}] failed:`, err)
-      toast.error(`复制 ${label} 失败：${msg}`)
+      toastError(`复制 ${label} 失败：${msg}`)
     }
     onClose()
   }
@@ -118,7 +119,7 @@ export function SessionContextMenu({ session, x, y, onClose }: SessionContextMen
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[openFolder] failed:', err)
-      toast.error(`打开文件夹失败：${msg}`)
+      toastError(`打开文件夹失败：${msg}`)
     }
     onClose()
   }
@@ -138,7 +139,7 @@ export function SessionContextMenu({ session, x, y, onClose }: SessionContextMen
       toast.dismiss(loadingId)
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[commit] failed:', err)
-      toast.error(`提交失败：${msg}`)
+      toastError(`提交失败：${msg}`)
     }
     onClose()
   }
@@ -153,8 +154,13 @@ export function SessionContextMenu({ session, x, y, onClose }: SessionContextMen
       toast.dismiss(loadingId)
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[updateFromBase] failed:', err)
-      toast.error(`更新失败：${msg}`)
+      toastError(`更新失败：${msg}`)
     }
+    onClose()
+  }
+
+  const handleSwitchBranch = () => {
+    onSwitchBranch()
     onClose()
   }
 
@@ -180,6 +186,7 @@ export function SessionContextMenu({ session, x, y, onClose }: SessionContextMen
       <MenuDivider />
 
       <MenuGroup label="Git" />
+      <MenuItem icon={GitBranch} label="切换分支" onClick={handleSwitchBranch} />
       <MenuItem icon={GitCommit} label="提交..." onClick={handleCommit} />
       <MenuItem icon={GitMerge} label={`从 ${session.baseBranch} 更新`} onClick={handleUpdateFromBase} />
     </div>

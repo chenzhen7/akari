@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { GitCommit, Trash2, GitMerge, GitPullRequest, Loader2, FileIcon } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast, toastError } from '@/lib/toast'
 import { API_BASE } from '@/lib/api'
 import { useSessionStore } from '@/stores/session-store'
 
@@ -75,7 +75,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
       setCommitMsg('')
       setCommitOpen(false)
     } catch (e) {
-      toast.error(`提交失败: ${String(e)}`)
+      toastError(`提交失败: ${String(e)}`)
     } finally {
       setCommitting(false)
     }
@@ -92,7 +92,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
       toast.success('已丢弃所有变更')
       setDiscardOpen(false)
     } catch (e) {
-      toast.error(`丢弃失败: ${String(e)}`)
+      toastError(`丢弃失败: ${String(e)}`)
     } finally {
       setDiscarding(false)
     }
@@ -117,7 +117,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
       toast.success(`已丢弃 ${file.path}`)
       setDiscardFileTarget(null)
     } catch (e) {
-      toast.error(`丢弃文件失败: ${String(e)}`)
+      toastError(`丢弃文件失败: ${String(e)}`)
     } finally {
       setDiscardingFile(false)
     }
@@ -138,7 +138,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
       toast.success(`已合并 ${session.branchName} → ${session.baseBranch}`)
       setMergeOpen(false)
     } catch (e) {
-      toast.error(`合并失败: ${String(e)}`)
+      toastError(`合并失败: ${String(e)}`)
     } finally {
       setMerging(false)
     }
@@ -155,7 +155,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
       toast.success(`已从 ${session.baseBranch} 更新到当前分支`)
       setUpdateOpen(false)
     } catch (e) {
-      toast.error(`更新失败: ${String(e)}`)
+      toastError(`更新失败: ${String(e)}`)
     } finally {
       setUpdating(false)
     }

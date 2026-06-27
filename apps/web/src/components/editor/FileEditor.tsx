@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense, useCallback, useRef, memo } from 'react'
 import { Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast, toastError } from '@/lib/toast'
 import type { FileDiffLine } from '@akari/shared-types'
 import type { editor } from 'monaco-editor'
 import { API_BASE } from '@/stores/session-store'
@@ -143,7 +143,7 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
           setOriginalContent(data.content)
           void fetchDiffLines()
         })
-        .catch((e: unknown) => toast.error(`重新加载文件失败: ${String(e)}`))
+        .catch((e: unknown) => toastError(`重新加载文件失败: ${String(e)}`))
     })
   }, [sessionId, filePath, fetchDiffLines])
 

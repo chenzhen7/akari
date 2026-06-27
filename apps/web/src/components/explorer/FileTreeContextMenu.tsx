@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { FolderOpen, Copy, Check, Terminal } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session-store'
 import type { FileNode } from '@akari/shared-types'
@@ -103,7 +103,7 @@ export function FileTreeContextMenu({
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`[copy ${label}] failed:`, err)
-      toast.error(`复制 ${label} 失败：${msg}`)
+      toastError(`复制 ${label} 失败：${msg}`)
     }
     onClose()
   }
@@ -122,7 +122,7 @@ export function FileTreeContextMenu({
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[openFolder] failed:', err)
-      toast.error(`打开文件夹失败：${msg}`)
+      toastError(`打开文件夹失败：${msg}`)
     }
     onClose()
   }
@@ -144,7 +144,7 @@ export function FileTreeContextMenu({
     if (sent) {
       toast.success('已添加到终端')
     } else {
-      toast.error('终端未连接，无法添加路径')
+      toastError('终端未连接，无法添加路径')
     }
     onClose()
   }

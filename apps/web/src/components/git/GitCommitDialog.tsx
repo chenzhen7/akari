@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { toast } from 'sonner'
+import { toast, toastError } from '@/lib/toast'
 import {
   Dialog,
   DialogContent,
@@ -26,7 +26,7 @@ export function GitCommitDialog({ open, onOpenChange, sessionId, diffFiles }: Gi
 
   const handleCommit = async () => {
     if (!message.trim()) {
-      toast.error('请填写 commit message')
+      toastError('请填写 commit message')
       return
     }
     setLoading(true)
@@ -44,7 +44,7 @@ export function GitCommitDialog({ open, onOpenChange, sessionId, diffFiles }: Gi
       setMessage('')
       onOpenChange(false)
     } catch (err) {
-      toast.error(`Commit 失败: ${err instanceof Error ? err.message : String(err)}`)
+      toastError(`Commit 失败: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setLoading(false)
     }

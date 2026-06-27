@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { GitBranch, RefreshCw } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast, toastError } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -69,7 +69,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       })
       .catch(err => {
         console.error('[GitGraphPanel] fetch failed:', err)
-        toast.error(`加载 Git 日志失败: ${err instanceof Error ? err.message : String(err)}`)
+        toastError(`加载 Git 日志失败: ${err instanceof Error ? err.message : String(err)}`)
       })
       .finally(() => setLoading(false))
   }, [sessionId, setGitLog])
@@ -123,7 +123,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       })
       .catch(err => {
         console.error('[GitGraphPanel] checkout failed:', err)
-        toast.error(`Checkout 失败: ${err instanceof Error ? err.message : String(err)}`)
+        toastError(`Checkout 失败: ${err instanceof Error ? err.message : String(err)}`)
       })
   }
 
@@ -148,7 +148,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       })
       .catch(err => {
         console.error('[GitGraphPanel] create branch failed:', err)
-        toast.error(`创建分支失败: ${err instanceof Error ? err.message : String(err)}`)
+        toastError(`创建分支失败: ${err instanceof Error ? err.message : String(err)}`)
       })
     setNewBranch(prev => ({ ...prev, open: false, name: '' }))
   }

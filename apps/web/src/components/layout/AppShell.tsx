@@ -199,7 +199,7 @@ export function AppShell() {
         <CommandCenter />
         <CreateSessionDialog />
       </div>
-      <Toaster richColors position="bottom-right" />
+      <Toaster richColors position="bottom-right" closeButton />
     </TooltipProvider>
   )
 }

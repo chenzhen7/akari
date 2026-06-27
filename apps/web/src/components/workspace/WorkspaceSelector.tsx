@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { toast } from 'sonner'
+import { toast, toastError } from '@/lib/toast'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import {
   DropdownMenu,
@@ -31,7 +31,7 @@ export function WorkspaceSelector() {
         switchWorkspace(workspace.id)
       }
     } catch (err) {
-      toast.error(`打开文件夹失败：${err instanceof Error ? err.message : String(err)}`)
+      toastError(`打开文件夹失败：${err instanceof Error ? err.message : String(err)}`)
     }
   }, [addWorkspace, switchWorkspace])
 
