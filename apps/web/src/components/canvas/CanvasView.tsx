@@ -19,7 +19,7 @@ import { SessionNode } from './SessionNode'
 import FlowEdge from './FlowEdge'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import { Loader2, ServerOff, LayoutGrid } from 'lucide-react'
-import { toast, toastError } from '@/lib/toast'
+import { toastError } from '@/lib/toast'
 import { API_BASE } from '@/lib/api'
 
 /** 模块级：跨组件挂载/卸载周期持久化 viewport，不写入 store */

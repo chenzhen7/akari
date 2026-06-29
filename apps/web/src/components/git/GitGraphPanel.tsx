@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { GitBranch, RefreshCw } from 'lucide-react'
-import { toast, toastError } from '@/lib/toast'
+import { toastError } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'

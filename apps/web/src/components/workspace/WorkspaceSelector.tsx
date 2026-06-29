@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { toast, toastError } from '@/lib/toast'
+import { toastError } from '@/lib/toast'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import {
   DropdownMenu,

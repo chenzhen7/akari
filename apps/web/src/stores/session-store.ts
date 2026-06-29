@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { toast, toastError } from '@/lib/toast'
+import { toastError } from '@/lib/toast'
 import type { AgentSession, AgentType, CanvasEdge, GitLogResponse, KanbanColumn, SessionStatus, ServerMessage } from '@akari/shared-types'
 import type { ConnectionStatus } from '@/hooks/useWebSocket'
 import { terminalBus } from '@/lib/terminalBus'

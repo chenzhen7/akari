@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense, memo } from 'react'
 import { Loader2 } from 'lucide-react'
-import { toast, toastError } from '@/lib/toast'
+import { toastError } from '@/lib/toast'
 import type { DiffFile } from '@akari/shared-types'
 import { useTheme } from '@/components/theme-provider'
 import { detectLanguage } from '@/lib/language-utils'
