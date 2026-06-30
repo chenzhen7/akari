@@ -8,19 +8,14 @@ import '@xterm/xterm/css/xterm.css'
 import type { ClientMessage } from '@akari/shared-types'
 import { terminalBus } from '@/lib/terminalBus'
 import { resizeMutex } from '@/lib/ptyResizeMutex'
+import { attachImeAnchor } from '@/lib/xterm-ime-anchor'
 import { API_BASE } from '@/lib/api'
+import { terminalInstances } from './terminal-instances'
 
 interface TerminalPanelProps {
   sessionId: string
   terminalId: string
   send: (msg: ClientMessage) => void
-}
-
-interface TerminalEntry {
-  term: Terminal
-  fitAddon: FitAddon
-  unsubscribeData: () => void
-  unsubscribeResized: () => void
 }
 
 const DARK_THEME = {
@@ -69,20 +64,6 @@ const LIGHT_THEME = {
   brightWhite: '#000000',
 }
 
-/** Module-level registry: keeps Terminal instances alive across tab switches. */
-const terminalInstances = new Map<string, TerminalEntry>()
-
-// DEBUG: helper to inspect instance / DOM state
-function logTerminalState(label: string, terminalId: string, container?: HTMLDivElement | null) {
-  const entry = terminalInstances.get(terminalId)
-  const inContainer = container ? container.querySelectorAll('.xterm').length : 'n/a'
-  const inDoc = typeof document !== 'undefined' ? document.querySelectorAll('.xterm').length : 'n/a'
-  console.log(
-    `[TERMINAL_DEBUG] ${label} | terminalId=${terminalId} | instances=${terminalInstances.size} ` +
-    `| hasEntry=${!!entry} | termElementInContainer=${inContainer} | totalXtermRoots=${inDoc}`
-  )
-}
-
 function getXtermTheme(isDark: boolean) {
   return isDark ? DARK_THEME : LIGHT_THEME
 }
@@ -115,7 +96,6 @@ export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProp
 
     if (existing) {
       // Tab switched back: re-attach DOM element
-      console.log(`[TERMINAL_DEBUG] re-attach existing terminal ${terminalId}`)
       if (existing.term.element) {
         container.appendChild(existing.term.element)
       }
@@ -124,23 +104,18 @@ export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProp
           existing.fitAddon.fit()
           existing.term.focus()
         } catch { /* ignore if disposed */ }
-        logTerminalState('after re-attach fit', terminalId, container)
       })
     } else {
       // First mount: create a fresh terminal
-      console.log(`[TERMINAL_DEBUG] create new terminal ${terminalId}`)
       createTerminal(sessionId, terminalId, container, send, isDark)
     }
 
     return () => {
       // Detach DOM element but keep the instance alive
-      logTerminalState('cleanup start', terminalId, container)
       const entry = terminalInstances.get(terminalId)
       if (entry?.term.element && container.contains(entry.term.element)) {
         container.removeChild(entry.term.element)
-        console.log(`[TERMINAL_DEBUG] detached terminal ${terminalId} from container`)
       }
-      logTerminalState('cleanup end', terminalId, container)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminalId])
@@ -156,7 +131,6 @@ export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProp
   useEffect(() => {
     if (terminalReadyTick === 0) return
     const entry = terminalInstances.get(terminalId)
-    console.log(`[TERMINAL_DEBUG] terminal:ready tick=${terminalReadyTick} terminalId=${terminalId} hasEntry=${!!entry}`)
     if (!entry) return
     try {
       entry.fitAddon.fit()
@@ -216,9 +190,6 @@ function createTerminal(
   send: (msg: ClientMessage) => void,
   isDark: boolean,
 ): void {
-  console.log(`[TERMINAL_DEBUG] createTerminal start terminalId=${terminalId}`)
-  logTerminalState('createTerminal before new Terminal', terminalId, container)
-
   const term = new Terminal({
     cursorBlink: true,
     fontFamily: '"Cascadia Code", "Fira Code", Menlo, "Courier New", monospace',
@@ -233,7 +204,10 @@ function createTerminal(
   term.loadAddon(fitAddon)
   term.loadAddon(webLinksAddon)
   term.open(container)
-  logTerminalState('createTerminal after term.open', terminalId, container)
+
+  // Anchor IME composition elements to the visual caret for Ink-style TUIs
+  // (e.g. Claude Code) which hide the hardware cursor and render a fake one.
+  const { detach: detachImeAnchor } = attachImeAnchor(term)
 
   requestAnimationFrame(() => {
     try {
@@ -241,7 +215,6 @@ function createTerminal(
       term.focus()
       send({ event: 'terminal:resize', payload: { sessionId, terminalId, cols: term.cols, rows: term.rows } })
     } catch { /* ignore if disposed */ }
-    logTerminalState('createTerminal after initial fit', terminalId, container)
   })
 
   // Keystrokes → backend PTY
@@ -251,7 +224,7 @@ function createTerminal(
 
   // ── Subscribe to terminal:data events (buffered during resize) ──────────
   let historyLoaded = false
-  let pendingChunks: string[] = []
+  const pendingChunks: string[] = []
 
   const unsubscribeData = terminalBus.on(terminalId, data => {
     if (resizeMutex.buffer(terminalId, data)) return  // buffered during resize
@@ -276,14 +249,12 @@ function createTerminal(
   })
 
   // Register immediately so tab-switch cleanup can always find and detach the DOM.
-  terminalInstances.set(terminalId, { term, fitAddon, unsubscribeData, unsubscribeResized })
-  logTerminalState('createTerminal after register', terminalId, container)
+  terminalInstances.set(terminalId, { term, fitAddon, unsubscribeData, unsubscribeResized, detachImeAnchor })
 
   // ── Fetch history from server ──────────────────────────────────────────
   fetch(`${API_BASE}/sessions/${sessionId}/terminal-buffer?terminalId=${terminalId}`)
     .then(r => r.json())
     .then(({ buffer }: { buffer: string[] }) => {
-      logTerminalState(`createTerminal history fetched (${buffer.length} chunks)`, terminalId, container)
       // Skip TUI animation frames (\x1b[H = cursor home) that would push
       // duplicate history into scrollback on replay.
       buffer
@@ -302,41 +273,4 @@ function createTerminal(
       const pending = pendingChunks.splice(0)
       pending.forEach(chunk => term.write(chunk))
     })
-}
-
-/* ─── Public helpers ─────────────────────────────────────────────────────── */
-
-/**
- * Read the last `maxLines` non-empty lines from the currently visible xterm viewport.
- * Returns [] if the terminal instance hasn't been created yet.
- */
-export function getTerminalViewportLines(terminalId: string, maxLines = 5): string[] {
-  const entry = terminalInstances.get(terminalId)
-  if (!entry) return []
-  const { term } = entry
-  const buf = term.buffer.active
-  const viewportY = buf.viewportY
-  const viewportEnd = viewportY + term.rows - 1
-  const result: string[] = []
-  for (let row = viewportEnd; row >= viewportY && result.length < maxLines; row--) {
-    const line = buf.getLine(row)
-    if (!line) continue
-    const text = line.translateToString(true).trimEnd()
-    result.unshift(text)
-  }
-  return result
-}
-
-/** Call when a terminal tab is closed to free xterm resources. */
-export function destroyTerminalInstance(terminalId: string): void {
-  console.log(`[TERMINAL_DEBUG] destroyTerminalInstance terminalId=${terminalId}`)
-  const entry = terminalInstances.get(terminalId)
-  if (entry) {
-    entry.unsubscribeData()
-    entry.unsubscribeResized()
-    entry.term.dispose()
-    terminalInstances.delete(terminalId)
-  }
-  resizeMutex.release(terminalId) // drain any residual buffer
-  logTerminalState('after destroy', terminalId)
 }

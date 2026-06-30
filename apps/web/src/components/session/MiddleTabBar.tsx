@@ -6,7 +6,7 @@ import type { AgentSession, SessionTab } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { resolveAbsoluteFilePath } from '@/lib/path-utils'
-import { destroyTerminalInstance } from './TerminalPanel'
+import { destroyTerminalInstance } from './terminal-instances'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {

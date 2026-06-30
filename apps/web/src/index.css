@@ -167,6 +167,14 @@
   background: #1e1e1e;
 }
 
+/* Make composition preedit visible and theme-aware.
+   xterm.js positions this element at the IME anchor point. */
+.xterm .composition-view {
+  background-color: var(--terminal-background) !important;
+  color: var(--foreground) !important;
+  z-index: 10;
+}
+
 /* Firefox */
 * {
   scrollbar-width: thin;
