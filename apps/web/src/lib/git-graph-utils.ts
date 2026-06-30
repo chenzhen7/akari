@@ -6,13 +6,11 @@ export const LANE_COLORS = [
   '#14b8a6', '#8b5cf6',
 ]
 
-export const ROW_H = 28
-export const LANE_W = 18
-export const DOT_R = 4
-export const PAD_LEFT = 12
+export const ROW_H = 24
+export const LANE_W = 14
+export const DOT_R = 3
+export const PAD_LEFT = 10
 export const PAD_TOP = ROW_H / 2
-
-const CORNER_R = 3
 
 export interface IdeaGraphNode {
   lane: number
@@ -122,7 +120,7 @@ function assignLanes(commits: GitCommit[]): Map<string, number> {
   return laneOf
 }
 
-function buildOrthogonalPath(fromRow: number, toRow: number, fromLane: number, toLane: number): string {
+function buildBranchPath(fromRow: number, toRow: number, fromLane: number, toLane: number): string {
   const x1 = cx(fromLane)
   const y1 = cy(fromRow)
   const x2 = cx(toLane)
@@ -132,19 +130,10 @@ function buildOrthogonalPath(fromRow: number, toRow: number, fromLane: number, t
     return `M ${x1} ${y1} L ${x2} ${y2}`
   }
 
-  const yTurn = y1 + ROW_H / 2
-  const right = x2 > x1
-  const xr = right ? CORNER_R : -CORNER_R
-  const sweep = right ? 1 : 0
+  const c1y = y1 + ROW_H / 2
+  const c2y = y2 - ROW_H / 2
 
-  return [
-    `M ${x1} ${y1}`,
-    `L ${x1} ${yTurn - CORNER_R}`,
-    `A ${CORNER_R} ${CORNER_R} 0 0 ${sweep} ${x1 + xr} ${yTurn}`,
-    `L ${x2 - xr} ${yTurn}`,
-    `A ${CORNER_R} ${CORNER_R} 0 0 ${sweep} ${x2} ${yTurn + CORNER_R}`,
-    `L ${x2} ${y2}`,
-  ].join(' ')
+  return `M ${x1} ${y1} C ${x1} ${c1y}, ${x2} ${c2y}, ${x2} ${y2}`
 }
 
 export function computeIdeaGraphLayout(
@@ -188,7 +177,7 @@ export function computeIdeaGraphLayout(
         branch = primary.get(parentHash) ?? null
       }
       const color = branch ? (colors.get(branch) ?? LANE_COLORS[toLane % LANE_COLORS.length]!) : LANE_COLORS[toLane % LANE_COLORS.length]!
-      const d = buildOrthogonalPath(row, toRow, fromLane, toLane)
+      const d = buildBranchPath(row, toRow, fromLane, toLane)
 
       edges.push({ fromRow: row, toRow, fromLane, toLane, color, branch, d })
     }

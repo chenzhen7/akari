@@ -36,9 +36,11 @@ export function GitGraphSvg({ commits, layout, head }: GitGraphSvgProps) {
             key={`edge-${i}`}
             d={edge.d}
             stroke={edge.color}
-            strokeWidth={1.5}
+            strokeWidth={1.2}
             fill="none"
             opacity={0.75}
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
         ))}
       </g>
@@ -58,7 +60,7 @@ export function GitGraphSvg({ commits, layout, head }: GitGraphSvgProps) {
               r={DOT_R}
               fill={isHead ? 'var(--background)' : node.color}
               stroke={node.color}
-              strokeWidth={isHead ? 2.5 : 1.5}
+              strokeWidth={isHead ? 2 : 1.2}
             />
           )
         })}
