@@ -86,9 +86,7 @@ export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProp
 
   useEffect(() => {
     const container = containerRef.current
-    logTerminalState('mount effect start', terminalId, container)
     if (!container) {
-      console.log(`[TERMINAL_DEBUG] mount effect early return: container is null for ${terminalId}`)
       return
     }
 
@@ -150,7 +148,6 @@ export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProp
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
     const ro = new ResizeObserver(() => {
-      console.log(`[TERMINAL_DEBUG] ResizeObserver fired terminalId=${terminalId}`)
       try { entry.fitAddon.fit() } catch { /* ignore */ }
 
       if (debounceTimer) clearTimeout(debounceTimer)
@@ -161,7 +158,6 @@ export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProp
         if (!resizeMutex.acquire(terminalId)) return
         try {
           const { cols, rows } = entry.term
-          console.log(`[TERMINAL_DEBUG] sending resize terminalId=${terminalId} cols=${cols} rows=${rows}`)
           send({ event: 'terminal:resize', payload: { sessionId, terminalId, cols, rows } })
         } catch { /* ignore if disposed */ }
       }, 150)
