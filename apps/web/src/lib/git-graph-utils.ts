@@ -35,6 +35,8 @@ export interface IdeaGraphResult {
   positions: Map<string, IdeaGraphNode>
   edges: OrthogonalEdge[]
   graphWidth: number
+  /** 逐行图形宽度（VS Code 风格）：只有实际占用多 lane 的行才变宽 */
+  rowWidths: number[]
   svgHeight: number
   maxLane: number
 }
@@ -186,7 +188,28 @@ export function computeIdeaGraphLayout(
   const graphWidth = Math.max(PAD_LEFT + (maxLane + 1) * LANE_W + DOT_R + 8, 80)
   const svgHeight = commits.length * ROW_H
 
-  return { positions, edges, graphWidth, svgHeight, maxLane }
+  // VS Code 风格：逐行计算图形宽度。某一行只占一根线时，消息紧跟其右侧；
+  // 仅当该行实际有多 lane 的线（commit 自身 lane 或贯穿该行的边）时才变宽。
+  const rowMaxLane = new Array<number>(commits.length).fill(0)
+  for (let row = 0; row < commits.length; row++) {
+    rowMaxLane[row] = laneOf.get(commits[row]!.hash) ?? 0
+  }
+  for (const edge of edges) {
+    const lo = Math.min(edge.fromRow, edge.toRow)
+    const hi = Math.max(edge.fromRow, edge.toRow)
+    const ext = Math.max(edge.fromLane, edge.toLane)
+    for (let r = lo; r <= hi; r++) {
+      if (ext > rowMaxLane[r]!) rowMaxLane[r] = ext
+    }
+  }
+  const rowWidths = rowMaxLane.map(rowGraphWidth)
+
+  return { positions, edges, graphWidth, rowWidths, svgHeight, maxLane }
+}
+
+/** 单行图形宽度：紧贴该行最右侧 lane 的圆点右缘 + 少量间距，无全局最小值约束 */
+export function rowGraphWidth(maxLaneAtRow: number): number {
+  return PAD_LEFT + maxLaneAtRow * LANE_W + DOT_R * 2 + 4
 }
 
 export function graphColWidth(maxLane: number): number {

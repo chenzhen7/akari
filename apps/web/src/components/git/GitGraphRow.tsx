@@ -49,6 +49,7 @@ interface GitGraphRowProps {
   node: IdeaGraphNode | undefined
   isSelected: boolean
   isHead: boolean
+  /** 本行图形列宽度（逐行动态，VS Code 风格），消息从此处起排 */
   graphWidth: number
   localBranchNames: Set<string>
   onSelect: () => void
@@ -96,7 +97,7 @@ export function GitGraphRow({
             <div className="relative h-full" />
 
             {/* Message + Refs inline */}
-            <div className="flex min-w-0 items-center gap-1.5 overflow-hidden px-2">
+            <div className="flex min-w-0 items-center gap-1.5 overflow-hidden pl-1 pr-2">
               <span
                 className={cn(
                   'min-w-0 truncate',

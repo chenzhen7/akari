@@ -213,7 +213,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       </div>
 
       {/* Scrollable graph + rows */}
-      <div className="relative flex-1 overflow-auto">
+      <div className="relative flex-1 overflow-auto py-2">
         <div
           className="relative"
           style={{ height: svgHeight, minWidth: graphWidth + 160 }}
@@ -232,7 +232,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
               node={layout.positions.get(commit.hash)}
               isSelected={commit.hash === selectedHash}
               isHead={commit.hash === logData?.head}
-              graphWidth={graphWidth}
+              graphWidth={layout.rowWidths[row] ?? graphWidth}
               localBranchNames={localBranchNames}
               onSelect={() => setSelectedHash(sessionId, selectedHash === commit.hash ? null : commit.hash)}
               onCheckout={handleCheckout}
