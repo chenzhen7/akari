@@ -92,6 +92,9 @@ export function validateTransition(from: SessionStatus, to: SessionStatus): bool
 }
 
 export class SessionManager {
+  /** 文档型 tab（file/diff）的最大保留数量，终端 / agent 类型不受限制 */
+  private static readonly MAX_DOC_TABS = 10
+
   private readonly db: Database.Database
   private worktreeManager: WorktreeManager
   private readonly terminalMux: TerminalMultiplexer
@@ -377,12 +380,32 @@ export class SessionManager {
     }
 
     const tab: SessionTab = { id: tabId, type: resolvedType, label, filePath, terminalId, agentType }
-    const updatedTabs = [...session.tabs, tab]
+    let updatedTabs = [...session.tabs, tab]
     const activeTabId = tabId
+
+    // 文档型 tab（file/diff）最多保留 MAX_DOC_TABS 个：超出时按插入顺序淘汰最旧的，
+    // 终端 / agent（terminal/claude）类型不受此限制。
+    const evictedTabIds: string[] = []
+    if (resolvedType === 'file' || resolvedType === 'diff') {
+      const isDocTab = (t: SessionTab): boolean => t.type === 'file' || t.type === 'diff'
+      let docCount = updatedTabs.filter(isDocTab).length
+      while (docCount > SessionManager.MAX_DOC_TABS) {
+        // 找最旧的、且不是刚新建的那个文档型 tab 淘汰
+        const victim = updatedTabs.find(t => isDocTab(t) && t.id !== tabId)
+        if (!victim) break
+        evictedTabIds.push(victim.id)
+        updatedTabs = updatedTabs.filter(t => t.id !== victim.id)
+        docCount--
+      }
+    }
 
     this.db
       .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ? WHERE id = ?')
       .run(JSON.stringify(updatedTabs), activeTabId, sessionId)
+
+    for (const evictedId of evictedTabIds) {
+      this.broadcast({ event: 'tab:closed', payload: { sessionId, tabId: evictedId } })
+    }
 
     if ((resolvedType === 'terminal' || resolvedType === 'claude') && terminalId) {
       this.terminalMux.createTerminal(terminalId, sessionId, session.worktreePath)
