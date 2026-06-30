@@ -67,6 +67,7 @@ export interface SessionTab {
   label: string
   filePath?: string
   terminalId?: string
+  agentType?: AgentType
 }
 
 export interface AgentSession {
@@ -169,7 +170,7 @@ export type ClientMessage =
   | { event: 'tab:close'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:activate'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:reorder'; payload: { sessionId: string; orderedTabIds: string[] } }
-  | { event: 'terminal:create'; payload: { sessionId: string } }
+  | { event: 'terminal:create'; payload: { sessionId: string; agentType?: AgentType } }
 
 // ─── Phase 8: HTTP Hook Event Types ──────────────────────────────────────────
 

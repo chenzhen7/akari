@@ -345,19 +345,30 @@ export class SessionManager {
 
   // ─── Tab management ───────────────────────────────────────────────────────
 
-  createTab(sessionId: string, type: 'terminal' | 'claude' | 'diff' | 'file', filePath?: string): SessionTab {
+  createTab(
+    sessionId: string,
+    type: 'terminal' | 'claude' | 'diff' | 'file',
+    filePath?: string,
+    agentType?: AgentType,
+  ): SessionTab {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
 
     const tabId = nanoid(6)
     let terminalId: string | undefined
+    let resolvedType: SessionTab['type'] = type
     let label: string
 
     if (type === 'terminal' || type === 'claude') {
       terminalId = nanoid(8)
-      if (type === 'claude') {
-        label = 'Claude'
+      if (agentType === 'claude' || agentType === 'claude-orchestrator') {
+        resolvedType = 'claude'
+        label = agentType === 'claude-orchestrator' ? 'Claude Orchestrator' : 'Claude'
+      } else if (agentType === 'aider') {
+        resolvedType = 'terminal'
+        label = 'Aider'
       } else {
+        resolvedType = 'terminal'
         const count = session.tabs.filter(t => t.type === 'terminal').length + 1
         label = `Terminal ${count}`
       }
@@ -365,7 +376,7 @@ export class SessionManager {
       label = filePath ? path.basename(filePath) : (type === 'file' ? 'File' : 'Diff')
     }
 
-    const tab: SessionTab = { id: tabId, type, label, filePath, terminalId }
+    const tab: SessionTab = { id: tabId, type: resolvedType, label, filePath, terminalId, agentType }
     const updatedTabs = [...session.tabs, tab]
     const activeTabId = tabId
 
@@ -373,8 +384,13 @@ export class SessionManager {
       .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ? WHERE id = ?')
       .run(JSON.stringify(updatedTabs), activeTabId, sessionId)
 
-    if ((type === 'terminal' || type === 'claude') && terminalId) {
+    if ((resolvedType === 'terminal' || resolvedType === 'claude') && terminalId) {
       this.terminalMux.createTerminal(terminalId, sessionId, session.worktreePath)
+      if (agentType) {
+        this.launchAgentInTerminal(sessionId, terminalId, session.worktreePath, agentType, session.task).catch(err => {
+          console.error(`[SessionManager] launchAgentInTerminal failed for ${sessionId}:`, err)
+        })
+      }
     }
 
     this.broadcast({ event: 'tab:created', payload: { sessionId, tab } })
@@ -677,6 +693,30 @@ export class SessionManager {
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId)
   }
 
+  private async launchAgentInTerminal(
+    sessionId: string,
+    terminalId: string,
+    worktreePath: string,
+    agentType: AgentType,
+    task: string,
+  ): Promise<void> {
+    const adapter = createAgentAdapter(agentType)
+    if (!adapter) return
+
+    this.pushTerminalDisplay(sessionId, `> Launching ${agentType}...\r\n`)
+    const commands = await adapter.prepare(worktreePath, task, sessionId)
+    let cumulativeDelay = SHELL_STARTUP_DELAY_MS
+    for (const { cmd, delayMs = 0 } of commands) {
+      cumulativeDelay += delayMs
+      const delay = cumulativeDelay
+      setTimeout(() => {
+        if (this.terminalMux.hasTerminal(terminalId)) {
+          this.terminalMux.sendToTerminal(terminalId, cmd)
+        }
+      }, delay)
+    }
+  }
+
   private async initSession(session: AgentSession): Promise<void> {
     const { id, baseBranch } = session
     try {
@@ -704,7 +744,15 @@ export class SessionManager {
       this.terminalMux.createTerminal(terminalId, id, worktreePath)
 
       const isClaudeAgent = session.agentType === 'claude' || session.agentType === 'claude-orchestrator'
-      const tab: SessionTab = { id: nanoid(6), type: isClaudeAgent ? 'claude' : 'terminal', label: isClaudeAgent ? 'Claude' : 'Terminal 1', terminalId }
+      const tab: SessionTab = {
+        id: nanoid(6),
+        type: isClaudeAgent ? 'claude' : 'terminal',
+        label: isClaudeAgent
+          ? (session.agentType === 'claude-orchestrator' ? 'Claude Orchestrator' : 'Claude')
+          : 'Terminal 1',
+        terminalId,
+        agentType: session.agentType,
+      }
       session.tabs = [tab]
       session.activeTabId = tab.id
       session.terminalId = terminalId
@@ -717,23 +765,7 @@ export class SessionManager {
 
       this.pushTerminalDisplay(id, `> Terminal ready (agent: ${session.agentType})\r\n`)
 
-      const adapter = createAgentAdapter(session.agentType)
-      if (adapter) {
-        this.pushTerminalDisplay(id, `> Launching ${session.agentType}...\r\n`)
-        const commands = await adapter.prepare(worktreePath, session.task, id)
-        let cumulativeDelay = SHELL_STARTUP_DELAY_MS
-        for (const { cmd, delayMs = 0 } of commands) {
-          cumulativeDelay += delayMs
-          const delay = cumulativeDelay
-          console.log(`[TERMINAL_DEBUG_BACKEND] scheduling agent command for terminalId=${terminalId} delay=${delay} cmd=${cmd.trim()}`)
-          setTimeout(() => {
-            if (this.terminalMux.hasTerminal(terminalId)) {
-              console.log(`[TERMINAL_DEBUG_BACKEND] sending agent command to terminalId=${terminalId}`)
-              this.terminalMux.sendToTerminal(terminalId, cmd)
-            }
-          }, delay)
-        }
-      }
+      await this.launchAgentInTerminal(id, terminalId, worktreePath, session.agentType, session.task)
 
       this.worktreeManager.watchDiff(id, resolvedBase, this.createDiffCallbacks(id))
 

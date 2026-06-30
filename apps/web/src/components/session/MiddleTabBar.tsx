@@ -1,5 +1,6 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { FileText, Plus, X, Terminal, GitCompare } from 'lucide-react'
+import { CreateTerminalDialog } from './CreateTerminalDialog'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { cn } from '@/lib/utils'
 import type { AgentSession, SessionTab } from '@/types'
@@ -147,7 +148,7 @@ const SortableTab = memo(function SortableTab({
 })
 
 export function MiddleTabBar({ session }: MiddleTabBarProps) {
-  const createTerminal = useSessionStore(s => s.createTerminal)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const reorderTabs = useSessionStore(s => s.reorderTabs)
   const tabs = session.tabs
   const activeTabId = session.activeTabId
@@ -188,10 +189,6 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
     }
   }, [tabs, session.id, reorderTabs])
 
-  const handleCreateTerminal = useCallback(() => {
-    createTerminal(session.id)
-  }, [createTerminal, session.id])
-
   return (
     <div className="flex h-12 shrink-0 items-center bg-[var(--terminal-background)]">
       <DndContext
@@ -222,11 +219,17 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
         variant="ghost"
         size="xs"
         className="mr-1 h-6 w-6 shrink-0 p-0 text-muted-foreground hover:text-foreground"
-        onClick={handleCreateTerminal}
+        onClick={() => setCreateDialogOpen(true)}
         title="新建终端"
       >
         <Plus className="h-3.5 w-3.5" />
       </Button>
+
+      <CreateTerminalDialog
+        sessionId={session.id}
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+      />
     </div>
   )
 }

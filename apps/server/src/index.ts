@@ -637,11 +637,11 @@ function handleClientMessage(msg: ClientMessage): void {
       break
     }
     case 'terminal:create': {
-      const { sessionId } = msg.payload
+      const { sessionId, agentType } = msg.payload
       try {
-        sessionManager.createTab(sessionId, 'terminal')
+        sessionManager.createTab(sessionId, agentType ? 'claude' : 'terminal', undefined, agentType)
       } catch (err) {
-        fastify.log.warn({ err, sessionId }, 'terminal:create failed')
+        fastify.log.warn({ err, sessionId, agentType }, 'terminal:create failed')
       }
       break
     }
