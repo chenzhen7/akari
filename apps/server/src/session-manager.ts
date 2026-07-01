@@ -96,6 +96,7 @@ export class SessionManager {
   private static readonly MAX_DOC_TABS = 10
 
   private readonly db: Database.Database
+  private repoRoot: string
   private worktreeManager: WorktreeManager
   private readonly terminalMux: TerminalMultiplexer
   private readonly broadcast: (msg: ServerMessage) => void
@@ -105,6 +106,7 @@ export class SessionManager {
 
   constructor(opts: { workspacePath: string; repoRoot: string; db: Database.Database; broadcast: (msg: ServerMessage) => void; workspaceId: string; isGitWorkspace?: boolean }) {
     this.db = opts.db
+    this.repoRoot = opts.repoRoot
     this.workspaceId = opts.workspaceId
     this.isGitWorkspace = opts.isGitWorkspace ?? true
     this.settingsStore = new SettingsStore(opts.db)
@@ -203,13 +205,13 @@ export class SessionManager {
     const existing = this.getMainSession()
     if (existing) {
       if (this.isGitWorkspace) {
-        this.watchMainBranch(existing.id, workspacePath)
+        this.watchMainBranch(existing.id, this.repoRoot)
         // Re-read current branch in case it changed while this workspace was not active
         const currentBranch = await this.worktreeManager.getCurrentBranch()
-        if (currentBranch !== existing.branchName || currentBranch !== existing.name) {
+        if (currentBranch !== existing.branchName) {
           this.db
-            .prepare('UPDATE sessions SET branch_name = ?, base_branch = ?, name = ? WHERE id = ?')
-            .run(currentBranch, currentBranch, currentBranch, existing.id)
+            .prepare('UPDATE sessions SET branch_name = ?, base_branch = ? WHERE id = ?')
+            .run(currentBranch, currentBranch, existing.id)
           const updated = this.getSession(existing.id)
           if (updated) {
             this.broadcast({ event: 'session:updated', payload: updated })
@@ -237,7 +239,7 @@ export class SessionManager {
     }
 
     const currentBranch = this.isGitWorkspace ? await this.worktreeManager.getCurrentBranch() : ''
-    const sessionName = currentBranch || workspaceName
+    const sessionName = workspaceName
     const id = nanoid(8)
     const session: AgentSession = {
       id,
@@ -278,7 +280,7 @@ export class SessionManager {
     )
 
     if (this.isGitWorkspace) {
-      this.watchMainBranch(session.id, workspacePath)
+      this.watchMainBranch(session.id, this.repoRoot)
     }
 
     return session
@@ -307,6 +309,7 @@ export class SessionManager {
   async setWorkspace(workspaceId: string, workspacePath: string, repoRoot: string, isGitWorkspace = true): Promise<void> {
     await this.worktreeManager.dispose()
     this.workspaceId = workspaceId
+    this.repoRoot = repoRoot
     this.isGitWorkspace = isGitWorkspace
     this.worktreeManager = new WorktreeManager(repoRoot, workspacePath, this.settingsStore.getWorktreeBaseDir())
   }

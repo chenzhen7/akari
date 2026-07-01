@@ -256,8 +256,8 @@ export class WorktreeManager {
       watcher.on('change', callback).on('add', callback)
       this.watchers.set(`${sessionId}:branch`, watcher)
       return watcher
-    } catch {
-      // Not a git repo or HEAD missing — ignore
+    } catch (err) {
+      console.warn(`[WorktreeManager] failed to watch branch HEAD for ${sessionId}: ${headPath}`, err)
       return null
     }
   }
