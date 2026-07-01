@@ -14,6 +14,8 @@ interface SessionStore {
   activeTabId: string | null
   commandCenterOpen: boolean
   createDialogOpen: boolean
+  settingsOpen: boolean
+  shortcutsHelpOpen: boolean
   connectionStatus: ConnectionStatus
   disconnectedAt: number | null
   terminalReadyTick: Record<string, number>
@@ -42,6 +44,9 @@ interface SessionStore {
   setGlobalViewMode: (mode: 'canvas' | 'kanban' | null) => void
   toggleCommandCenter: () => void
   toggleCreateDialog: () => void
+  setSettingsOpen: (open: boolean) => void
+  toggleShortcutsHelp: () => void
+  setShortcutsHelpOpen: (open: boolean) => void
   archiveSession: (id: string) => void
   deleteSession: (id: string) => void
   restoreSession: (id: string) => void
@@ -74,6 +79,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   activeTabId: null,
   commandCenterOpen: false,
   createDialogOpen: false,
+  settingsOpen: false,
+  shortcutsHelpOpen: false,
   connectionStatus: 'connecting',
   disconnectedAt: null,
   terminalReadyTick: {},
@@ -197,6 +204,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   toggleCreateDialog: () =>
     set(state => ({ createDialogOpen: !state.createDialogOpen })),
+
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
+
+  toggleShortcutsHelp: () =>
+    set(state => ({ shortcutsHelpOpen: !state.shortcutsHelpOpen })),
+
+  setShortcutsHelpOpen: (open) => set({ shortcutsHelpOpen: open }),
 
   archiveSession: (id) => {
     if (get().pendingOps.has(id)) return

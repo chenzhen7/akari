@@ -9,8 +9,10 @@ import { CanvasView } from '@/components/canvas/CanvasView'
 import { KanbanView } from '@/components/kanban/KanbanView'
 import { CommandCenter } from '@/components/command-center/CommandCenter'
 import { CreateSessionDialog } from '@/components/create-session/CreateSessionDialog'
+import { ShortcutsHelpDialog } from '@/components/layout/ShortcutsHelpDialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useWebSocket } from '@/hooks/useWebSocket'
+import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { Toaster } from 'sonner'
 import { useResizablePanels } from '@/hooks/useResizablePanels'
 import { cn } from '@/lib/utils'
@@ -113,6 +115,8 @@ export function AppShell() {
     }
   }
 
+  useGlobalShortcuts({ toggleLeft, toggleRight })
+
   const isResizing = isDraggingLeft || isDraggingRight
 
   // 画布功能临时关闭：若当前处于画布模式则自动切回默认视图
@@ -198,6 +202,7 @@ export function AppShell() {
         </div>
         <CommandCenter />
         <CreateSessionDialog />
+        <ShortcutsHelpDialog />
       </div>
       <Toaster richColors position="bottom-right" closeButton />
     </TooltipProvider>

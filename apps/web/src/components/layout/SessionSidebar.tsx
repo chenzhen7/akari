@@ -27,6 +27,7 @@ import { SwitchBranchDialog } from '@/components/session/SwitchBranchDialog'
 import { SessionContextMenu } from './SessionContextMenu'
 import { SettingsDialog } from '@/components/settings/SettingsDialog'
 import { WorkspaceSelector } from '@/components/workspace/WorkspaceSelector'
+import { shortcutLabel } from '@/lib/shortcuts'
 
 import { useWorkspaceStore } from '@/stores/workspace-store'
 
@@ -289,6 +290,7 @@ function SidebarActions() {
       <SidebarActionButton
         icon={Plus}
         label="新建会话"
+        shortcut={shortcutLabel('new-session')}
         onClick={() => openCreateDialog()}
         disabled={!canCreateSession}
         title={canCreateSession ? undefined : '当前工作区不是 Git 仓库'}
@@ -305,11 +307,13 @@ function SidebarActions() {
         icon={Columns3}
         label="看板"
         active={globalViewMode === 'kanban'}
+        shortcut={shortcutLabel('kanban')}
         onClick={() => setGlobalViewMode('kanban')}
       />
       <SidebarActionButton
         icon={Radio}
         label="指挥中心"
+        shortcut={shortcutLabel('command-center')}
         onClick={toggleCommandCenter}
       />
     </div>
@@ -319,8 +323,9 @@ function SidebarActions() {
 export function SessionSidebar() {
   const sessions = useSessionStore(s => s.sessions)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
+  const settingsOpen = useSessionStore(s => s.settingsOpen)
+  const setSettingsOpen = useSessionStore(s => s.setSettingsOpen)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [switchBranchDialog, setSwitchBranchDialog] = useState<{ open: boolean; sessionId: string | null }>({
     open: false,
     sessionId: null,
@@ -418,6 +423,7 @@ export function SessionSidebar() {
             <SidebarActionButton
               icon={Settings}
               label="设置"
+              shortcut={shortcutLabel('settings')}
               onClick={() => setSettingsOpen(true)}
             />
           </div>
