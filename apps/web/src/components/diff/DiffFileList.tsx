@@ -212,18 +212,15 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="inline-flex" tabIndex={0}>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    disabled={!hasDiff}
-                    onClick={() => setMergeOpen(true)}
-                  >
-                    <GitMerge className="h-3.5 w-3.5" />
-                  </Button>
-                </span>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  onClick={() => setMergeOpen(true)}
+                >
+                  <GitMerge className="h-3.5 w-3.5" />
+                </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">合并到基准分支</TooltipContent>
+              <TooltipContent side="bottom">合并到当前分支</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -400,12 +397,11 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
       <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>合并到基准分支</DialogTitle>
+            <DialogTitle>合并到当前分支</DialogTitle>
             <DialogDescription className="break-words">
               将把{' '}
               <span className="break-all font-mono text-foreground">{session.branchName}</span>{' '}
-              合并（--no-ff）到{' '}
-              <span className="break-all font-mono text-foreground">{session.baseBranch}</span>。
+              合并（--no-ff）到当前分支。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

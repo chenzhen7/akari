@@ -252,20 +252,19 @@ export class WorktreeManager {
     }
   }
 
-  async mergeToBase(
+  async mergeIntoCurrentBranch(
     worktreePath: string,
-    branchName: string,
-    baseBranch: string,
+    sourceBranch: string,
     strategy: 'squash' | 'merge' | 'rebase' = 'squash',
   ): Promise<void> {
-    // worktreePath 已经 checkout 在 baseBranch（agent 分支）上，直接在该 worktree 内合并即可
+    // 直接把 sourceBranch 合并到当前分支（当前 worktree 已 checkout 的分支）
     if (strategy === 'squash') {
-      await this.git(['merge', '--squash', branchName], worktreePath)
-      await this.git(['commit', '-m', `chore: squash merge ${branchName}`], worktreePath)
+      await this.git(['merge', '--squash', sourceBranch], worktreePath)
+      await this.git(['commit', '-m', `chore: squash merge ${sourceBranch}`], worktreePath)
     } else if (strategy === 'merge') {
-      await this.git(['merge', '--no-ff', '-m', `Merge ${branchName}`, branchName], worktreePath)
+      await this.git(['merge', '--no-ff', '-m', `Merge ${sourceBranch}`, sourceBranch], worktreePath)
     } else {
-      await this.git(['rebase', branchName], worktreePath)
+      await this.git(['rebase', sourceBranch], worktreePath)
     }
   }
 
