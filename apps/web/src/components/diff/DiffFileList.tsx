@@ -161,14 +161,6 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
     }
   }
 
-  if (diffFiles.length === 0) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-        暂无变更
-      </div>
-    )
-  }
-
   const totalAdditions = diffFiles.reduce((s, f) => s + f.additions, 0)
   const totalDeletions = diffFiles.reduce((s, f) => s + f.deletions, 0)
 
@@ -193,14 +185,16 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
           <div className="flex items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  disabled={!hasDiff}
-                  onClick={() => setCommitOpen(true)}
-                >
-                  <GitCommit className="h-3.5 w-3.5" />
-                </Button>
+                <span className="inline-flex" tabIndex={0}>
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    disabled={!hasDiff}
+                    onClick={() => setCommitOpen(true)}
+                  >
+                    <GitCommit className="h-3.5 w-3.5" />
+                  </Button>
+                </span>
               </TooltipTrigger>
               <TooltipContent side="bottom">Commit 所有变更</TooltipContent>
             </Tooltip>
@@ -218,28 +212,32 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  disabled={!hasDiff}
-                  onClick={() => setMergeOpen(true)}
-                >
-                  <GitMerge className="h-3.5 w-3.5" />
-                </Button>
+                <span className="inline-flex" tabIndex={0}>
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    disabled={!hasDiff}
+                    onClick={() => setMergeOpen(true)}
+                  >
+                    <GitMerge className="h-3.5 w-3.5" />
+                  </Button>
+                </span>
               </TooltipTrigger>
               <TooltipContent side="bottom">合并到基准分支</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  className="text-red-400 hover:text-red-400"
-                  disabled={!hasDiff}
-                  onClick={() => setDiscardOpen(true)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                <span className="inline-flex" tabIndex={0}>
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    className="text-red-400 hover:text-red-400"
+                    disabled={!hasDiff}
+                    onClick={() => setDiscardOpen(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </span>
               </TooltipTrigger>
               <TooltipContent side="bottom">丢弃所有变更</TooltipContent>
             </Tooltip>
@@ -249,6 +247,11 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
 
       {/* File list */}
       <div className="flex-1 overflow-y-auto py-0.5">
+        {diffFiles.length === 0 && (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            暂无变更
+          </div>
+        )}
         {diffFiles.map(f => {
           const { dir, name } = splitPath(f.path)
           const activeTab = session.tabs.find(t => t.id === session.activeTabId)

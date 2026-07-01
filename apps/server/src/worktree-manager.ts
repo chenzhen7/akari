@@ -114,13 +114,10 @@ export class WorktreeManager {
     }
   }
 
-  async getDiff(sessionId: string, baseBranch: string, cwd?: string): Promise<GitDiff> {
+  async getDiff(sessionId: string, cwd?: string): Promise<GitDiff> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
     try {
-      // Use merge-base so the diff only reflects agent branch changes,
-      // not new commits that may have landed on baseBranch since the worktree was created.
-      const mergeBase = (await this.git(['merge-base', 'HEAD', baseBranch], worktreePath).catch(() => '')).trim()
-      const baseRef = mergeBase || baseBranch
+      const baseRef = 'HEAD'
 
       const [stat, full, nameStatus, numStat] = await Promise.all([
         this.git(['diff', '--stat', baseRef], worktreePath),
@@ -170,13 +167,9 @@ export class WorktreeManager {
     }
   }
 
-  async getFileDiffContent(worktreePath: string, baseBranch: string, filePath: string): Promise<{ original: string; modified: string }> {
+  async getFileDiffContent(worktreePath: string, filePath: string): Promise<{ original: string; modified: string }> {
     const gitCwd = this.isAgentWorktree(worktreePath) ? worktreePath : this.repoRoot
-    const mergeBase = await execa('git', ['-c', 'core.quotepath=false', 'merge-base', 'HEAD', baseBranch], { cwd: gitCwd })
-      .then(r => r.stdout.trim())
-      .catch(() => '')
-    const baseRef = mergeBase || baseBranch
-    const original = await execa('git', ['-c', 'core.quotepath=false', 'show', `${baseRef}:${filePath}`], { cwd: gitCwd })
+    const original = await execa('git', ['-c', 'core.quotepath=false', 'show', `HEAD:${filePath}`], { cwd: gitCwd })
       .then(r => r.stdout)
       .catch(() => '')
     const absolutePath = await this.resolveFilePath(filePath, worktreePath)
@@ -184,12 +177,9 @@ export class WorktreeManager {
     return { original, modified }
   }
 
-  async getFileDiffLines(worktreePath: string, baseBranch: string, filePath: string): Promise<FileDiffLine[]> {
+  async getFileDiffLines(worktreePath: string, filePath: string): Promise<FileDiffLine[]> {
     const gitCwd = this.isAgentWorktree(worktreePath) ? worktreePath : this.repoRoot
-    const mergeBase = await execa('git', ['-c', 'core.quotepath=false', 'merge-base', 'HEAD', baseBranch], { cwd: gitCwd })
-      .then(r => r.stdout.trim())
-      .catch(() => '')
-    const baseRef = mergeBase || baseBranch
+    const baseRef = 'HEAD'
 
     // For untracked (new) files, use git diff --no-index against /dev/null
     const isUntracked = await execa('git', ['-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard', '--full-name'], { cwd: gitCwd })
@@ -214,7 +204,7 @@ export class WorktreeManager {
     return parseDiffLines(diffOutput)
   }
 
-  watchDiff(sessionId: string, baseBranch: string, callbacks: WatchDiffCallbacks, watchPath?: string, cwd?: string): FSWatcher {
+  watchDiff(sessionId: string, callbacks: WatchDiffCallbacks, watchPath?: string, cwd?: string): FSWatcher {
     const resolvedPath = resolve(watchPath ?? this.getWorktreePath(sessionId))
     const watcher = watch(resolvedPath, {
       ignored: /(node_modules|\.git)/,
@@ -226,7 +216,7 @@ export class WorktreeManager {
     const scheduleDiff = () => {
       if (debounce) clearTimeout(debounce)
       debounce = setTimeout(() => {
-        void this.getDiff(sessionId, baseBranch, cwd).then(callbacks.onDiff)
+        void this.getDiff(sessionId, cwd).then(callbacks.onDiff)
       }, 500)
     }
 
@@ -244,7 +234,7 @@ export class WorktreeManager {
     this.watchers.set(sessionId, watcher)
 
     // Push initial diff immediately so the client sees the starting state.
-    void this.getDiff(sessionId, baseBranch, cwd).then(callbacks.onDiff)
+    void this.getDiff(sessionId, cwd).then(callbacks.onDiff)
 
     return watcher
   }

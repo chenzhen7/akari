@@ -273,7 +273,6 @@ export class SessionManager {
     // 主会话监听仓库根目录的文件变更
     this.worktreeManager.watchDiff(
       session.id,
-      session.baseBranch,
       this.createDiffCallbacks(session.id, session.worktreePath),
       session.worktreePath,
       session.worktreePath,
@@ -492,7 +491,7 @@ export class SessionManager {
     if (!session?.worktreePath) {
       return { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
     }
-    return this.worktreeManager.getDiff(sessionId, session.baseBranch, session.worktreePath)
+    return this.worktreeManager.getDiff(sessionId, session.worktreePath)
   }
 
   setLastAiMessage(sessionId: string, message: string): void {
@@ -550,18 +549,21 @@ export class SessionManager {
     await this.worktreeManager.commitAll(sessionId, message, session.worktreePath)
     const log = await this.worktreeManager.getGitLog(sessionId, 100, 0, session.worktreePath)
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+    this.broadcastDiffUpdate(sessionId)
   }
 
   async discardAll(sessionId: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     await this.worktreeManager.discardAll(sessionId, session.worktreePath)
+    this.broadcastDiffUpdate(sessionId)
   }
 
   async discardFile(sessionId: string, filePath: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     await this.worktreeManager.discardFile(sessionId, filePath, session.worktreePath)
+    this.broadcastDiffUpdate(sessionId)
   }
 
   async checkoutBranch(sessionId: string, branch: string, createNew = false): Promise<void> {
@@ -575,6 +577,7 @@ export class SessionManager {
         this.broadcast({ event: 'session:updated', payload: updated })
       }
     }
+    this.broadcastDiffUpdate(sessionId)
   }
 
   async worktreeMerge(sessionId: string, sourceBranch: string): Promise<void> {
@@ -583,6 +586,7 @@ export class SessionManager {
     await this.worktreeManager.mergeToBase(session.worktreePath, sourceBranch, session.branchName, 'merge')
     const log = await this.worktreeManager.getGitLog(sessionId, 100, 0)
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+    this.broadcastDiffUpdate(sessionId)
   }
 
   async updateFromBase(sessionId: string): Promise<void> {
@@ -591,18 +595,19 @@ export class SessionManager {
     await this.worktreeManager.updateFromBase(sessionId, session.baseBranch, session.worktreePath)
     const log = await this.worktreeManager.getGitLog(sessionId, 100, 0)
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+    this.broadcastDiffUpdate(sessionId)
   }
 
   async getFileDiffContent(sessionId: string, filePath: string): Promise<{ original: string; modified: string }> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    return this.worktreeManager.getFileDiffContent(session.worktreePath, session.baseBranch, filePath)
+    return this.worktreeManager.getFileDiffContent(session.worktreePath, filePath)
   }
 
   async getFileDiffLines(sessionId: string, filePath: string): Promise<import('@akari/shared-types').FileDiffLine[]> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    return this.worktreeManager.getFileDiffLines(session.worktreePath, session.baseBranch, filePath)
+    return this.worktreeManager.getFileDiffLines(session.worktreePath, filePath)
   }
 
   async listFiles(sessionId: string, relativePath: string): Promise<FileNode[]> {
@@ -632,7 +637,6 @@ export class SessionManager {
         if (session.worktreePath && this.isGitWorkspace) {
           this.worktreeManager.watchDiff(
             session.id,
-            session.baseBranch,
             this.createDiffCallbacks(session.id, session.worktreePath),
             session.worktreePath,
             session.worktreePath,
@@ -693,7 +697,6 @@ export class SessionManager {
 
       this.worktreeManager.watchDiff(
         session.id,
-        session.baseBranch,
         this.createDiffCallbacks(session.id),
       )
     }
@@ -793,7 +796,7 @@ export class SessionManager {
 
       await this.launchAgentInTerminal(id, terminalId, worktreePath, session.agentType, session.task)
 
-      this.worktreeManager.watchDiff(id, resolvedBase, this.createDiffCallbacks(id))
+      this.worktreeManager.watchDiff(id, this.createDiffCallbacks(id))
 
       this.updateStatus(id, 'idle')
     } catch (err) {
@@ -856,6 +859,15 @@ export class SessionManager {
     if (terminalId) {
       this.broadcast({ event: 'terminal:data', payload: { sessionId, terminalId, data } })
     }
+  }
+
+  private broadcastDiffUpdate(sessionId: string): void {
+    void this.getCurrentDiff(sessionId).then(diff => {
+      this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(JSON.stringify(diff.summary), sessionId)
+      this.broadcast({ event: 'diff:update', payload: { sessionId, diff } })
+    }).catch((err: unknown) => {
+      console.warn(`[SessionManager] failed to broadcast diff update for ${sessionId}:`, err)
+    })
   }
 
   private createDiffCallbacks(sessionId: string, cwd?: string): {
