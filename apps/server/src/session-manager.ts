@@ -583,10 +583,18 @@ export class SessionManager {
   async worktreeMerge(sessionId: string, sourceBranch: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    await this.worktreeManager.mergeIntoCurrentBranch(session.worktreePath, sourceBranch, 'merge')
-    const log = await this.worktreeManager.getGitLog(sessionId, 100, 0)
-    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
-    this.broadcastDiffUpdate(sessionId)
+    if (session.isMain) {
+      throw new Error('Cannot merge the main session into itself')
+    }
+    const mainSession = this.getMainSession()
+    if (!mainSession?.worktreePath) {
+      throw new Error('Main session not found or has no worktree')
+    }
+    const branchToMerge = session.branchName || sourceBranch
+    await this.worktreeManager.mergeIntoCurrentBranch(mainSession.worktreePath, branchToMerge, 'merge')
+    const log = await this.worktreeManager.getGitLog(mainSession.id, 100, 0, mainSession.worktreePath)
+    this.broadcast({ event: 'git:log-updated', payload: { sessionId: mainSession.id, ...log } })
+    this.broadcastDiffUpdate(mainSession.id)
   }
 
   async updateFromBase(sessionId: string): Promise<void> {

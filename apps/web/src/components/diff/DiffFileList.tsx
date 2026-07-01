@@ -220,7 +220,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
                   <GitMerge className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">合并到当前分支</TooltipContent>
+              <TooltipContent side="bottom">合并到主会话当前分支</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -397,11 +397,11 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
       <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>合并到当前分支</DialogTitle>
+            <DialogTitle>合并到主会话当前分支</DialogTitle>
             <DialogDescription className="break-words">
               将把{' '}
               <span className="break-all font-mono text-foreground">{session.branchName}</span>{' '}
-              合并（--no-ff）到当前分支。
+              合并（--no-ff）到主会话当前分支。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

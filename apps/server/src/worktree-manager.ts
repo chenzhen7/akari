@@ -258,11 +258,12 @@ export class WorktreeManager {
     strategy: 'squash' | 'merge' | 'rebase' = 'squash',
   ): Promise<void> {
     // 直接把 sourceBranch 合并到当前分支（当前 worktree 已 checkout 的分支）
+    const currentBranch = await this.getCurrentBranch(worktreePath)
     if (strategy === 'squash') {
       await this.git(['merge', '--squash', sourceBranch], worktreePath)
-      await this.git(['commit', '-m', `chore: squash merge ${sourceBranch}`], worktreePath)
+      await this.git(['commit', '-m', `chore: squash merge ${sourceBranch} into ${currentBranch}`], worktreePath)
     } else if (strategy === 'merge') {
-      await this.git(['merge', '--no-ff', '-m', `Merge ${sourceBranch}`, sourceBranch], worktreePath)
+      await this.git(['merge', '--no-ff', '-m', `Merge ${sourceBranch} into ${currentBranch}`, sourceBranch], worktreePath)
     } else {
       await this.git(['rebase', sourceBranch], worktreePath)
     }
@@ -470,8 +471,14 @@ export class WorktreeManager {
   }
 
   private async git(args: string[], cwd = this.repoRoot): Promise<string> {
-    const result = await execa('git', ['-c', 'core.quotepath=false', ...args], { cwd })
-    return result.stdout
+    try {
+      const result = await execa('git', ['-c', 'core.quotepath=false', ...args], { cwd })
+      return result.stdout
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error(`[git] command failed: git ${args.join(' ')} in ${cwd}: ${message}`)
+      throw err
+    }
   }
 
   private async linkNodeModules(worktreePath: string): Promise<void> {
