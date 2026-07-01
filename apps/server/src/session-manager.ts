@@ -600,8 +600,15 @@ export class SessionManager {
   async updateFromBase(sessionId: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    await this.worktreeManager.updateFromBase(sessionId, session.baseBranch, session.worktreePath)
-    const log = await this.worktreeManager.getGitLog(sessionId, 100, 0)
+    if (session.isMain) {
+      throw new Error('Cannot update the main session from itself')
+    }
+    const mainSession = this.getMainSession()
+    if (!mainSession?.worktreePath) {
+      throw new Error('Main session not found or has no worktree')
+    }
+    await this.worktreeManager.updateFromBase(sessionId, mainSession.branchName, session.worktreePath)
+    const log = await this.worktreeManager.getGitLog(sessionId, 100, 0, session.worktreePath)
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
     this.broadcastDiffUpdate(sessionId)
   }

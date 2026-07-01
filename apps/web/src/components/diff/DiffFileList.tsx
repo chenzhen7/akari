@@ -152,7 +152,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
         const body = await res.json() as { error?: string }
         throw new Error(body.error ?? res.statusText)
       }
-      toast.success(`已从 ${session.baseBranch} 更新到当前分支`)
+      toast.success('已从主会话当前分支更新到当前分支')
       setUpdateOpen(false)
     } catch (e) {
       toastError(`更新失败: ${String(e)}`)
@@ -208,7 +208,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
                   <GitPullRequest className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">从基准分支更新</TooltipContent>
+              <TooltipContent side="bottom">从主会话当前分支更新</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -417,11 +417,9 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
       <Dialog open={updateOpen} onOpenChange={setUpdateOpen}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>从基准分支更新</DialogTitle>
+            <DialogTitle>从主会话当前分支更新</DialogTitle>
             <DialogDescription className="break-words">
-              将把{' '}
-              <span className="break-all font-mono text-foreground">{session.baseBranch}</span>{' '}
-              的最新代码合并（--no-ff）到当前分支{' '}
+              将把主会话当前分支的最新代码合并（--no-ff）到当前分支{' '}
               <span className="break-all font-mono text-foreground">{session.branchName}</span>。
             </DialogDescription>
           </DialogHeader>

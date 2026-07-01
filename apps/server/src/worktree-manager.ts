@@ -269,8 +269,8 @@ export class WorktreeManager {
     }
   }
 
-  async updateFromBase(sessionId: string, baseBranch: string, worktreePath: string): Promise<void> {
-    await this.git(['merge', '--no-ff', '-m', `Merge ${baseBranch} into current branch`, baseBranch], worktreePath)
+  async updateFromBase(sessionId: string, sourceBranch: string, worktreePath: string): Promise<void> {
+    await this.git(['merge', '--no-ff', '-m', `Merge ${sourceBranch} into current branch`, sourceBranch], worktreePath)
   }
 
   async getGitLog(sessionId: string, limit = 100, offset = 0, cwd?: string, branch?: string): Promise<GitLogResponse> {
