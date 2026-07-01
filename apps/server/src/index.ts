@@ -655,6 +655,9 @@ try {
   await fastify.listen({ port: PORT, host: HOST })
   const address = fastify.server.address()
   const actualPort = typeof address === 'object' && address ? address.port : PORT
+  // 用实际绑定的端口回填 process.env.PORT，供 ClaudeAdapter 生成正确的 Hook URL。
+  // 打包环境下 desktop 以 PORT=0 启动（随机端口），若不回填，Hook URL 会写成 http://localhost:0/... 导致 Hook 失效。
+  process.env.PORT = String(actualPort)
   console.log(`AKARI_PORT=${actualPort}`)
   console.log(`🚀 Akari server running on http://localhost:${actualPort}`)
 } catch (err) {
