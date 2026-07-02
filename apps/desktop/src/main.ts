@@ -154,7 +154,10 @@ async function startServer(): Promise<number> {
   const userData = app.getPath('userData')
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    PORT: '0',
+    // 固定一个不常见端口，保证重启后端口不变。
+    // Claude Hook URL 被写死进各 worktree 的 .claude/settings.local.json，
+    // 若用随机端口(0)，重启后端口变化会导致旧会话的 Hook 指向失效端口。
+    PORT: '43917',
     REPO_ROOT: userData,
     DATA_DIR: path.join(userData, 'data'),
     WEB_DIST_PATH: webDistPath,
