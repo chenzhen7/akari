@@ -28,5 +28,8 @@ interface Window {
     shell?: {
       openPath: (path: string) => Promise<string>
     }
+    clipboard?: {
+      writeText: (text: string) => Promise<void>
+    }
   }
 }

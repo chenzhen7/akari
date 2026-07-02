@@ -28,4 +28,4 @@ apps/*/dist/
 *.sw?
 
 settings.local.json
-akari.db
+akari.db,

@@ -62,7 +62,7 @@ export function attachImeAnchor(terminal: Terminal): Detached {
   const textareaObserver = new MutationObserver(() => reapply(textarea))
   const compositionObserver = new MutationObserver(() => reapply(compositionView))
 
-  function computeCellSize(): { width: number; height: number } {
+  const computeCellSize = (): { width: number; height: number } => {
     const rect = screen.getBoundingClientRect()
     return {
       width: rect.width / Math.max(terminal.cols, 1),
@@ -105,7 +105,7 @@ export function attachImeAnchor(terminal: Terminal): Detached {
     return null
   }
 
-  function applyPin(left: string, top: string, width: string, height: string, lineHeight: string): void {
+  const applyPin = (left: string, top: string, width: string, height: string, lineHeight: string): void => {
     pinned = { left, top, width, height, lineHeight }
     textarea.style.setProperty('left', left, 'important')
     textarea.style.setProperty('top', top, 'important')

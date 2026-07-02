@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useSessionStore } from '@/stores/session-store'
 import { useTheme } from '@/components/theme-provider'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type IDisposable } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
@@ -179,6 +179,66 @@ export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProp
 
 /* ─── Terminal creation (runs once per terminalId) ──────────────────────── */
 
+async function writeTextToClipboard(text: string): Promise<void> {
+  if (window.electron?.clipboard?.writeText) {
+    await window.electron.clipboard.writeText(text)
+    return
+  }
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+  // Fallback for non-secure contexts or when the Clipboard API is unavailable.
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  try {
+    const success = document.execCommand('copy')
+    if (!success) {
+      throw new Error('document.execCommand("copy") returned false')
+    }
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
+
+function base64ToUtf8(base64: string): string {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return new TextDecoder().decode(bytes)
+}
+
+/**
+ * Intercept OSC 52 clipboard-write sequences (used by Claude Code fullscreen
+ * mode) and forward the payload to the browser's system clipboard.
+ */
+function installOsc52ClipboardHandler(term: Terminal): IDisposable {
+  return term.parser.registerOscHandler(52, (data) => {
+    const idx = data.indexOf(';')
+    if (idx === -1) return false
+    const payload = data.slice(idx + 1)
+    if (!payload || payload === '?') return false
+    try {
+      const decoded = base64ToUtf8(payload)
+      if (decoded) {
+        writeTextToClipboard(decoded).catch((err: unknown) => {
+          console.error('[TerminalPanel] failed to write OSC 52 clipboard:', err)
+        })
+      }
+      return true
+    } catch (err) {
+      console.error('[TerminalPanel] failed to decode OSC 52 payload:', err)
+      return false
+    }
+  })
+}
+
 function createTerminal(
   sessionId: string,
   terminalId: string,
@@ -200,6 +260,12 @@ function createTerminal(
   term.loadAddon(fitAddon)
   term.loadAddon(webLinksAddon)
   term.open(container)
+
+  // Bridge clipboard writes from the TUI (e.g. Claude Code fullscreen mode)
+  // to the browser's system clipboard. In fullscreen mode Claude Code sends
+  // OSC 52 sequences; xterm.js ignores them by default, so we intercept them
+  // here and forward the payload to navigator.clipboard.
+  const osc52Disposable = installOsc52ClipboardHandler(term)
 
   // Anchor IME composition elements to the visual caret for Ink-style TUIs
   // (e.g. Claude Code) which hide the hardware cursor and render a fake one.
@@ -245,7 +311,16 @@ function createTerminal(
   })
 
   // Register immediately so tab-switch cleanup can always find and detach the DOM.
-  terminalInstances.set(terminalId, { term, fitAddon, unsubscribeData, unsubscribeResized, detachImeAnchor })
+  terminalInstances.set(terminalId, {
+    term,
+    fitAddon,
+    unsubscribeData,
+    unsubscribeResized,
+    detachImeAnchor,
+    disposeClipboardHandlers: () => {
+      osc52Disposable.dispose()
+    },
+  })
 
   // ── Fetch history from server ──────────────────────────────────────────
   fetch(`${API_BASE}/sessions/${sessionId}/terminal-buffer?terminalId=${terminalId}`)

@@ -20,4 +20,7 @@ contextBridge.exposeInMainWorld('electron', {
   shell: {
     openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path),
   },
+  clipboard: {
+    writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
+  },
 })

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell, Menu, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, shell, Menu, ipcMain, clipboard } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -90,6 +90,11 @@ function createWindow(loadUrl: string): void {
   // Open local file/folder in system default application
   ipcMain.handle('shell:openPath', async (_event, filePath: string) => {
     return shell.openPath(filePath)
+  })
+
+  // Write text to the system clipboard from the renderer
+  ipcMain.handle('clipboard:writeText', (_event, text: string) => {
+    clipboard.writeText(text)
   })
 
   mainWindow.on('maximize', () => {

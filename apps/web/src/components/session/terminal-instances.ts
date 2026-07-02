@@ -8,6 +8,7 @@ export interface TerminalEntry {
   unsubscribeData: () => void
   unsubscribeResized: () => void
   detachImeAnchor: () => void
+  disposeClipboardHandlers?: () => void
 }
 
 /** Module-level registry: keeps Terminal instances alive across tab switches. */
@@ -38,6 +39,7 @@ export function getTerminalViewportLines(terminalId: string, maxLines = 5): stri
 export function destroyTerminalInstance(terminalId: string): void {
   const entry = terminalInstances.get(terminalId)
   if (entry) {
+    entry.disposeClipboardHandlers?.()
     entry.detachImeAnchor()
     entry.unsubscribeData()
     entry.unsubscribeResized()
