@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
-import { GitBranch, RefreshCw } from 'lucide-react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { GitBranch, RefreshCw, ChevronDown } from 'lucide-react'
 import { toastError } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +30,106 @@ interface NewBranchDialogState {
   name: string
 }
 
+interface BranchSelectorProps {
+  branches: { name: string; isCurrent?: boolean }[]
+  value: string
+  onChange: (value: string) => void
+}
+
+function BranchSelector({ branches, value, onChange }: BranchSelectorProps) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const selectedLabel = value === '__all__' ? '所有分支' : value
+
+  const filteredBranches = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return branches
+    return branches.filter(b => b.name.toLowerCase().includes(q))
+  }, [branches, search])
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [open])
+
+  const handleSelect = (name: string) => {
+    onChange(name)
+    setOpen(false)
+    setSearch('')
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex h-6 w-36 items-center justify-between truncate rounded-sm border border-border bg-background px-2 text-xs text-foreground hover:bg-muted/50 focus:outline-none focus:ring-1 focus:ring-ring"
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-56 rounded-md border border-border bg-popover shadow-md">
+          <div className="border-b border-border p-1">
+            <input
+              autoFocus
+              type="text"
+              placeholder="搜索分支..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="h-7 w-full rounded-sm bg-transparent px-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && filteredBranches.length > 0) {
+                  handleSelect(filteredBranches[0]!.name)
+                }
+                if (e.key === 'Escape') setOpen(false)
+              }}
+            />
+          </div>
+          <div className="max-h-60 overflow-y-auto py-1">
+            <button
+              type="button"
+              onClick={() => handleSelect('__all__')}
+              className={cn(
+                'flex w-full items-center px-2 py-1 text-xs',
+                value === '__all__' ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-muted/50',
+              )}
+            >
+              所有分支
+            </button>
+            {filteredBranches.map(b => (
+              <button
+                key={b.name}
+                type="button"
+                onClick={() => handleSelect(b.name)}
+                className={cn(
+                  'flex w-full items-center px-2 py-1 text-xs',
+                  value === b.name ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-muted/50',
+                )}
+              >
+                <span className="truncate">{b.name}</span>
+                {b.isCurrent && <span className="ml-auto shrink-0 text-[9px] text-muted-foreground">当前</span>}
+              </button>
+            ))}
+            {filteredBranches.length === 0 && (
+              <div className="px-2 py-1 text-xs text-muted-foreground">无匹配分支</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface GitGraphPanelProps {
   sessionId: string
 }
@@ -47,6 +147,13 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   const [searchInput, setSearchInput] = useState('')
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS)
   const [newBranch, setNewBranch] = useState<NewBranchDialogState>({ open: false, hash: '', name: '' })
+
+  // 默认选中当前分支
+  useEffect(() => {
+    if (session?.branchName && branchFilter === '__all__') {
+      setBranchFilter(session.branchName)
+    }
+  }, [session?.branchName])
 
   const logData: GitLogResponse | null = gitLogs[sessionId] ?? null
 
@@ -181,16 +288,11 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
     <div className="flex h-full flex-col overflow-hidden bg-panel">
       {/* Toolbar */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
-        <select
+        <BranchSelector
+          branches={logData?.branches.map(b => ({ name: b.name, isCurrent: b.isCurrent })) ?? []}
           value={branchFilter}
-          onChange={e => setBranchFilter(e.target.value)}
-          className="h-6 w-28 shrink-0 truncate rounded-sm border border-border bg-background px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="__all__">所有分支</option>
-          {logData?.branches.map(b => (
-            <option key={b.name} value={b.name}>{b.name}</option>
-          ))}
-        </select>
+          onChange={setBranchFilter}
+        />
         <Input
           placeholder="搜索提交..."
           value={searchInput}
