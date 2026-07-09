@@ -876,6 +876,10 @@ export class SessionManager {
     }
   }
 
+  refreshDiff(sessionId: string): void {
+    this.broadcastDiffUpdate(sessionId)
+  }
+
   private broadcastDiffUpdate(sessionId: string): void {
     void this.getCurrentDiff(sessionId).then(diff => {
       this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(JSON.stringify(diff.summary), sessionId)

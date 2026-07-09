@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { AgentSession, DiffFile } from '@akari/shared-types'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { GitCommit, Trash2, GitMerge, GitPullRequest, Loader2, FileIcon } from 'lucide-react'
+import {
+  GitCommit, Trash2, GitMerge, GitPullRequest, Loader2, FileIcon,
+  ChevronRight, ChevronDown, Folder, FolderOpen, RefreshCw,
+} from 'lucide-react'
 import { toast, toastError } from '@/lib/toast'
 import { API_BASE } from '@/lib/api'
 import { useSessionStore } from '@/stores/session-store'
@@ -21,11 +24,234 @@ function statusColor(s: DiffFile['status']) {
   return s === 'A' ? 'text-green-500' : s === 'D' ? 'text-red-500' : s === 'R' ? 'text-blue-400' : 'text-amber-400'
 }
 
-function splitPath(filePath: string): { dir: string; name: string } {
-  const parts = filePath.replace(/\\/g, '/').split('/')
-  const name = parts.pop() ?? filePath
-  const dir = parts.join('/')
-  return { dir, name }
+interface TreeNode {
+  id: string
+  name: string
+  path: string
+  isDirectory: boolean
+  fileCount: number
+  additions: number
+  deletions: number
+  children: TreeNode[]
+  file?: DiffFile
+}
+
+function buildTree(files: DiffFile[]): TreeNode {
+  const root: TreeNode = {
+    id: '__root__',
+    name: '',
+    path: '',
+    isDirectory: true,
+    fileCount: 0,
+    additions: 0,
+    deletions: 0,
+    children: [],
+  }
+  for (const file of files) {
+    const parts = file.path.replace(/\\/g, '/').split('/')
+    const name = parts.pop() ?? file.path
+    let current = root
+    current.fileCount++
+    current.additions += file.additions
+    current.deletions += file.deletions
+    for (const part of parts) {
+      const path = current.path ? `${current.path}/${part}` : part
+      let child = current.children.find(c => c.name === part && c.isDirectory)
+      if (!child) {
+        child = {
+          id: path,
+          name: part,
+          path,
+          isDirectory: true,
+          fileCount: 0,
+          additions: 0,
+          deletions: 0,
+          children: [],
+        }
+        current.children.push(child)
+      }
+      current = child
+      current.fileCount++
+      current.additions += file.additions
+      current.deletions += file.deletions
+    }
+    const filePath = file.path
+    current.children.push({
+      id: filePath,
+      name,
+      path: filePath,
+      isDirectory: false,
+      fileCount: 1,
+      additions: file.additions,
+      deletions: file.deletions,
+      children: [],
+      file,
+    })
+  }
+  sortTree(root)
+  return compressSingleChildDirs(root)
+}
+
+function sortTree(node: TreeNode): void {
+  node.children.sort((a, b) => {
+    if (a.isDirectory && !b.isDirectory) return -1
+    if (!a.isDirectory && b.isDirectory) return 1
+    return a.name.localeCompare(b.name)
+  })
+  for (const child of node.children) {
+    if (child.isDirectory) sortTree(child)
+  }
+}
+
+function compressSingleChildDirs(node: TreeNode): TreeNode {
+  if (!node.isDirectory) return node
+  const compressedChildren = node.children.map(compressSingleChildDirs)
+  node.children = compressedChildren
+  // 合并只有一个子目录的目录，避免树太深
+  if (node.path !== '' && node.children.length === 1 && node.children[0]!.isDirectory) {
+    const child = node.children[0]!
+    return {
+      ...child,
+      id: `${node.id}/${child.name}`,
+      name: `${node.name}/${child.name}`,
+      path: child.path,
+      fileCount: node.fileCount,
+      additions: node.additions,
+      deletions: node.deletions,
+    }
+  }
+  return node
+}
+
+function FileTreeNode({
+  node,
+  depth,
+  expanded,
+  toggleExpanded,
+  selectedPath,
+  onSelectFile,
+  onOpenFile,
+  onDiscardFile,
+}: {
+  node: TreeNode
+  depth: number
+  expanded: Set<string>
+  toggleExpanded: (id: string) => void
+  selectedPath: string | null
+  onSelectFile: (path: string) => void
+  onOpenFile: (file: DiffFile) => void
+  onDiscardFile: (file: DiffFile) => void
+}) {
+  if (!node.isDirectory) {
+    const f = node.file!
+    const isSelected = selectedPath === f.path
+    const hasAdd = f.additions > 0
+    const hasDel = f.deletions > 0
+    return (
+      <div
+        key={f.path}
+        onClick={() => onSelectFile(f.path)}
+        className={cn(
+          'group flex w-full cursor-pointer items-center gap-1.5 py-1 pl-1.5 pr-2 transition-colors',
+          isSelected
+            ? 'border-l-2 border-primary bg-accent/40'
+            : 'border-l-2 border-transparent hover:bg-muted/50',
+        )}
+        style={{ paddingLeft: `${0.375 + depth * 0.75}rem` }}
+      >
+        <span className={cn('w-3.5 shrink-0 text-center text-[10px] font-bold leading-none', statusColor(f.status))}>
+          {f.status}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[12px] leading-tight text-foreground">{node.name}</div>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <div className="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  className="h-6 w-6"
+                  onClick={e => {
+                    e.stopPropagation()
+                    onOpenFile(f)
+                  }}
+                >
+                  <FileIcon className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">在编辑器中打开</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  className="h-6 w-6 text-red-400 hover:text-red-400"
+                  onClick={e => {
+                    e.stopPropagation()
+                    onDiscardFile(f)
+                  }}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">丢弃此文件变更</TooltipContent>
+            </Tooltip>
+          </div>
+          {(hasAdd || hasDel) && (
+            <div className="font-mono text-[10px] leading-none">
+              {hasAdd && <span className="text-green-500">+{f.additions}</span>}
+              {hasAdd && hasDel && <span className="text-muted-foreground/50"> </span>}
+              {hasDel && <span className="text-red-400">-{f.deletions}</span>}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const isExpanded = expanded.has(node.id)
+  const isRoot = node.path === ''
+  return (
+    <div key={node.id}>
+      {!isRoot && (
+        <div
+          onClick={() => toggleExpanded(node.id)}
+          className="group flex w-full cursor-pointer items-center gap-1.5 py-1 pl-1.5 pr-2 transition-colors hover:bg-muted/50"
+          style={{ paddingLeft: `${0.375 + depth * 0.75}rem` }}
+        >
+          {isExpanded ? (
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+          )}
+          {isExpanded ? (
+            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+          ) : (
+            <Folder className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+          )}
+          <div className="min-w-0 flex-1 truncate text-[12px] leading-tight text-foreground">{node.name}</div>
+          <span className="rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">{node.fileCount}</span>
+        </div>
+      )}
+      {isExpanded &&
+        node.children.map(child => (
+          <FileTreeNode
+            key={child.id}
+            node={child}
+            depth={isRoot ? depth : depth + 1}
+            expanded={expanded}
+            toggleExpanded={toggleExpanded}
+            selectedPath={selectedPath}
+            onSelectFile={onSelectFile}
+            onOpenFile={onOpenFile}
+            onDiscardFile={onDiscardFile}
+          />
+        ))}
+    </div>
+  )
 }
 
 interface DiffFileListProps {
@@ -57,6 +283,9 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   // Update from base dialog
   const [updateOpen, setUpdateOpen] = useState(false)
   const [updating, setUpdating] = useState(false)
+
+  // Refresh diff
+  const [refreshing, setRefreshing] = useState(false)
 
   async function handleCommit() {
     if (!commitMsg.trim()) return
@@ -123,6 +352,21 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
     }
   }
 
+  async function handleRefresh() {
+    setRefreshing(true)
+    try {
+      const res = await fetch(`${API_BASE}/sessions/${session.id}/diff-refresh`, { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json() as { error?: string }
+        throw new Error(body.error ?? res.statusText)
+      }
+    } catch (e) {
+      toastError(`刷新失败: ${String(e)}`)
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   async function handleMerge() {
     setMerging(true)
     try {
@@ -164,6 +408,41 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   const totalAdditions = diffFiles.reduce((s, f) => s + f.additions, 0)
   const totalDeletions = diffFiles.reduce((s, f) => s + f.deletions, 0)
 
+  const tree = useMemo(() => buildTree(diffFiles), [diffFiles])
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setExpanded(prev => {
+      const allDirIds = new Set<string>()
+      function collect(node: TreeNode) {
+        if (node.isDirectory) {
+          allDirIds.add(node.id)
+          node.children.forEach(collect)
+        }
+      }
+      collect(tree)
+      // 首次加载全部展开；后续保留用户折叠状态
+      if (prev.size === 0) return allDirIds
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (allDirIds.has(id)) next.add(id)
+      }
+      return next
+    })
+  }, [tree])
+
+  const toggleExpanded = (id: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const activeTab = session.tabs.find(t => t.id === session.activeTabId)
+  const selectedPath = activeTab?.type === 'diff' ? activeTab.filePath : null
+
   return (
     <div className="flex h-full w-full flex-col">
       {/* Header */}
@@ -183,6 +462,21 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
             )}
           </div>
           <div className="flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex" tabIndex={0}>
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    disabled={refreshing}
+                    onClick={() => void handleRefresh()}
+                  >
+                    {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">刷新变更列表</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="inline-flex" tabIndex={0}>
@@ -242,85 +536,25 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
         </div>
       </div>
 
-      {/* File list */}
+      {/* File tree */}
       <div className="flex-1 overflow-y-auto py-0.5">
         {diffFiles.length === 0 && (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             暂无变更
           </div>
         )}
-        {diffFiles.map(f => {
-          const { dir, name } = splitPath(f.path)
-          const activeTab = session.tabs.find(t => t.id === session.activeTabId)
-          const isSelected = activeTab?.type === 'diff' && activeTab.filePath === f.path
-          const hasAdd = f.additions > 0
-          const hasDel = f.deletions > 0
-          return (
-            <div
-              key={f.path}
-              onClick={() => onSelectFile(f.path)}
-              className={cn(
-                'group flex w-full cursor-pointer items-center gap-1.5 py-1 pl-1.5 pr-2 transition-colors',
-                isSelected
-                  ? 'border-l-2 border-primary bg-accent/40'
-                  : 'border-l-2 border-transparent hover:bg-muted/50',
-              )}
-            >
-              <span className={cn('w-3.5 shrink-0 text-center text-[10px] font-bold leading-none', statusColor(f.status))}>
-                {f.status}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[12px] leading-tight text-foreground">{name}</div>
-                {dir && (
-                  <div className="mt-0.5 truncate text-[10px] leading-none text-muted-foreground/70">{dir}</div>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-0.5">
-                <div className="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        onClick={e => {
-                          e.stopPropagation()
-                          handleOpenFile(f)
-                        }}
-                      >
-                        <FileIcon className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">在编辑器中打开</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        className="h-6 w-6 text-red-400 hover:text-red-400"
-                        onClick={e => {
-                          e.stopPropagation()
-                          setDiscardFileTarget(f)
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">丢弃此文件变更</TooltipContent>
-                  </Tooltip>
-                </div>
-                {(hasAdd || hasDel) && (
-                  <div className="font-mono text-[10px] leading-none">
-                    {hasAdd && <span className="text-green-500">+{f.additions}</span>}
-                    {hasAdd && hasDel && <span className="text-muted-foreground/50"> </span>}
-                    {hasDel && <span className="text-red-400">-{f.deletions}</span>}
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })}
+        {diffFiles.length > 0 && (
+          <FileTreeNode
+            node={tree}
+            depth={0}
+            expanded={expanded}
+            toggleExpanded={toggleExpanded}
+            selectedPath={selectedPath}
+            onSelectFile={onSelectFile}
+            onOpenFile={handleOpenFile}
+            onDiscardFile={setDiscardFileTarget}
+          />
+        )}
       </div>
 
       {/* Commit dialog */}

@@ -139,6 +139,16 @@ fastify.post<{ Body: { message: string; targets?: string[] } }>(
   },
 )
 
+fastify.post<{ Params: { id: string } }>(
+  '/sessions/:id/diff-refresh',
+  async (request, reply) => {
+    const { id } = request.params
+    if (!sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+    sessionManager.refreshDiff(id)
+    return { ok: true }
+  },
+)
+
 fastify.get<{ Params: { id: string }; Querystring: { file?: string } }>(
   '/sessions/:id/diff-content',
   async (request, reply) => {
