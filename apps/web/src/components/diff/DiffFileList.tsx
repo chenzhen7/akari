@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import type { AgentSession, DiffFile } from '@akari/shared-types'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -410,8 +410,13 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
 
   const tree = useMemo(() => buildTree(diffFiles), [diffFiles])
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const prevPathsRef = useRef<string>('')
 
   useEffect(() => {
+    const pathsKey = diffFiles.map(f => f.path).join('\n')
+    if (pathsKey === prevPathsRef.current) return
+    prevPathsRef.current = pathsKey
+
     setExpanded(prev => {
       const allDirIds = new Set<string>()
       function collect(node: TreeNode) {
@@ -429,7 +434,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
       }
       return next
     })
-  }, [tree])
+  }, [diffFiles, tree])
 
   const toggleExpanded = (id: string) => {
     setExpanded(prev => {
