@@ -239,15 +239,21 @@ export class WorktreeManager {
     return watcher
   }
 
-  watchBranchHead(sessionId: string, repoRoot: string, callback: () => void): FSWatcher | null {
-    const headPath = join(resolve(repoRoot), '.git', 'HEAD')
+  watchGitMetadata(sessionId: string, repoRoot: string, callback: () => void): FSWatcher | null {
+    const gitDir = join(resolve(repoRoot), '.git')
+    const paths = [join(gitDir, 'HEAD'), join(gitDir, 'index'), join(gitDir, 'refs', 'heads')]
     try {
-      const watcher = watch(headPath, { persistent: true, ignoreInitial: true })
-      watcher.on('change', callback).on('add', callback)
+      const watcher = watch(paths, { persistent: true, ignoreInitial: true })
+      let debounce: ReturnType<typeof setTimeout> | null = null
+      const scheduleCallback = () => {
+        if (debounce) clearTimeout(debounce)
+        debounce = setTimeout(() => callback(), 300)
+      }
+      watcher.on('change', scheduleCallback).on('add', scheduleCallback)
       this.watchers.set(`${sessionId}:branch`, watcher)
       return watcher
     } catch (err) {
-      console.warn(`[WorktreeManager] failed to watch branch HEAD for ${sessionId}: ${headPath}`, err)
+      console.warn(`[WorktreeManager] failed to watch git metadata for ${sessionId}: ${gitDir}`, err)
       return null
     }
   }

@@ -906,17 +906,20 @@ export class SessionManager {
   }
 
   private watchMainBranch(sessionId: string, repoRoot: string): void {
-    this.worktreeManager.watchBranchHead(sessionId, repoRoot, () => {
+    this.worktreeManager.watchGitMetadata(sessionId, repoRoot, () => {
       void (async () => {
         const session = this.getSession(sessionId)
         if (!session || !session.isMain) return
         const branch = await this.worktreeManager.getCurrentBranch(repoRoot)
-        if (branch === session.branchName) return
-        this.db.prepare('UPDATE sessions SET branch_name = ?, base_branch = ? WHERE id = ?').run(branch, branch, sessionId)
-        const updated = this.getSession(sessionId)
-        if (updated) {
-          this.broadcast({ event: 'session:updated', payload: updated })
+        if (branch !== session.branchName) {
+          this.db.prepare('UPDATE sessions SET branch_name = ?, base_branch = ? WHERE id = ?').run(branch, branch, sessionId)
+          const updated = this.getSession(sessionId)
+          if (updated) {
+            this.broadcast({ event: 'session:updated', payload: updated })
+          }
         }
+        // Refresh diff after any external git operation (commit, reset, checkout, etc.)
+        this.broadcastDiffUpdate(sessionId)
       })()
     })
   }
