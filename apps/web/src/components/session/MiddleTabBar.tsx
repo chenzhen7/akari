@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState } from 'react'
-import { FileText, Plus, X, Terminal, GitCompare } from 'lucide-react'
+import { FileText, Plus, X, Terminal, GitCompare, Bot } from 'lucide-react'
 import { CreateTerminalDialog } from './CreateTerminalDialog'
 import { TabContextMenu } from './TabContextMenu'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
@@ -91,9 +91,13 @@ const SortableTab = memo(function SortableTab({
     ? GitCompare
     : tab.type === 'file'
       ? FileText
-      : tab.type === 'claude'
-        ? ClaudeIcon
+      : tab.type === 'agent'
+        ? (tab.agentType === 'claude' || tab.agentType === 'claude-orchestrator' ? ClaudeIcon : Bot)
         : Terminal
+
+  const agentIconClassName = tab.type === 'agent' && (tab.agentType === 'claude' || tab.agentType === 'claude-orchestrator')
+    ? 'h-3 w-3 shrink-0 text-[#D97757]'
+    : 'h-3 w-3 shrink-0'
 
   const handleActivate = useCallback(() => {
     activateTab(sessionId, tab.id)
@@ -101,7 +105,7 @@ const SortableTab = memo(function SortableTab({
 
   const handleClose = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
-    if ((tab.type === 'terminal' || tab.type === 'claude') && tab.terminalId) {
+    if ((tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
       destroyTerminalInstance(tab.terminalId)
     }
     closeTab(sessionId, tab.id)
@@ -130,10 +134,10 @@ const SortableTab = memo(function SortableTab({
             isDragging && 'opacity-60',
           )}
         >
-          {tab.type === 'claude' ? (
+          {tab.type === 'agent' && (tab.agentType === 'claude' || tab.agentType === 'claude-orchestrator') ? (
             <ClaudeIcon className="h-3 w-3 shrink-0 text-[#D97757]" />
           ) : (
-            <Icon className="h-3 w-3 shrink-0" />
+            <Icon className={agentIconClassName} />
           )}
           <span className="max-w-[120px] truncate">{displayLabel}</span>
           <span

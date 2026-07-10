@@ -43,13 +43,13 @@ function MenuDivider() {
 }
 
 function destroyTerminalIfNeeded(tab: SessionTab): void {
-  if ((tab.type === 'terminal' || tab.type === 'claude') && tab.terminalId) {
+  if ((tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
     destroyTerminalInstance(tab.terminalId)
   }
 }
 
 function isBatchClosable(tab: SessionTab): boolean {
-  return tab.type !== 'terminal' && tab.type !== 'claude'
+  return tab.type !== 'terminal' && tab.type !== 'agent'
 }
 
 export function TabContextMenu({ sessionId, tab, tabs, x, y, onClose }: TabContextMenuProps) {

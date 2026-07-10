@@ -133,7 +133,7 @@ export function FileTreeContextMenu({
 
   const handleSendToTerminal = () => {
     const activeTabType = activeTab?.type
-    if (activeTabType !== 'terminal' && activeTabType !== 'claude') {
+    if (activeTabType !== 'terminal' && activeTabType !== 'agent') {
       onClose()
       return
     }

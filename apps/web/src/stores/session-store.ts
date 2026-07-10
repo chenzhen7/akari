@@ -56,7 +56,7 @@ interface SessionStore {
   setSelectedGitCommit: (sessionId: string, hash: string | null) => void
   setConnectionStatus: (status: ConnectionStatus) => void
   setActiveRightTab: (tab: 'git-graph' | 'diff' | 'info' | 'explorer') => void
-  createTab: (sessionId: string, type: 'terminal' | 'claude' | 'diff' | 'file', filePath?: string) => void
+  createTab: (sessionId: string, type: 'terminal' | 'agent' | 'diff' | 'file', filePath?: string) => void
   closeTab: (sessionId: string, tabId: string) => void
   activateTab: (sessionId: string, tabId: string) => void
   reorderTabs: (sessionId: string, orderedTabIds: string[]) => void

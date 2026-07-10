@@ -63,7 +63,7 @@ export interface FileChangeEvent {
 
 export interface SessionTab {
   id: string
-  type: 'terminal' | 'claude' | 'diff' | 'file'
+  type: 'terminal' | 'agent' | 'diff' | 'file'
   label: string
   filePath?: string
   terminalId?: string
@@ -166,7 +166,7 @@ export type ClientMessage =
   | { event: 'terminal:input'; payload: { sessionId: string; terminalId: string; data: string } }
   | { event: 'terminal:resize'; payload: { sessionId: string; terminalId: string; cols: number; rows: number } }
   | { event: 'broadcast:send'; payload: { message: string; targets?: string[] } }
-  | { event: 'tab:create'; payload: { sessionId: string; type: 'terminal' | 'claude' | 'diff' | 'file'; filePath?: string } }
+  | { event: 'tab:create'; payload: { sessionId: string; type: 'terminal' | 'agent' | 'diff' | 'file'; filePath?: string } }
   | { event: 'tab:close'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:activate'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:reorder'; payload: { sessionId: string; orderedTabIds: string[] } }

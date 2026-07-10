@@ -491,7 +491,7 @@ fastify.get<{ Params: { id: string } }>(
   },
 )
 
-fastify.post<{ Params: { id: string }; Body: { type: 'terminal' | 'claude' | 'diff'; filePath?: string } }>(
+fastify.post<{ Params: { id: string }; Body: { type: 'terminal' | 'agent' | 'diff'; filePath?: string } }>(
   '/sessions/:id/tabs',
   async (request, reply) => {
     const { id } = request.params
@@ -649,7 +649,7 @@ function handleClientMessage(msg: ClientMessage): void {
     case 'terminal:create': {
       const { sessionId, agentType } = msg.payload
       try {
-        sessionManager.createTab(sessionId, agentType ? 'claude' : 'terminal', undefined, agentType)
+        sessionManager.createTab(sessionId, agentType && agentType !== 'shell' ? 'agent' : 'terminal', undefined, agentType)
       } catch (err) {
         fastify.log.warn({ err, sessionId, agentType }, 'terminal:create failed')
       }

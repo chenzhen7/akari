@@ -73,7 +73,7 @@ export function useGlobalShortcuts({ toggleLeft, toggleRight }: ShortcutHandlers
     function closeActiveTab(sessionId: string, tabId: string): void {
       const session = useSessionStore.getState().sessions.find(s => s.id === sessionId)
       const tab = session?.tabs.find(t => t.id === tabId)
-      if (tab && (tab.type === 'terminal' || tab.type === 'claude') && tab.terminalId) {
+      if (tab && (tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
         destroyTerminalInstance(tab.terminalId)
       }
       useSessionStore.getState().closeTab(sessionId, tabId)

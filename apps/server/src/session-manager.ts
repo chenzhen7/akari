@@ -30,6 +30,23 @@ export interface CreateSessionParams {
   parentSessionId?: string
 }
 
+function isAgentAgentType(agentType: AgentType | undefined): boolean {
+  return agentType !== undefined && agentType !== 'shell'
+}
+
+function getAgentTabLabel(agentType: AgentType): string {
+  switch (agentType) {
+    case 'claude':
+      return 'Claude'
+    case 'claude-orchestrator':
+      return 'Claude Orchestrator'
+    case 'aider':
+      return 'Aider'
+    default:
+      return agentType.charAt(0).toUpperCase() + agentType.slice(1)
+  }
+}
+
 interface DbRow {
   id: string
   name: string
@@ -339,7 +356,7 @@ export class SessionManager {
     const targets = sessionIds ? active.filter(s => sessionIds.includes(s.id)) : active
     for (const s of targets) {
       const data = `\r\n📢 Broadcast: ${message}\r\n`
-      const terminalTab = s.tabs.find(t => t.type === 'terminal' || t.type === 'claude')
+      const terminalTab = s.tabs.find(t => t.type === 'terminal' || t.type === 'agent')
       if (terminalTab?.terminalId) {
         this.terminalMux.sendToTerminal(terminalTab.terminalId, `${message}\n`)
         this.broadcast({ event: 'terminal:data', payload: { sessionId: s.id, terminalId: terminalTab.terminalId, data } })
@@ -352,7 +369,7 @@ export class SessionManager {
 
   createTab(
     sessionId: string,
-    type: 'terminal' | 'claude' | 'diff' | 'file',
+    type: 'terminal' | 'agent' | 'diff' | 'file',
     filePath?: string,
     agentType?: AgentType,
   ): SessionTab {
@@ -364,14 +381,10 @@ export class SessionManager {
     let resolvedType: SessionTab['type'] = type
     let label: string
 
-    if (type === 'terminal' || type === 'claude') {
+    if (type === 'terminal' || type === 'agent') {
       terminalId = nanoid(8)
-      if (agentType === 'claude' || agentType === 'claude-orchestrator') {
-        resolvedType = 'claude'
-        label = agentType === 'claude-orchestrator' ? 'Claude Orchestrator' : 'Claude'
-      } else if (agentType === 'aider') {
-        resolvedType = 'terminal'
-        label = 'Aider'
+      if (type === 'agent' && agentType && isAgentAgentType(agentType)) {
+        label = getAgentTabLabel(agentType)
       } else {
         resolvedType = 'terminal'
         const count = session.tabs.filter(t => t.type === 'terminal').length + 1
@@ -386,7 +399,7 @@ export class SessionManager {
     const activeTabId = tabId
 
     // 文档型 tab（file/diff）最多保留 MAX_DOC_TABS 个：超出时按插入顺序淘汰最旧的，
-    // 终端 / agent（terminal/claude）类型不受此限制。
+    // 终端 / agent（terminal/agent）类型不受此限制。
     const evictedTabIds: string[] = []
     if (resolvedType === 'file' || resolvedType === 'diff') {
       const isDocTab = (t: SessionTab): boolean => t.type === 'file' || t.type === 'diff'
@@ -409,7 +422,7 @@ export class SessionManager {
       this.broadcast({ event: 'tab:closed', payload: { sessionId, tabId: evictedId } })
     }
 
-    if ((resolvedType === 'terminal' || resolvedType === 'claude') && terminalId) {
+    if ((resolvedType === 'terminal' || resolvedType === 'agent') && terminalId) {
       this.terminalMux.createTerminal(terminalId, sessionId, session.worktreePath)
       if (agentType) {
         this.launchAgentInTerminal(sessionId, terminalId, session.worktreePath, agentType, session.task).catch(err => {
@@ -441,7 +454,7 @@ export class SessionManager {
       .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ? WHERE id = ?')
       .run(JSON.stringify(updatedTabs), activeTabId, sessionId)
 
-    if ((tab.type === 'terminal' || tab.type === 'claude') && tab.terminalId) {
+    if ((tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
       this.terminalMux.killTerminal(tab.terminalId)
     }
 
@@ -679,22 +692,30 @@ export class SessionManager {
       let tabs = session.tabs
       let activeTabId = session.activeTabId
       if (tabs.length === 0) {
-        // Legacy session without tabs: create a default terminal tab
+        // Legacy session without tabs: create a default terminal/agent tab
         const terminalId = nanoid(8)
-        const isClaudeAgent = session.agentType === 'claude' || session.agentType === 'claude-orchestrator'
-        const tab: SessionTab = { id: nanoid(6), type: isClaudeAgent ? 'claude' : 'terminal', label: isClaudeAgent ? 'Claude' : 'Terminal 1', terminalId }
+        const isAgent = isAgentAgentType(session.agentType)
+        const tab: SessionTab = {
+          id: nanoid(6),
+          type: isAgent ? 'agent' : 'terminal',
+          label: isAgent && session.agentType ? getAgentTabLabel(session.agentType) : 'Terminal 1',
+          terminalId,
+          agentType: session.agentType,
+        }
         tabs = [tab]
         activeTabId = tab.id
         this.terminalMux.createTerminal(terminalId, session.id, session.worktreePath)
       } else {
         const restoredTabs: SessionTab[] = []
         for (const tab of tabs) {
-          if (tab.type === 'terminal' || tab.type === 'claude') {
+          // 兼容旧数据：曾经的 'claude' 类型已合并为通用 'agent'
+          const normalizedType = (tab.type as string) === 'claude' ? 'agent' : tab.type
+          if (normalizedType === 'terminal' || normalizedType === 'agent') {
             const terminalId = nanoid(8)
             this.terminalMux.createTerminal(terminalId, session.id, session.worktreePath)
-            restoredTabs.push({ ...tab, terminalId })
+            restoredTabs.push({ ...tab, type: normalizedType, terminalId })
           } else {
-            restoredTabs.push(tab)
+            restoredTabs.push({ ...tab, type: normalizedType })
           }
         }
         tabs = restoredTabs
@@ -787,13 +808,11 @@ export class SessionManager {
       const terminalId = nanoid(8)
       this.terminalMux.createTerminal(terminalId, id, worktreePath)
 
-      const isClaudeAgent = session.agentType === 'claude' || session.agentType === 'claude-orchestrator'
+      const isAgent = isAgentAgentType(session.agentType)
       const tab: SessionTab = {
         id: nanoid(6),
-        type: isClaudeAgent ? 'claude' : 'terminal',
-        label: isClaudeAgent
-          ? (session.agentType === 'claude-orchestrator' ? 'Claude Orchestrator' : 'Claude')
-          : 'Terminal 1',
+        type: isAgent ? 'agent' : 'terminal',
+        label: isAgent && session.agentType ? getAgentTabLabel(session.agentType) : 'Terminal 1',
         terminalId,
         agentType: session.agentType,
       }
@@ -870,7 +889,7 @@ export class SessionManager {
   private pushTerminalDisplay(sessionId: string, data: string): void {
     const session = this.getSession(sessionId)
     const activeTab = session?.tabs.find(t => t.id === session.activeTabId)
-    const terminalId = (activeTab?.type === 'terminal' || activeTab?.type === 'claude') ? activeTab.terminalId : session?.tabs.find(t => t.type === 'terminal' || t.type === 'claude')?.terminalId
+    const terminalId = (activeTab?.type === 'terminal' || activeTab?.type === 'agent') ? activeTab.terminalId : session?.tabs.find(t => t.type === 'terminal' || t.type === 'agent')?.terminalId
     if (terminalId) {
       this.broadcast({ event: 'terminal:data', payload: { sessionId, terminalId, data } })
     }

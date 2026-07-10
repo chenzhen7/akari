@@ -43,7 +43,7 @@ const TabPane = memo(function TabPane({
         !isActive && 'hidden',
       )}
     >
-      {(type === 'terminal' || type === 'claude') && terminalId && (
+      {(type === 'terminal' || type === 'agent') && terminalId && (
         <TerminalPanel
           sessionId={sessionId}
           terminalId={terminalId}
