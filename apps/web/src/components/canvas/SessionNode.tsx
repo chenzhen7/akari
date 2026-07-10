@@ -2,6 +2,7 @@ import { memo, useState, useRef } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { DeleteSessionDialog } from '@/components/session/DeleteSessionDialog'
 import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Plus, RotateCcw, Loader2, HardDrive } from 'lucide-react'
+import { KimiIcon } from '@/components/icons/KimiIcon'
 import type { LucideIcon } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
@@ -15,11 +16,12 @@ type SessionNodeData = {
 
 type SessionNodeType = Node<SessionNodeData>
 
-const agentConfig: Record<string, { bg: string; Icon: LucideIcon }> = {
+const agentConfig: Record<string, { bg: string; Icon: LucideIcon | typeof KimiIcon }> = {
   claude: { bg: '#7c3aed', Icon: Bot },
   'claude-orchestrator': { bg: '#b45309', Icon: Bot },
   aider: { bg: '#2563eb', Icon: Code2 },
   shell: { bg: '#374151', Icon: Terminal },
+  kimi: { bg: '#1783FF', Icon: KimiIcon },
 }
 
 const statusConfig: Record<string, { color: string; label: string }> = {

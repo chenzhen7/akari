@@ -13,6 +13,7 @@ export function createAgentAdapter(agentType: string): AgentAdapter | null {
     case 'claude':
       return new ClaudeAdapter()
     case 'aider':
+    case 'kimi':
     case 'shell':
     case 'claude-orchestrator':
     default:

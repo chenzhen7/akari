@@ -18,7 +18,7 @@ export type KanbanColumn =
   | 'approved'
   | 'done'
 
-export type AgentType = 'claude' | 'aider' | 'shell' | 'claude-orchestrator'
+export type AgentType = 'claude' | 'aider' | 'shell' | 'kimi' | 'claude-orchestrator'
 
 export type CollaborationRole = 'standalone' | 'orchestrator' | 'worker' | 'reviewer'
 

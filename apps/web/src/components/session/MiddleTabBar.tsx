@@ -1,5 +1,6 @@
 import { memo, useCallback, useMemo, useState } from 'react'
 import { FileText, Plus, X, Terminal, GitCompare, Bot } from 'lucide-react'
+import { KimiIcon } from '@/components/icons/KimiIcon'
 import { CreateTerminalDialog } from './CreateTerminalDialog'
 import { TabContextMenu } from './TabContextMenu'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
@@ -87,17 +88,21 @@ const SortableTab = memo(function SortableTab({
     zIndex: isDragging ? 10 : undefined,
   }
 
-  const Icon = tab.type === 'diff'
-    ? GitCompare
-    : tab.type === 'file'
-      ? FileText
-      : tab.type === 'agent'
-        ? (tab.agentType === 'claude' || tab.agentType === 'claude-orchestrator' ? ClaudeIcon : Bot)
-        : Terminal
+  const Icon = (() => {
+    if (tab.type === 'diff') return GitCompare
+    if (tab.type === 'file') return FileText
+    if (tab.type !== 'agent') return Terminal
+    if (tab.agentType === 'claude' || tab.agentType === 'claude-orchestrator') return ClaudeIcon
+    if (tab.agentType === 'kimi') return KimiIcon
+    return Bot
+  })()
 
-  const agentIconClassName = tab.type === 'agent' && (tab.agentType === 'claude' || tab.agentType === 'claude-orchestrator')
-    ? 'h-3 w-3 shrink-0 text-[#D97757]'
-    : 'h-3 w-3 shrink-0'
+  const agentIconClassName = (() => {
+    if (tab.type !== 'agent') return 'h-3 w-3 shrink-0'
+    if (tab.agentType === 'claude' || tab.agentType === 'claude-orchestrator') return 'h-3 w-3 shrink-0 text-[#D97757]'
+    if (tab.agentType === 'kimi') return 'h-3 w-3 shrink-0 text-[#1783FF]'
+    return 'h-3 w-3 shrink-0'
+  })()
 
   const handleActivate = useCallback(() => {
     activateTab(sessionId, tab.id)
@@ -134,11 +139,7 @@ const SortableTab = memo(function SortableTab({
             isDragging && 'opacity-60',
           )}
         >
-          {tab.type === 'agent' && (tab.agentType === 'claude' || tab.agentType === 'claude-orchestrator') ? (
-            <ClaudeIcon className="h-3 w-3 shrink-0 text-[#D97757]" />
-          ) : (
-            <Icon className={agentIconClassName} />
-          )}
+          <Icon className={agentIconClassName} />
           <span className="max-w-[120px] truncate">{displayLabel}</span>
           <span
             onClick={handleClose}

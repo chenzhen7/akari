@@ -7,8 +7,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Bot, Code2, Terminal } from 'lucide-react'
+import { Bot, Code2, Terminal, Sparkles } from 'lucide-react'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
+import { KimiIcon } from '@/components/icons/KimiIcon'
 
 interface AgentTypeSelectProps {
   value: AgentType
@@ -31,6 +32,11 @@ const OPTIONS: { value: AgentType; label: string; icon: ReactNode }[] = [
     value: 'aider',
     label: 'Aider',
     icon: <Code2 className="h-3.5 w-3.5 shrink-0 text-[#2563eb]" />,
+  },
+  {
+    value: 'kimi',
+    label: 'Kimi',
+    icon: <KimiIcon className="h-3.5 w-3.5 shrink-0 text-[#1783FF]" />,
   },
   {
     value: 'shell',

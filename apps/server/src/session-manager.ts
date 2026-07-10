@@ -43,6 +43,8 @@ function getAgentTabLabel(agentType: AgentType): string {
       return 'Claude Orchestrator'
     case 'aider':
       return 'Aider'
+    case 'kimi':
+      return 'Kimi'
     default:
       return agentType.charAt(0).toUpperCase() + agentType.slice(1)
   }
