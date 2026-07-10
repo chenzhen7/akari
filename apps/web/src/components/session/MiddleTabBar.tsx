@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo, useState } from 'react'
 import { FileText, Plus, X, Terminal, GitCompare } from 'lucide-react'
 import { CreateTerminalDialog } from './CreateTerminalDialog'
+import { TabContextMenu } from './TabContextMenu'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { cn } from '@/lib/utils'
 import type { AgentSession, SessionTab } from '@/types'
@@ -59,12 +60,14 @@ const SortableTab = memo(function SortableTab({
   isActive,
   displayLabel,
   tooltipContent,
+  onContextMenu,
 }: {
   sessionId: string
   tab: AgentSession['tabs'][number]
   isActive: boolean
   displayLabel: string
   tooltipContent: string
+  onContextMenu?: (e: React.MouseEvent) => void
 }) {
   const activateTab = useSessionStore(s => s.activateTab)
   const closeTab = useSessionStore(s => s.closeTab)
@@ -104,6 +107,11 @@ const SortableTab = memo(function SortableTab({
     closeTab(sessionId, tab.id)
   }, [tab.type, tab.terminalId, tab.id, sessionId, closeTab])
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    onContextMenu?.(e)
+  }, [onContextMenu])
+
   return (
     <Tooltip delayDuration={500}>
       <TooltipTrigger asChild>
@@ -113,6 +121,7 @@ const SortableTab = memo(function SortableTab({
           {...attributes}
           {...listeners}
           onClick={handleActivate}
+          onContextMenu={handleContextMenu}
           className={cn(
             'group relative flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors select-none focus:outline-none',
             isActive
@@ -149,6 +158,7 @@ const SortableTab = memo(function SortableTab({
 
 export function MiddleTabBar({ session }: MiddleTabBarProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ tab: SessionTab; x: number; y: number } | null>(null)
   const reorderTabs = useSessionStore(s => s.reorderTabs)
   const tabs = session.tabs
   const activeTabId = session.activeTabId
@@ -174,6 +184,11 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
       },
     })
   )
+
+  const handleContextMenu = useCallback((tab: SessionTab, e: React.MouseEvent) => {
+    e.preventDefault()
+    setContextMenu({ tab, x: e.clientX, y: e.clientY })
+  }, [])
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event
@@ -209,11 +224,23 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
                 isActive={tab.id === activeTabId}
                 displayLabel={displayLabel}
                 tooltipContent={tooltipContent}
+                onContextMenu={e => handleContextMenu(tab, e)}
               />
             ))}
           </div>
         </SortableContext>
       </DndContext>
+
+      {contextMenu && (
+        <TabContextMenu
+          sessionId={session.id}
+          tab={contextMenu.tab}
+          tabs={tabs}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
 
       <Button
         variant="ghost"
