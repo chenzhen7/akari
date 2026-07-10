@@ -27,6 +27,7 @@
     "lucide-react": "^1.16.0",
     "radix-ui": "^1.4.3",
     "react": "^19.2.4",
+    "react-arborist": "^3.13.2",
     "react-dom": "^19.2.4",
     "shadcn": "^4.8.2",
     "sonner": "^1.7.4",

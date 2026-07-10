@@ -1,14 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { RefreshCw } from 'lucide-react'
 import type { AgentSession, FileNode } from '@akari/shared-types'
-import { cn } from '@/lib/utils'
 import {
   fetchFileTreeChildren,
   getFileTreeChildren,
   getFileTreePathsForSession,
   useFileTreeChildren,
 } from '@/lib/file-tree-store'
-import { FileTreeNode } from './FileTreeNode'
+import { ArboristFileTree } from './ArboristFileTree'
 import { FileTreeContextMenu } from './FileTreeContextMenu'
 
 interface ExplorerPanelProps {
@@ -22,7 +20,6 @@ function getRootFolderName(worktreePath: string): string {
 }
 
 export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
-  const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | undefined>()
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -38,21 +35,14 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
       return cached
     }
 
-    setLoadingPaths(prev => new Set(prev).add(path))
     try {
-      const nodes = await fetchFileTreeChildren(session.id, path)
-      return nodes
+      setError(null)
+      return await fetchFileTreeChildren(session.id, path)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`[ExplorerPanel] loadDir error path="${path}"`, msg)
       setError(msg)
       return []
-    } finally {
-      setLoadingPaths(prev => {
-        const next = new Set(prev)
-        next.delete(path)
-        return next
-      })
     }
   }, [session.id])
 
@@ -65,7 +55,6 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
       lastSessionIdRef.current = session.id
       setSelectedPath(undefined)
       setError(null)
-      setLoadingPaths(new Set())
       setIsRefreshing(false)
       wasInitializingRef.current = isInitializing
       if (!isInitializing) {
@@ -80,11 +69,9 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
     }
   }, [session.id, session.status, loadDir])
 
-  const handleToggleDir = useCallback(async (path: string): Promise<void> => {
-    await loadDir(path)
-  }, [loadDir])
+  const rootChildren = useFileTreeChildren(session.id, '')
 
-  const handleSelectFile = useCallback((path: string) => {
+  const handleOpenFile = useCallback((path: string) => {
     setSelectedPath(path)
     onOpenFile(path)
   }, [onOpenFile])
@@ -97,6 +84,7 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
+    setError(null)
     try {
       let paths = getFileTreePathsForSession(session.id)
       if (paths.length === 0) {
@@ -114,53 +102,32 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
     }
   }, [session.id])
 
-  const rootNode: FileNode = {
-    name: getRootFolderName(session.worktreePath),
-    path: '',
-    type: 'directory',
-  }
-
-  const rootChildren = useFileTreeChildren(session.id, '')
-  const isRootLoading = loadingPaths.has('')
-
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto py-1">
-        {error && (
-          <div className="px-3 py-4 text-xs text-red-400">
-            加载失败: {error}
-          </div>
-        )}
+      {error && (
+        <div className="shrink-0 px-3 py-2 text-xs text-red-400">
+          加载失败: {error}
+        </div>
+      )}
 
-        {isRootLoading && rootChildren === undefined && (
-          <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
-            <span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
-            加载中...
-          </div>
-        )}
+      {rootChildren === undefined && !error && (
+        <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+          <span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+          加载中...
+        </div>
+      )}
 
-        <FileTreeNode
+      {rootChildren !== undefined && (
+        <ArboristFileTree
           sessionId={session.id}
-          node={rootNode}
-          level={0}
-          defaultExpanded={true}
+          rootName={getRootFolderName(session.worktreePath)}
           selectedPath={selectedPath}
-          onSelectFile={handleSelectFile}
-          onToggleDir={handleToggleDir}
+          onOpenFile={handleOpenFile}
           onContextMenu={handleContextMenu}
-          actions={
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              title="刷新"
-              className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-            >
-              <RefreshCw className={cn('h-3 w-3', isRefreshing && 'animate-spin')} />
-            </button>
-          }
+          onRefresh={handleRefresh}
+          isRefreshing={isRefreshing}
         />
-      </div>
+      )}
 
       {contextMenu && (
         <FileTreeContextMenu

@@ -4,13 +4,20 @@ import { API_BASE } from './api'
 
 const cache = new Map<string, FileNode[]>()
 const listeners = new Set<() => void>()
+let tick = 0
 
 function cacheKey(sessionId: string, path: string): string {
   return `${sessionId}:${path}`
 }
 
 function notify(): void {
+  tick++
   listeners.forEach(listener => listener())
+}
+
+function subscribe(callback: () => void): () => void {
+  listeners.add(callback)
+  return () => listeners.delete(callback)
 }
 
 export function getFileTreeChildren(sessionId: string, path: string): FileNode[] | undefined {
@@ -44,13 +51,11 @@ export function getFileTreePathsForSession(sessionId: string): string[] {
 }
 
 export function useFileTreeChildren(sessionId: string, path: string): FileNode[] | undefined {
-  return useSyncExternalStore(
-    callback => {
-      listeners.add(callback)
-      return () => listeners.delete(callback)
-    },
-    () => getFileTreeChildren(sessionId, path),
-  )
+  return useSyncExternalStore(subscribe, () => getFileTreeChildren(sessionId, path))
+}
+
+export function useFileTreeTick(): number {
+  return useSyncExternalStore(subscribe, () => tick)
 }
 
 export async function fetchFileTreeChildren(sessionId: string, path: string): Promise<FileNode[]> {
