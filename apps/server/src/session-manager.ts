@@ -708,14 +708,12 @@ export class SessionManager {
       } else {
         const restoredTabs: SessionTab[] = []
         for (const tab of tabs) {
-          // 兼容旧数据：曾经的 'claude' 类型已合并为通用 'agent'
-          const normalizedType = (tab.type as string) === 'claude' ? 'agent' : tab.type
-          if (normalizedType === 'terminal' || normalizedType === 'agent') {
+          if (tab.type === 'terminal' || tab.type === 'agent') {
             const terminalId = nanoid(8)
             this.terminalMux.createTerminal(terminalId, session.id, session.worktreePath)
-            restoredTabs.push({ ...tab, type: normalizedType, terminalId })
+            restoredTabs.push({ ...tab, terminalId })
           } else {
-            restoredTabs.push({ ...tab, type: normalizedType })
+            restoredTabs.push(tab)
           }
         }
         tabs = restoredTabs
@@ -999,6 +997,27 @@ export class SessionManager {
     }
     if (!cols.includes('is_main')) {
       this.db.exec('ALTER TABLE sessions ADD COLUMN is_main INTEGER NOT NULL DEFAULT 0')
+    }
+
+    // Migration: 把旧数据中 type 为 'claude' 的标签页统一改为通用 'agent'
+    const rows = this.db.prepare('SELECT id, tabs FROM sessions').all() as { id: string; tabs: string }[]
+    for (const row of rows) {
+      let tabs: SessionTab[]
+      try {
+        tabs = JSON.parse(row.tabs)
+      } catch {
+        continue
+      }
+      let changed = false
+      for (const tab of tabs) {
+        if ((tab.type as string) === 'claude') {
+          tab.type = 'agent'
+          changed = true
+        }
+      }
+      if (changed) {
+        this.db.prepare('UPDATE sessions SET tabs = ? WHERE id = ?').run(JSON.stringify(tabs), row.id)
+      }
     }
     // pending_approval column removed — no longer used
   }

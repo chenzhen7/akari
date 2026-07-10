@@ -321,6 +321,17 @@ Worktree 初始化时，`prepare()` 自动写入 `.claude/settings.local.json`�
 
 ---
 
+## Agent 抽象与 Tab 类型规范
+
+- `AgentType`（`claude` / `aider` / `shell` / 未来的 `openai` / `kimi` 等）描述的是“使用哪种 Agent 适配器”，属于会话/标签的元数据。
+- 标签页类型 `SessionTab.type` 只描述标签的**形态**，必须是通用的 `'terminal' | 'agent' | 'diff' | 'file'`：
+  - `'agent'` 代表“运行 Agent 的终端标签”，不区分具体 Agent 品牌。
+  - 具体品牌通过 `tab.agentType` 区分，用于图标、标签文字和 adapter 路由。
+- **禁止**把某个 Agent 品牌（如 `'claude'`）直接作为 `SessionTab.type` 写入。新增 Agent 时，只扩展 `AgentType` 和 `agent-adapters`，不要新增 tab 类型。
+- 当已持久化的旧数据中出现被废弃的类型/字段时，应在 `SessionManager.initDb()` 里做一次性迁移，将数据改写为新形态，随后删除运行时兼容代码。不得以“兼容旧数据”为由在业务逻辑中保留分支。
+
+---
+
 ## Worktree 管理规范
 
 - Worktree 基础目录：`<worktreeBaseDir>/<repoSlug>/<sessionId>/`（默认 `<repo>/.agent-worktrees/<repoSlug>/<sessionId>/`）
