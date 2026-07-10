@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Bot, Code2, Terminal, Sparkles } from 'lucide-react'
+import { Bot, Code2, Terminal } from 'lucide-react'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { KimiIcon } from '@/components/icons/KimiIcon'
 

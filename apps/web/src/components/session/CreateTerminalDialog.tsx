@@ -46,12 +46,12 @@ export function CreateTerminalDialog({ sessionId, open, onOpenChange }: CreateTe
                 value={agentType}
                 onValueChange={v => {
                   setAgentType(v)
-                  if (v !== 'claude') setBypassPermissions(false)
+                  if (v !== 'claude' && v !== 'kimi') setBypassPermissions(false)
                 }}
               />
             </Field>
 
-            {agentType === 'claude' && (
+            {(agentType === 'claude' || agentType === 'kimi') && (
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="bypass-permissions"
@@ -62,7 +62,9 @@ export function CreateTerminalDialog({ sessionId, open, onOpenChange }: CreateTe
                   htmlFor="bypass-permissions"
                   className="cursor-pointer text-xs text-muted-foreground"
                 >
-                  以最高权限启动（--permission-mode bypassPermissions）
+                  {agentType === 'claude'
+                    ? '以最高权限启动（--permission-mode bypassPermissions）'
+                    : '以最高权限启动（--yolo）'}
                 </label>
               </div>
             )}

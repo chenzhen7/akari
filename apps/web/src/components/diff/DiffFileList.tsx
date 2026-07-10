@@ -446,7 +446,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   }
 
   const activeTab = session.tabs.find(t => t.id === session.activeTabId)
-  const selectedPath = activeTab?.type === 'diff' ? activeTab.filePath : null
+  const selectedPath = activeTab?.type === 'diff' ? (activeTab.filePath ?? null) : null
 
   return (
     <div className="flex h-full w-full flex-col">
