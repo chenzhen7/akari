@@ -155,6 +155,7 @@ export function ArboristFileTree({
   const treeTick = useFileTreeTick()
   const containerRef = useRef<HTMLDivElement>(null)
   const treeRef = useRef<TreeApi<ArboristFileNode> | undefined>(undefined)
+  const lastRevealedRef = useRef<string | undefined>(undefined)
   const [height, setHeight] = useState(400)
 
   useEffect(() => {
@@ -166,6 +167,48 @@ export function ArboristFileTree({
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
+
+  // 当外部指定了选中文件（如中间编辑区激活了某个文件标签）时，
+  // 自动加载其所有祖先目录并在树中展开、滚动到该文件。
+  useEffect(() => {
+    if (!selectedPath) {
+      lastRevealedRef.current = undefined
+      return
+    }
+    if (lastRevealedRef.current === selectedPath) return
+
+    const reveal = async () => {
+      try {
+        const parts = selectedPath.split(/[/\\]/).filter(Boolean)
+        const ancestorDirs: string[] = ['']
+        let current = ''
+        for (let i = 0; i < parts.length - 1; i++) {
+          current = current ? `${current}/${parts[i]}` : parts[i]
+          ancestorDirs.push(current)
+        }
+
+        for (const dir of ancestorDirs) {
+          if (!isLoaded(sessionId, dir)) {
+            await fetchFileTreeChildren(sessionId, dir)
+          }
+        }
+
+        // 等待 react-arborist 根据新数据完成一次渲染
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+
+        const tree = treeRef.current
+        if (!tree) return
+        const targetId = pathToId(selectedPath)
+        tree.openParents(targetId)
+        tree.select(targetId, { align: 'center', focus: false })
+        lastRevealedRef.current = selectedPath
+      } catch (err) {
+        console.error(`[ArboristFileTree] reveal failed for "${selectedPath}":`, err)
+      }
+    }
+
+    reveal()
+  }, [selectedPath, sessionId])
 
   const treeData = useMemo(() => {
     if (!rootChildren) return []

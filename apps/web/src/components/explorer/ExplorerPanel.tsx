@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import type { AgentSession, FileNode } from '@akari/shared-types'
 import {
   fetchFileTreeChildren,
@@ -19,12 +19,26 @@ function getRootFolderName(worktreePath: string): string {
   return parts[parts.length - 1] ?? worktreePath
 }
 
+function getActiveFilePath(session: AgentSession): string | undefined {
+  const tab = session.tabs.find(
+    t => t.id === session.activeTabId && (t.type === 'file' || t.type === 'diff'),
+  )
+  return tab?.filePath
+}
+
 export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | undefined>()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null)
   const lastSessionIdRef = useRef<string | null>(null)
+
+  const activeFilePath = useMemo(() => getActiveFilePath(session), [session])
+
+  // 与中间编辑区的当前标签保持同步：进入文件/ diff 编辑区时高亮对应文件
+  useEffect(() => {
+    setSelectedPath(activeFilePath)
+  }, [activeFilePath])
 
   const loadDir = useCallback(async (path: string): Promise<FileNode[]> => {
     const cached = getFileTreeChildren(session.id, path)
