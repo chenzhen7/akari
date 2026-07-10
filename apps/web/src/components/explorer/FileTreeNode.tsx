@@ -1,4 +1,4 @@
-import { useState, useCallback, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { ChevronRight, ChevronDown, Folder, FolderOpen, File } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { FileNode } from '@akari/shared-types'
@@ -33,6 +33,28 @@ export function FileTreeNode({
   const isSelected = selectedPath === node.path
   const children = useFileTreeChildren(sessionId, node.path)
 
+  // 自动加载展开目录的子节点
+  useEffect(() => {
+    if (!isDirectory) return
+    if (children !== undefined) return
+    if (!defaultExpanded && !expanded) return
+
+    let cancelled = false
+    setLoading(true)
+    onToggleDir(node.path).finally(() => {
+      if (!cancelled) setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [isDirectory, children, defaultExpanded, expanded, node.path, onToggleDir])
+
+  // 压缩中间单目录链：只有一个子目录且没有文件时，合并显示
+  const compressedChild = useMemo(() => {
+    if (!isDirectory || !children || children.length !== 1) return null
+    const child = children[0]
+    if (!child || child.type !== 'directory') return null
+    return { ...child, name: `${node.name}/${child.name}` }
+  }, [isDirectory, children, node.name])
+
   const handleToggle = useCallback(async () => {
     if (!isDirectory) {
       onSelectFile(node.path)
@@ -59,6 +81,22 @@ export function FileTreeNode({
     e.preventDefault()
     onContextMenu?.(e, node)
   }, [onContextMenu, node])
+
+  if (compressedChild) {
+    return (
+      <FileTreeNode
+        sessionId={sessionId}
+        node={compressedChild}
+        level={level}
+        defaultExpanded={true}
+        selectedPath={selectedPath}
+        onSelectFile={onSelectFile}
+        onToggleDir={onToggleDir}
+        onContextMenu={onContextMenu}
+        actions={actions}
+      />
+    )
+  }
 
   return (
     <div>

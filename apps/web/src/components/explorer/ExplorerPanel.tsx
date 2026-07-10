@@ -40,7 +40,8 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
 
     setLoadingPaths(prev => new Set(prev).add(path))
     try {
-      return await fetchFileTreeChildren(session.id, path)
+      const nodes = await fetchFileTreeChildren(session.id, path)
+      return nodes
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`[ExplorerPanel] loadDir error path="${path}"`, msg)
