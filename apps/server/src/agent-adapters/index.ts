@@ -1,7 +1,7 @@
 import type { AgentAdapter } from './base.js'
 import { ClaudeAdapter, SHELL_STARTUP_DELAY_MS } from './claude.js'
 
-export type { AgentAdapter, PtyCommand } from './base.js'
+export type { AgentAdapter, PtyCommand, AgentLaunchOptions } from './base.js'
 export { ClaudeAdapter, SHELL_STARTUP_DELAY_MS } from './claude.js'
 
 /**

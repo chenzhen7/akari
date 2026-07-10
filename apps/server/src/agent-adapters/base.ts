@@ -3,6 +3,10 @@ export interface PtyCommand {
   delayMs?: number
 }
 
+export interface AgentLaunchOptions {
+  bypassPermissions?: boolean
+}
+
 export interface AgentAdapter {
   readonly agentType: string
   /**
@@ -16,6 +20,7 @@ export interface AgentAdapter {
    * @param worktreePath Absolute path to the session's git worktree
    * @param task Task description to give to the agent
    * @param sessionId Session ID
+   * @param options Optional launch options (e.g. bypass permissions)
    */
-  prepare(worktreePath: string, task: string, sessionId: string): Promise<PtyCommand[]>
+  prepare(worktreePath: string, task: string, sessionId: string, options?: AgentLaunchOptions): Promise<PtyCommand[]>
 }

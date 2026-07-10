@@ -1,6 +1,6 @@
 import { mkdir, writeFile, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { AgentAdapter, PtyCommand } from './base.js'
+import type { AgentAdapter, AgentLaunchOptions, PtyCommand } from './base.js'
 
 /**
  * Delay after the PTY shell starts before sending the claude launch command.
@@ -79,10 +79,11 @@ async function writeClaudeSettings(worktreePath: string, sessionId: string): Pro
 export class ClaudeAdapter implements AgentAdapter {
   readonly agentType = 'claude'
 
-  async prepare(worktreePath: string, _task: string, sessionId: string): Promise<PtyCommand[]> {
+  async prepare(worktreePath: string, _task: string, sessionId: string, options?: AgentLaunchOptions): Promise<PtyCommand[]> {
     await writeClaudeSettings(worktreePath, sessionId)
     const nl = process.platform === 'win32' ? '\r\n' : '\n'
-    return [{ cmd: `claude${nl}` }]
+    const bypassFlag = options?.bypassPermissions ? ' --permission-mode bypassPermissions' : ''
+    return [{ cmd: `claude${bypassFlag}${nl}` }]
   }
 }
 

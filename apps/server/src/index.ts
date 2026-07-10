@@ -647,9 +647,15 @@ function handleClientMessage(msg: ClientMessage): void {
       break
     }
     case 'terminal:create': {
-      const { sessionId, agentType } = msg.payload
+      const { sessionId, agentType, bypassPermissions } = msg.payload
       try {
-        sessionManager.createTab(sessionId, agentType && agentType !== 'shell' ? 'agent' : 'terminal', undefined, agentType)
+        sessionManager.createTab(
+          sessionId,
+          agentType && agentType !== 'shell' ? 'agent' : 'terminal',
+          undefined,
+          agentType,
+          { bypassPermissions },
+        )
       } catch (err) {
         fastify.log.warn({ err, sessionId, agentType }, 'terminal:create failed')
       }

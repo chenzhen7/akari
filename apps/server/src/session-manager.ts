@@ -18,6 +18,7 @@ import type {
 import { WorktreeManager } from './worktree-manager.js'
 import { TerminalMultiplexer } from './terminal-mux.js'
 import { createAgentAdapter, SHELL_STARTUP_DELAY_MS } from './agent-adapters/index.js'
+import type { AgentLaunchOptions } from './agent-adapters/base.js'
 import { SettingsStore } from './settings-store.js'
 
 export interface CreateSessionParams {
@@ -372,6 +373,7 @@ export class SessionManager {
     type: 'terminal' | 'agent' | 'diff' | 'file',
     filePath?: string,
     agentType?: AgentType,
+    launchOptions?: AgentLaunchOptions,
   ): SessionTab {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
@@ -425,7 +427,7 @@ export class SessionManager {
     if ((resolvedType === 'terminal' || resolvedType === 'agent') && terminalId) {
       this.terminalMux.createTerminal(terminalId, sessionId, session.worktreePath)
       if (agentType) {
-        this.launchAgentInTerminal(sessionId, terminalId, session.worktreePath, agentType, session.task).catch(err => {
+        this.launchAgentInTerminal(sessionId, terminalId, session.worktreePath, agentType, session.task, launchOptions).catch(err => {
           console.error(`[SessionManager] launchAgentInTerminal failed for ${sessionId}:`, err)
         })
       }
@@ -762,12 +764,13 @@ export class SessionManager {
     worktreePath: string,
     agentType: AgentType,
     task: string,
+    launchOptions?: AgentLaunchOptions,
   ): Promise<void> {
     const adapter = createAgentAdapter(agentType)
     if (!adapter) return
 
     this.pushTerminalDisplay(sessionId, `> Launching ${agentType}...\r\n`)
-    const commands = await adapter.prepare(worktreePath, task, sessionId)
+    const commands = await adapter.prepare(worktreePath, task, sessionId, launchOptions)
     let cumulativeDelay = SHELL_STARTUP_DELAY_MS
     for (const { cmd, delayMs = 0 } of commands) {
       cumulativeDelay += delayMs

@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Plus } from 'lucide-react'
 import { AgentTypeSelect } from '@/components/agent/AgentTypeSelect'
@@ -21,10 +22,11 @@ interface CreateTerminalDialogProps {
 export function CreateTerminalDialog({ sessionId, open, onOpenChange }: CreateTerminalDialogProps) {
   const createTerminal = useSessionStore(s => s.createTerminal)
   const [agentType, setAgentType] = useState<AgentType>('claude')
+  const [bypassPermissions, setBypassPermissions] = useState(false)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    createTerminal(sessionId, agentType)
+    createTerminal(sessionId, agentType, bypassPermissions)
     onOpenChange(false)
   }
 
@@ -36,15 +38,34 @@ export function CreateTerminalDialog({ sessionId, open, onOpenChange }: CreateTe
         </DialogHeader>
 
         <form id="create-terminal-form" onSubmit={handleSubmit}>
-          <FieldGroup className="px-5 py-4">
+          <FieldGroup className="px-5 py-4 gap-4">
             <Field>
               <FieldLabel htmlFor="terminal-agent">Agent 类型</FieldLabel>
               <AgentTypeSelect
                 id="terminal-agent"
                 value={agentType}
-                onValueChange={setAgentType}
+                onValueChange={v => {
+                  setAgentType(v)
+                  if (v !== 'claude') setBypassPermissions(false)
+                }}
               />
             </Field>
+
+            {agentType === 'claude' && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="bypass-permissions"
+                  checked={bypassPermissions}
+                  onCheckedChange={checked => setBypassPermissions(checked === true)}
+                />
+                <label
+                  htmlFor="bypass-permissions"
+                  className="cursor-pointer text-xs text-muted-foreground"
+                >
+                  以最高权限启动（--permission-mode bypassPermissions）
+                </label>
+              </div>
+            )}
           </FieldGroup>
 
           <div className="h-px bg-border" />
