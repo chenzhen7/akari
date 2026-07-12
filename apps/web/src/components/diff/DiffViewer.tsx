@@ -25,8 +25,8 @@ export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFi
   const [content, setContent] = useState<{ original: string; modified: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { theme: appTheme } = useTheme()
-  const monacoTheme = appTheme === 'dark' ? 'vs-dark' : 'light'
+  const { resolvedTheme } = useTheme()
+  const monacoTheme = resolvedTheme === 'dark' ? 'vs-dark' : 'light'
 
   useEffect(() => {
     if (!filePath || !sessionId) return

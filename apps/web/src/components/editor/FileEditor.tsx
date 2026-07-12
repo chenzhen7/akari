@@ -39,8 +39,8 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   const isDirtyRef = useRef(isDirty)
   contentRef.current = content
   isDirtyRef.current = isDirty
-  const { theme: appTheme } = useTheme()
-  const monacoTheme = appTheme === 'dark' ? 'vs-dark' : 'light'
+  const { resolvedTheme } = useTheme()
+  const monacoTheme = resolvedTheme === 'dark' ? 'vs-dark' : 'light'
 
   // Fetch diff lines helper
   const fetchDiffLines = useCallback(async () => {

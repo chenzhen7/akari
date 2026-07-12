@@ -159,12 +159,12 @@
   background: transparent;
 }
 
-/* Override xterm.js default background to match vs-dark theme */
+/* Override xterm.js default background to match theme */
 .xterm {
-  background-color: #1e1e1e !important;
+  background-color: var(--terminal-background) !important;
 }
 .xterm-viewport::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: var(--terminal-background);
 }
 
 /* Make composition preedit visible and theme-aware.

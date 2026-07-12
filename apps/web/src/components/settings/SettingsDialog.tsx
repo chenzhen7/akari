@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, FolderOpen, Sun, Moon } from 'lucide-react'
+import { Loader2, FolderOpen, Sun, Moon, Monitor } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
 import { API_BASE } from '@/lib/api'
 import { selectFolder } from '@/lib/native-file-picker'
@@ -106,6 +106,16 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               >
                 <Moon className="mr-2 h-4 w-4" />
                 深色
+              </Button>
+              <Button
+                type="button"
+                variant={theme === 'system' ? 'default' : 'outline'}
+                size="sm"
+                className="flex-1"
+                onClick={() => setTheme('system')}
+              >
+                <Monitor className="mr-2 h-4 w-4" />
+                跟随系统
               </Button>
             </div>
           </div>

@@ -79,8 +79,8 @@ function updateTerminalTheme(terminalId: string, isDark: boolean) {
 export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalReadyTick = useSessionStore(s => s.terminalReadyTick[terminalId] ?? 0)
-  const { theme: appTheme } = useTheme()
-  const isDark = appTheme === 'dark'
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
 
   /* ─── Mount / unmount ─────────────────────────────────────────────────── */
 
