@@ -24,6 +24,15 @@ function statusColor(s: DiffFile['status']) {
   return s === 'A' ? 'text-green-500' : s === 'D' ? 'text-red-500' : s === 'R' ? 'text-blue-400' : 'text-amber-400'
 }
 
+function splitFilePath(path: string): { fileName: string; dirPath: string } {
+  const normalized = path.replace(/\\/g, '/')
+  const lastSlash = normalized.lastIndexOf('/')
+  if (lastSlash === -1) {
+    return { fileName: path, dirPath: '' }
+  }
+  return { fileName: normalized.slice(lastSlash + 1), dirPath: normalized.slice(0, lastSlash + 1) }
+}
+
 interface DiffFileListProps {
   session: AgentSession
   onSelectFile: (path: string) => void
@@ -290,67 +299,75 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
           const isSelected = selectedPath === file.path
           const hasAdd = file.additions > 0
           const hasDel = file.deletions > 0
+          const { fileName, dirPath } = splitFilePath(file.path)
           return (
-            <div
-              key={file.path}
-              onClick={() => onSelectFile(file.path)}
-              className={cn(
-                'group flex w-full cursor-pointer items-center gap-1.5 py-1 pl-1.5 pr-2 transition-colors',
-                isSelected
-                  ? 'border-l-2 border-primary bg-accent/40'
-                  : 'border-l-2 border-transparent hover:bg-muted/50',
-              )}
-            >
-              <span className={cn('w-3.5 shrink-0 text-center text-[10px] font-bold leading-none', statusColor(file.status))}>
-                {file.status}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[12px] leading-tight text-foreground">{file.path}</div>
-              </div>
-              <div className="flex shrink-0 items-center gap-0.5">
-                <div className="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        onClick={e => {
-                          e.stopPropagation()
-                          handleOpenFile(file)
-                        }}
-                      >
-                        <FileIcon className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">在编辑器中打开</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        className="h-6 w-6 text-red-400 hover:text-red-400"
-                        onClick={e => {
-                          e.stopPropagation()
-                          setDiscardFileTarget(file)
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">丢弃此文件变更</TooltipContent>
-                  </Tooltip>
-                </div>
-                {(hasAdd || hasDel) && (
-                  <div className="font-mono text-[10px] leading-none">
-                    {hasAdd && <span className="text-green-500">+{file.additions}</span>}
-                    {hasAdd && hasDel && <span className="text-muted-foreground/50"> </span>}
-                    {hasDel && <span className="text-red-400">-{file.deletions}</span>}
+            <Tooltip key={file.path}>
+              <TooltipTrigger asChild>
+                <div
+                  onClick={() => onSelectFile(file.path)}
+                  className={cn(
+                    'group flex w-full cursor-pointer items-center gap-1.5 py-1 pl-1.5 pr-2 transition-colors',
+                    isSelected
+                      ? 'border-l-2 border-primary bg-accent/40'
+                      : 'border-l-2 border-transparent hover:bg-muted/50',
+                  )}
+                >
+                  <span className={cn('w-3.5 shrink-0 text-center text-[10px] font-bold leading-none', statusColor(file.status))}>
+                    {file.status}
+                  </span>
+                  <div className="min-w-0 flex-1 truncate">
+                    <span className="text-[12px] leading-tight text-foreground">{fileName}</span>
+                    {dirPath && (
+                      <span className="ml-1 text-[12px] leading-tight text-muted-foreground">{dirPath}</span>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <div className="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="icon-xs"
+                            variant="ghost"
+                            className="h-6 w-6"
+                            onClick={e => {
+                              e.stopPropagation()
+                              handleOpenFile(file)
+                            }}
+                          >
+                            <FileIcon className="h-3 w-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">在编辑器中打开</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="icon-xs"
+                            variant="ghost"
+                            className="h-6 w-6 text-red-400 hover:text-red-400"
+                            onClick={e => {
+                              e.stopPropagation()
+                              setDiscardFileTarget(file)
+                            }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">丢弃此文件变更</TooltipContent>
+                      </Tooltip>
+                    </div>
+                    {(hasAdd || hasDel) && (
+                      <div className="font-mono text-[10px] leading-none">
+                        {hasAdd && <span className="text-green-500">+{file.additions}</span>}
+                        {hasAdd && hasDel && <span className="text-muted-foreground/50"> </span>}
+                        {hasDel && <span className="text-red-400">-{file.deletions}</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{file.path}</TooltipContent>
+            </Tooltip>
           )
         })}
       </div>
