@@ -27,6 +27,8 @@ export class TerminalMultiplexer extends EventEmitter {
 
     console.log(`[TERMINAL_DEBUG_BACKEND] createTerminal terminalId=${terminalId} sessionId=${sessionId} cwd=${cwd}`)
 
+    console.log(`[TERMINAL_DEBUG_BACKEND] createTerminal terminalId=${terminalId} sessionId=${sessionId} cwd=${cwd}`)
+
     const isWindows = process.platform === 'win32'
     // Prefer PowerShell 7+ (pwsh.exe); fall back to built-in Windows PowerShell 5.x
     const hasPwsh = existsSync('C:\\Program Files\\PowerShell\\7\\pwsh.exe')

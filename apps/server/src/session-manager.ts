@@ -664,8 +664,8 @@ export class SessionManager {
     const sessions = this.listSessions()
 
     for (const session of sessions) {
+      // 所有会话（包括主会话）都需要恢复 terminal/agent tab；主会话额外监听仓库根目录 diff
       if (session.isMain) {
-        // 主会话：不需要恢复终端，只需启动文件监听（监听仓库根目录）
         if (session.worktreePath && this.isGitWorkspace) {
           this.worktreeManager.watchDiff(
             session.id,
@@ -674,25 +674,47 @@ export class SessionManager {
             session.worktreePath,
           )
         }
-        continue
       }
 
-      if (session.status === 'initializing') {
-        this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
-        continue
+      // 主会话不参与状态机清理；非主会话按状态处理
+      if (!session.isMain) {
+        if (session.status === 'initializing') {
+          if (validateTransition(session.status, 'failed')) {
+            this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
+          } else {
+            this.broadcast({
+              event: 'session:status',
+              payload: { id: session.id, status: session.status, progress: session.progress },
+            })
+          }
+          this.clearSessionTerminalIds(session.id)
+          continue
+        }
+
+        const terminalStatuses: SessionStatus[] = ['completed', 'failed', 'merged', 'archived']
+        if (terminalStatuses.includes(session.status)) {
+          this.clearSessionTerminalIds(session.id)
+          continue
+        }
+
+        const needsRestore = ['running', 'waiting', 'paused', 'review', 'idle', 'approved'].includes(session.status)
+        if (!needsRestore || !session.worktreePath) {
+          this.clearSessionTerminalIds(session.id)
+          continue
+        }
+
+        try {
+          await access(session.worktreePath)
+        } catch {
+          if (validateTransition(session.status, 'failed')) {
+            this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
+          }
+          this.clearSessionTerminalIds(session.id)
+          continue
+        }
       }
 
-      const needsRestore = ['running', 'waiting', 'paused', 'review', 'idle'].includes(session.status)
-      if (!needsRestore || !session.worktreePath) continue
-
-      try {
-        await access(session.worktreePath)
-      } catch {
-        this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
-        continue
-      }
-
-      // Restore tabs: regenerate terminalIds for terminal tabs and recreate PTYs
+      // 恢复 tabs：为 terminal/agent tab 重新生成 terminalId 并创建 PTY
       let tabs = session.tabs
       let activeTabId = session.activeTabId
       if (tabs.length === 0) {
@@ -726,18 +748,52 @@ export class SessionManager {
           activeTabId = tabs.length > 0 ? tabs[0].id : null
         }
       }
+
+      const terminalId = this.resolveSessionTerminalId(tabs, activeTabId)
       this.db
-        .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ? WHERE id = ?')
-        .run(JSON.stringify(tabs), activeTabId, session.id)
+        .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ?, terminal_id = ? WHERE id = ?')
+        .run(JSON.stringify(tabs), activeTabId, terminalId ?? '', session.id)
       this.broadcast({ event: 'tabs:sync', payload: { sessionId: session.id, tabs, activeTabId } })
 
       this.pushTerminalDisplay(session.id, `\r\n\x1b[33m> [Server restarted — terminal restored]\x1b[0m\r\n`)
 
-      this.worktreeManager.watchDiff(
-        session.id,
-        this.createDiffCallbacks(session.id),
-      )
+      if (!session.isMain) {
+        this.worktreeManager.watchDiff(
+          session.id,
+          this.createDiffCallbacks(session.id),
+        )
+      }
     }
+  }
+
+  private resolveSessionTerminalId(tabs: SessionTab[], activeTabId: string | null): string | undefined {
+    const activeTab = tabs.find(t => t.id === activeTabId)
+    if ((activeTab?.type === 'terminal' || activeTab?.type === 'agent') && activeTab.terminalId) {
+      return activeTab.terminalId
+    }
+    return tabs.find(t => (t.type === 'terminal' || t.type === 'agent') && t.terminalId)?.terminalId
+  }
+
+  private clearSessionTerminalIds(sessionId: string): void {
+    const session = this.getSession(sessionId)
+    if (!session) return
+
+    let changed = false
+    const clearedTabs = session.tabs.map(tab => {
+      if ((tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
+        this.terminalMux.killTerminal(tab.terminalId)
+        changed = true
+        return { ...tab, terminalId: undefined }
+      }
+      return tab
+    })
+
+    if (!changed && !session.terminalId) return
+
+    this.db
+      .prepare('UPDATE sessions SET tabs = ?, terminal_id = ? WHERE id = ?')
+      .run(JSON.stringify(clearedTabs), '', sessionId)
+    this.broadcast({ event: 'tabs:sync', payload: { sessionId, tabs: clearedTabs, activeTabId: session.activeTabId } })
   }
 
   async deleteSession(sessionId: string): Promise<void> {
