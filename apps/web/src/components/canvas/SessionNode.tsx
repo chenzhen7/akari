@@ -1,28 +1,19 @@
 import { memo, useState, useRef } from 'react'
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { DeleteSessionDialog } from '@/components/session/DeleteSessionDialog'
-import { GitBranch, Archive, Trash2, Bot, Code2, Terminal, Plus, RotateCcw, Loader2, HardDrive } from 'lucide-react'
-import { KimiIcon } from '@/components/icons/KimiIcon'
-import type { LucideIcon } from 'lucide-react'
+import { GitBranch, Archive, Trash2, Plus, RotateCcw, Loader2, HardDrive } from 'lucide-react'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { AGENT_CONFIG } from '@/lib/agent-config'
 
 type SessionNodeData = {
   session: AgentSession
 }
 
 type SessionNodeType = Node<SessionNodeData>
-
-const agentConfig: Record<string, { bg: string; Icon: LucideIcon | typeof KimiIcon }> = {
-  claude: { bg: '#7c3aed', Icon: Bot },
-  'claude-orchestrator': { bg: '#b45309', Icon: Bot },
-  aider: { bg: '#2563eb', Icon: Code2 },
-  shell: { bg: '#374151', Icon: Terminal },
-  kimi: { bg: '#1783FF', Icon: KimiIcon },
-}
 
 const statusConfig: Record<string, { color: string; label: string }> = {
   running: { color: '#22c55e', label: '运行中' },
@@ -66,6 +57,8 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
   const isArchived = session.status === 'archived'
   const isPending = pendingOps.has(session.id)
   const color = cfg.color
+  const agentCfg = isMain ? null : (session.agentType ? AGENT_CONFIG[session.agentType] : AGENT_CONFIG.shell)
+  const AgentIcon = agentCfg?.icon ?? null
 
   function stopBubble(e: React.MouseEvent | React.PointerEvent) {
     e.stopPropagation()
@@ -216,33 +209,43 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
           <div className="flex items-stretch gap-3 pr-9">
             {/* Agent avatar (rounded-xl, stretches to match title+branch height) + status badge */}
             {(() => {
-              const ac = isMain ? { bg: '#b45309', Icon: HardDrive } : (agentConfig[session.agentType] ?? agentConfig.shell)
-              const Icon = ac.Icon
+              if (isMain) {
+                return (
+                  <div className="relative w-10 shrink-0">
+                    <div
+                      className="flex h-full w-full items-center justify-center rounded-xl"
+                      style={{ background: '#b45309' }}
+                    >
+                      <HardDrive className="h-4 w-4 text-white" />
+                    </div>
+                  </div>
+                )
+              }
+              const iconColor = agentCfg ? agentCfg.color : '#374151'
+              const Icon = AgentIcon ?? HardDrive
               return (
                 <div className="relative w-10 shrink-0">
                   <div
                     className="flex h-full w-full items-center justify-center rounded-xl"
-                    style={{ background: ac.bg }}
+                    style={{ background: iconColor }}
                   >
                     <Icon className="h-4 w-4 text-white" />
                   </div>
-                  {!isMain && (
-                    <span
-                      className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-[2px]"
-                      style={{
-                        background: color,
-                        borderColor: 'hsl(var(--background))',
-                        boxShadow: `0 0 5px ${color}`,
-                      }}
-                    >
-                      {session.status === 'running' && (
-                        <span
-                          className="absolute inset-0 rounded-full animate-ping opacity-70"
-                          style={{ background: color }}
-                        />
-                      )}
-                    </span>
-                  )}
+                  <span
+                    className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-[2px]"
+                    style={{
+                      background: color,
+                      borderColor: 'hsl(var(--background))',
+                      boxShadow: `0 0 5px ${color}`,
+                    }}
+                  >
+                    {session.status === 'running' && (
+                      <span
+                        className="absolute inset-0 rounded-full animate-ping opacity-70"
+                        style={{ background: color }}
+                      />
+                    )}
+                  </span>
                 </div>
               )
             })()}
@@ -269,16 +272,15 @@ function SessionNodeInner({ data }: NodeProps<SessionNodeType>) {
           >
             {cfg.label}
           </Badge>
-          {!isMain && session.agentType && (() => {
-            const ac = agentConfig[session.agentType] ?? agentConfig.shell
-            const Icon = ac.Icon
+          {!isMain && agentCfg && AgentIcon && (() => {
+            const Icon = AgentIcon
             return (
               <Badge
                 variant="outline"
                 style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.65)', borderColor: 'rgba(255,255,255,0.14)', fontSize: '9px' }}
               >
-                <Icon style={{ color: ac.bg }} />
-                {session.agentType}
+                <Icon style={{ color: agentCfg.color }} />
+                {agentCfg.displayName}
               </Badge>
             )
           })()}

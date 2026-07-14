@@ -32,25 +32,6 @@ export interface CreateSessionParams {
   parentSessionId?: string
 }
 
-function isAgentAgentType(agentType: AgentType | undefined): boolean {
-  return agentType !== undefined && agentType !== 'shell'
-}
-
-function getAgentTabLabel(agentType: AgentType): string {
-  switch (agentType) {
-    case 'claude':
-      return 'Claude'
-    case 'claude-orchestrator':
-      return 'Claude Orchestrator'
-    case 'aider':
-      return 'Aider'
-    case 'kimi':
-      return 'Kimi'
-    default:
-      return agentType.charAt(0).toUpperCase() + agentType.slice(1)
-  }
-}
-
 const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
   initializing: ['idle', 'failed'],
   running: ['idle', 'waiting', 'paused', 'completed', 'failed', 'archived'],
@@ -139,7 +120,7 @@ export class SessionManager {
       diffSummary: { additions: 0, deletions: 0 },
       createdAt: new Date(),
       tags: params.tags ?? [],
-      collaborationRole: 'standalone' as CollaborationRole,
+      collaborationRole: 'standalone',
       parentSessionId: params.parentSessionId,
       childSessionIds: [],
       tabs: [],
@@ -339,8 +320,9 @@ export class SessionManager {
 
     if (type === 'terminal' || type === 'agent') {
       terminalId = nanoid(8)
-      if (type === 'agent' && agentType && isAgentAgentType(agentType)) {
-        label = getAgentTabLabel(agentType)
+      const adapter = agentType ? createAgentAdapter(agentType) : null
+      if (type === 'agent' && adapter?.isAutomated) {
+        label = adapter.getTabLabel()
       } else {
         resolvedType = 'terminal'
         const count = session.tabs.filter(t => t.type === 'terminal').length + 1
@@ -662,11 +644,12 @@ export class SessionManager {
       if (tabs.length === 0) {
         // Legacy session without tabs: create a default terminal/agent tab
         const terminalId = nanoid(8)
-        const isAgent = isAgentAgentType(session.agentType)
+        const adapter = createAgentAdapter(session.agentType)
+        const isAgent = adapter.isAutomated
         const tab: SessionTab = {
           id: nanoid(6),
           type: isAgent ? 'agent' : 'terminal',
-          label: isAgent && session.agentType ? getAgentTabLabel(session.agentType) : 'Terminal 1',
+          label: isAgent ? adapter.getTabLabel() : 'Terminal 1',
           terminalId,
           agentType: session.agentType,
         }
@@ -763,7 +746,7 @@ export class SessionManager {
     launchOptions?: AgentLaunchOptions,
   ): Promise<void> {
     const adapter = createAgentAdapter(agentType)
-    if (!adapter) return
+    if (!adapter.isAutomated) return
 
     this.pushTerminalDisplay(sessionId, `> Launching ${agentType}...\r\n`)
     const commands = await adapter.prepare(worktreePath, task, sessionId, launchOptions)
@@ -803,11 +786,12 @@ export class SessionManager {
       const terminalId = nanoid(8)
       this.terminalMux.createTerminal(terminalId, id, worktreePath)
 
-      const isAgent = isAgentAgentType(session.agentType)
+      const adapter = createAgentAdapter(session.agentType)
+      const isAgent = adapter.isAutomated
       const tab: SessionTab = {
         id: nanoid(6),
         type: isAgent ? 'agent' : 'terminal',
-        label: isAgent && session.agentType ? getAgentTabLabel(session.agentType) : 'Terminal 1',
+        label: isAgent ? adapter.getTabLabel() : 'Terminal 1',
         terminalId,
         agentType: session.agentType,
       }

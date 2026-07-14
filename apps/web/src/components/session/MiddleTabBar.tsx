@@ -1,9 +1,7 @@
 import { memo, useCallback, useMemo, useState } from 'react'
-import { FileText, Plus, X, Terminal, GitCompare, Bot } from 'lucide-react'
-import { KimiIcon } from '@/components/icons/KimiIcon'
+import { FileText, Plus, X, Terminal, GitCompare } from 'lucide-react'
 import { CreateTerminalDialog } from './CreateTerminalDialog'
 import { TabContextMenu } from './TabContextMenu'
-import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { cn } from '@/lib/utils'
 import type { AgentSession, SessionTab } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
@@ -12,6 +10,7 @@ import { resolveAbsoluteFilePath } from '@/lib/path-utils'
 import { destroyTerminalInstance } from './terminal-instances'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { AGENT_CONFIG } from '@/lib/agent-config'
 import {
   DndContext,
   closestCenter,
@@ -92,16 +91,13 @@ const SortableTab = memo(function SortableTab({
     if (tab.type === 'diff') return GitCompare
     if (tab.type === 'file') return FileText
     if (tab.type !== 'agent') return Terminal
-    if (tab.agentType === 'claude' || tab.agentType === 'claude-orchestrator') return ClaudeIcon
-    if (tab.agentType === 'kimi') return KimiIcon
-    return Bot
+    const cfg = tab.agentType ? AGENT_CONFIG[tab.agentType] : AGENT_CONFIG.shell
+    return cfg.icon
   })()
 
-  const agentIconClassName = (() => {
-    if (tab.type !== 'agent') return 'h-3 w-3 shrink-0'
-    if (tab.agentType === 'claude' || tab.agentType === 'claude-orchestrator') return 'h-3 w-3 shrink-0 text-[#D97757]'
-    if (tab.agentType === 'kimi') return 'h-3 w-3 shrink-0 text-[#1783FF]'
-    return 'h-3 w-3 shrink-0'
+  const iconColor = (() => {
+    if (tab.type !== 'agent') return undefined
+    return tab.agentType ? AGENT_CONFIG[tab.agentType].color : AGENT_CONFIG.shell.color
   })()
 
   const handleActivate = useCallback(() => {
@@ -139,7 +135,7 @@ const SortableTab = memo(function SortableTab({
             isDragging && 'opacity-60',
           )}
         >
-          <Icon className={agentIconClassName} />
+          <Icon className="h-3 w-3 shrink-0" style={iconColor ? { color: iconColor } : undefined} />
           <span className="max-w-[120px] truncate">{displayLabel}</span>
           <span
             onClick={handleClose}

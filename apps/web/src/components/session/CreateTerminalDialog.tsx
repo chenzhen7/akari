@@ -12,6 +12,7 @@ import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Plus } from 'lucide-react'
 import { AgentTypeSelect } from '@/components/agent/AgentTypeSelect'
 import { useSessionStore } from '@/stores/session-store'
+import { AGENT_CONFIG } from '@/lib/agent-config'
 
 interface CreateTerminalDialogProps {
   sessionId: string
@@ -23,6 +24,8 @@ export function CreateTerminalDialog({ sessionId, open, onOpenChange }: CreateTe
   const createTerminal = useSessionStore(s => s.createTerminal)
   const [agentType, setAgentType] = useState<AgentType>('claude')
   const [bypassPermissions, setBypassPermissions] = useState(false)
+
+  const supportsBypass = AGENT_CONFIG[agentType].supportsBypassPermissions
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -46,12 +49,14 @@ export function CreateTerminalDialog({ sessionId, open, onOpenChange }: CreateTe
                 value={agentType}
                 onValueChange={v => {
                   setAgentType(v)
-                  if (v !== 'claude' && v !== 'kimi') setBypassPermissions(false)
+                  if (!AGENT_CONFIG[v].supportsBypassPermissions) {
+                    setBypassPermissions(false)
+                  }
                 }}
               />
             </Field>
 
-            {(agentType === 'claude' || agentType === 'kimi') && (
+            {supportsBypass && (
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="bypass-permissions"
@@ -64,7 +69,9 @@ export function CreateTerminalDialog({ sessionId, open, onOpenChange }: CreateTe
                 >
                   {agentType === 'claude'
                     ? '以最高权限启动（--permission-mode bypassPermissions）'
-                    : '以最高权限启动（--yolo）'}
+                    : agentType === 'kimi'
+                      ? '以最高权限启动（--yolo）'
+                      : '以最高权限启动'}
                 </label>
               </div>
             )}
@@ -83,7 +90,7 @@ export function CreateTerminalDialog({ sessionId, open, onOpenChange }: CreateTe
             </Button>
             <Button type="submit" className="h-8 gap-1.5 text-xs">
               <Plus className="h-3.5 w-3.5" />
-              创建终端
+              新建终端
             </Button>
           </div>
         </form>

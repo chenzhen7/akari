@@ -7,9 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Bot, Code2, Terminal } from 'lucide-react'
-import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
-import { KimiIcon } from '@/components/icons/KimiIcon'
+import { AGENT_CONFIG, AGENT_TYPES } from '@/lib/agent-config'
 
 interface AgentTypeSelectProps {
   value: AgentType
@@ -17,56 +15,33 @@ interface AgentTypeSelectProps {
   id?: string
 }
 
-const OPTIONS: { value: AgentType; label: string; icon: ReactNode }[] = [
-  {
-    value: 'claude',
-    label: 'Claude Code',
-    icon: <ClaudeIcon className="h-3.5 w-3.5 shrink-0 text-[#D97757]" />,
-  },
-  {
-    value: 'claude-orchestrator',
-    label: 'Claude Orchestrator',
-    icon: <Bot className="h-3.5 w-3.5 shrink-0 text-[#b45309]" />,
-  },
-  {
-    value: 'aider',
-    label: 'Aider',
-    icon: <Code2 className="h-3.5 w-3.5 shrink-0 text-[#2563eb]" />,
-  },
-  {
-    value: 'kimi',
-    label: 'Kimi',
-    icon: <KimiIcon className="h-3.5 w-3.5 shrink-0 text-[#1783FF]" />,
-  },
-  {
-    value: 'shell',
-    label: 'Shell（自定义）',
-    icon: <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />,
-  },
-]
-
 export function AgentTypeSelect({ value, onValueChange, id }: AgentTypeSelectProps) {
-  const selected = OPTIONS.find(o => o.value === value) ?? OPTIONS[0]
+  const selected = AGENT_CONFIG[value] ?? AGENT_CONFIG.shell
+  const SelectedIcon = selected.icon
 
   return (
     <Select value={value} onValueChange={v => onValueChange(v as AgentType)}>
       <SelectTrigger id={id} className="h-8 text-xs">
         <SelectValue placeholder="选择 Agent 类型">
           <span className="flex items-center gap-1.5">
-            {selected.icon}
-            {selected.label}
+            <SelectedIcon className="h-3.5 w-3.5 shrink-0" style={{ color: selected.color }} />
+            {selected.displayName}
           </span>
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {OPTIONS.map(option => (
-          <SelectItem key={option.value} value={option.value}>
-            <span className="flex items-center gap-1.5">
-              {option.icon}
-              {option.label}
-            </span>
-          </SelectItem>
-        ))}
+        {AGENT_TYPES.map(type => {
+          const cfg = AGENT_CONFIG[type]
+          const Icon = cfg.icon
+          return (
+            <SelectItem key={type} value={type}>
+              <span className="flex items-center gap-1.5">
+                <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: cfg.color }} />
+                {cfg.displayName}
+              </span>
+            </SelectItem>
+          )
+        })}
       </SelectContent>
     </Select>
   )
