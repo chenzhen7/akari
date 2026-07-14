@@ -39,7 +39,7 @@ akari/
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   └── src/
-│   │       ├── index.ts               # 入口，端口 3001（REST + WebSocket）
+│   │       ├── index.ts               # 入口：依赖组装、插件注册、服务启动
 │   │       ├── session-manager.ts     # SessionManager（SQLite + 状态机）
 │   │       ├── worktree-manager.ts    # WorktreeManager（git worktree + chokidar diff）
 │   │       ├── terminal-mux.ts        # TerminalMultiplexer（node-pty + 环形 Buffer）
@@ -48,6 +48,24 @@ akari/
 │   │       ├── settings-store.ts      # SettingsStore（设置持久化）
 │   │       ├── git-utils.ts           # Git 工具函数
 │   │       ├── canvas-edge-store.ts   # CanvasEdgeStore（画布连线持久化）
+│   │       ├── types/
+│   │       │   └── fastify.d.ts       # Fastify 装饰器类型声明（共享依赖类型）
+│   │       ├── plugins/
+│   │       │   ├── websocket.ts       # WebSocket 注册与客户端消息处理
+│   │       │   └── static.ts          # SPA static fallback
+│   │       ├── routes/
+│   │       │   ├── health.ts          # GET /health
+│   │       │   ├── settings.ts        # /settings
+│   │       │   ├── repo.ts            # /repo/branches
+│   │       │   ├── sessions.ts        # /sessions/*
+│   │       │   ├── git.ts             # /sessions/:id/git/*
+│   │       │   ├── files.ts           # /sessions/:id/files、/sessions/:id/file-content
+│   │       │   ├── diff.ts            # /sessions/:id/diff-*
+│   │       │   ├── terminal.ts        # /sessions/:id/terminal-buffer
+│   │       │   ├── tabs.ts            # /sessions/:id/tabs/*
+│   │       │   ├── workspace.ts       # /workspaces/*
+│   │       │   ├── canvas.ts          # /canvas/edges
+│   │       │   └── hooks.ts           # /sessions/:id/hooks、/broadcast
 │   │       └── agent-adapters/        # AgentAdapter 接口 + ClaudeAdapter
 │   │           ├── base.ts            # AgentAdapter 接口 + PtyCommand 类型
 │   │           ├── claude.ts          # ClaudeAdapter（注入 .claude/settings.local.json Hook 配置）
@@ -141,123 +159,6 @@ pnpm build:desktop
 
 ---
 
-## 已实现的后端接口
-
-### 会话管理
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/health` | 健康检查 |
-| GET | `/settings` | 获取设置（worktreeBaseDir） |
-| PATCH | `/settings` | 更新设置（body: `{worktreeBaseDir?}`） |
-| GET | `/sessions` | 获取所有会话 |
-| POST | `/sessions` | 创建新会话（body: `{name, task, baseBranch?, agentType?, tags?, canvasPosition?}`） |
-| PATCH | `/sessions/:id/status` | 更新会话状态（body: `{status}`，含状态机校验） |
-| POST | `/sessions/:id/archive` | 归档会话 |
-| POST | `/sessions/:id/restore` | 恢复归档会话 |
-| DELETE | `/sessions/:id` | 删除会话 |
-| PATCH | `/sessions/:id/canvas` | 更新画布位置（body: `{x, y}`） |
-
-### 终端与 Diff
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/sessions/:id/diff-content` | 获取文件 diff 内容（query: `file`） |
-| GET | `/sessions/:id/diff-lines` | 获取文件 diff 行信息（query: `path`） |
-| GET | `/sessions/:id/terminal-buffer` | 获取终端历史输出（query: `terminalId`） |
-
-### 文件浏览与编辑
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/sessions/:id/files` | 列出文件（query: `path?`） |
-| GET | `/sessions/:id/file-content` | 读取文件内容（query: `path`） |
-| POST | `/sessions/:id/file-content` | 写入文件内容（body: `{path, content}`） |
-
-### Git 操作
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/repo/branches` | 获取仓库分支列表 |
-| GET | `/sessions/:id/git-log` | 获取会话 Git 日志（query: `limit?`, `offset?`, `branch?`） |
-| GET | `/sessions/:id/git-branches` | 获取会话 Git 分支 |
-| POST | `/sessions/:id/git/commit` | Git commit（body: `{message}`） |
-| POST | `/sessions/:id/git/merge` | Git merge（body: `{sourceBranch}`） |
-| POST | `/sessions/:id/git/checkout` | Git checkout（body: `{branch, createNew?}`） |
-| POST | `/sessions/:id/git/update-branch` | 从 base branch 更新（merge） |
-| POST | `/sessions/:id/git/discard` | 丢弃所有变更 |
-| POST | `/sessions/:id/git/discard-file` | 丢弃单个文件（body: `{filePath}`） |
-
-### 工作区
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/workspaces` | 列出所有工作区 |
-| POST | `/workspaces` | 添加工作区（body: `{name, path}`） |
-| POST | `/workspaces/:id/switch` | 切换工作区 |
-| DELETE | `/workspaces/:id` | 删除工作区 |
-
-### 会话标签
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/sessions/:id/tabs` | 获取会话标签 |
-| POST | `/sessions/:id/tabs` | 创建标签（body: `{type, filePath?}`） |
-| DELETE | `/sessions/:id/tabs/:tabId` | 关闭标签 |
-| PATCH | `/sessions/:id/tabs/:tabId/activate` | 激活标签 |
-
-### 画布连线
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/canvas/edges` | 获取所有画布连线 |
-| POST | `/canvas/edges` | 创建画布连线 |
-| DELETE | `/canvas/edges/:edgeId` | 删除画布连线 |
-
-### 其他
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/broadcast` | 广播消息（body: `{message, targets?}`） |
-| POST | `/sessions/:id/hooks` | HTTP Hook 入口（body: `HookEvent`） |
-| GET | `/ws` | WebSocket 端点（`ws://localhost:3001/ws`） |
-
----
-
-## WebSocket 事件协议
-
-前后端通过以下事件通信（严格遵守字段名）：
-
-| 事件名 | 方向 | 关键 Payload 字段 |
-|--------|------|-------------------|
-| `sessions:list` | S→C | `payload: AgentSession[]`（连接时立即推送） |
-| `session:created` | S→C | `payload: AgentSession` |
-| `session:updated` | S→C | `payload: AgentSession`（全量更新） |
-| `session:status` | S→C | `payload: {id, status, progress}` |
-| `session:lastMessage` | S→C | `payload: {id, lastAiMessage}` |
-| `terminal:data` | S→C | `payload: {sessionId, terminalId, data: string}` |
-| `terminal:ready` | S→C | `payload: {sessionId, terminalId}` |
-| `terminal:resized` | S→C | `payload: {sessionId, terminalId}` |
-| `terminal:input` | C→S | `payload: {sessionId, terminalId, data: string}` |
-| `terminal:resize` | C→S | `payload: {sessionId, terminalId, cols, rows}` |
-| `diff:update` | S→C | `payload: {sessionId, diff: GitDiff}` |
-| `file:update` | S→C | `payload: {sessionId, filePath, changeType}` |
-| `git:log-updated` | S→C | `payload: {sessionId, commits, branches, head}` |
-| `canvas:edges` | S→C | `payload: CanvasEdge[]` |
-| `tab:created` | S→C | `payload: {sessionId, tab}` |
-| `tab:closed` | S→C | `payload: {sessionId, tabId}` |
-| `tab:activated` | S→C | `payload: {sessionId, tabId}` |
-| `tabs:sync` | S→C | `payload: {sessionId, tabs, activeTabId}` |
-| `workspace:list` | S→C | `payload: Workspace[]` |
-| `workspace:current` | S→C | `payload: Workspace` |
-| `broadcast:send` | C→S | `payload: {message: string, targets?: string[]}` |
-| `tab:create` | C→S | `payload: {sessionId, type, filePath?}` |
-| `tab:close` | C→S | `payload: {sessionId, tabId}` |
-| `tab:activate` | C→S | `payload: {sessionId, tabId}` |
-| `tab:reorder` | C→S | `payload: {sessionId, orderedTabIds}` |
-| `terminal:create` | C→S | `payload: {sessionId}` |
-
----
 
 ## 编码规范
 
@@ -290,47 +191,6 @@ pnpm build:desktop
 - 找到根本原因前，不提交补丁；找到后，**回滚所有错误方向的补丁**，再应用最小化正确修复
 ---
 
-## Agent 集成协议
-
-实现 Agent 适配器时必须支持：
-
-```typescript
-export interface PtyCommand {
-  cmd: string       // 发送到 PTY 的原始字符串（含换行符）
-  delayMs?: number  // 发送前等待的毫秒数（相对于前一条命令）
-}
-
-export interface AgentAdapter {
-  readonly agentType: string
-  prepare(worktreePath: string, task: string, sessionId: string): Promise<PtyCommand[]>
-}
-```
-
-**ClaudeAdapter 实现方式**：
-Worktree 初始化时，`prepare()` 自动写入 `.claude/settings.local.json`，向 Claude Code 注册 HTTP Hook：
-
-| Hook 事件 | 行为 |
-| :--- | :--- |
-| `PermissionRequest` | 记录审批日志（当前**不阻塞** Claude Code 原生权限流程） |
-| `SessionStart` | `initializing` → `idle` |
-| `UserPromptSubmit` | `paused` / `waiting` / `idle` → `running` |
-| `Stop` | `running` / `waiting` → `idle`，并广播 `session:lastMessage` |
-| `StopFailure` | `running` / `paused` / `waiting` → `failed` |
-
-> **历史说明**：早期版本通过终端输出解析 `[CHECKPOINT]` / `[APPROVAL_REQUIRED]` 魔法字符串驱动状态机，该机制已在 Phase 8 中完全废弃，改为 HTTP Hook 单轨驱动。
-
----
-
-## Agent 抽象与 Tab 类型规范
-
-- `AgentType`（`claude` / `aider` / `shell` / `kimi` / 未来的 `openai` 等）描述的是“使用哪种 Agent 适配器”，属于会话/标签的元数据。
-- 标签页类型 `SessionTab.type` 只描述标签的**形态**，必须是通用的 `'terminal' | 'agent' | 'diff' | 'file'`：
-  - `'agent'` 代表“运行 Agent 的终端标签”，不区分具体 Agent 品牌。
-  - 具体品牌通过 `tab.agentType` 区分，用于图标、标签文字和 adapter 路由。
-- **禁止**把某个 Agent 品牌（如 `'claude'`）直接作为 `SessionTab.type` 写入。新增 Agent 时，只扩展 `AgentType` 和 `agent-adapters`，不要新增 tab 类型。
-- 当已持久化的旧数据中出现被废弃的类型/字段时，应在 `SessionManager.initDb()` 里做一次性迁移，将数据改写为新形态，随后删除运行时兼容代码。不得以“兼容旧数据”为由在业务逻辑中保留分支。
-
----
 
 ## Worktree 管理规范
 
@@ -348,13 +208,14 @@ Worktree 初始化时，`prepare()` 自动写入 `.claude/settings.local.json`�
 3. **终端即真相**：Agent 输出通过终端复用器捕获，不通过自定义协议通信
 4. **审批不可绕过**：危险操作必须经用户审批，Agent 适配器不得自动确认
 5. **禁止遗留历史债务**：完成任务后必须同步清理废弃文件、死代码、过时注释和临时脚手架。迁移后旧路径立即删除，重构后旧实现立即移除，不得以「后续清理」为由搁置。AGENTS.md / progress.md 中的「待清理」标记视为未完成任务。
-6. **重大决策必须先征询用户**：凡涉及以下任一情形，**禁止**自行做出决定并直接实施，必须先向用户说明方案对比、征得明确同意后再动手：
+6. - 业务逻辑中保留最干净的分支，不要出现其他兼容或者历史债务代码，当已持久化的旧数据中出现被废弃的类型/字段时，应在 `SessionManager.initDb()` 里做一次性迁移，将数据改写为新形态，随后删除运行时兼容代码。不得以“兼容旧数据”为由在。
+7. **重大决策必须先征询用户**：凡涉及以下任一情形，**禁止**自行做出决定并直接实施，必须先向用户说明方案对比、征得明确同意后再动手：
    - 技术方案降级或替代（如用 `child_process` 替代 `node-pty`、用 mock 替代真实实现）
    - 架构层面的设计取舍（如数据库选型、通信协议变更、模块拆分方式）
    - 破坏性 API/类型变更（影响已有接口的签名或行为）
    - 任何「此方案有明显缺点但省事」的捷径
    正确做法：先用 `ask_user_question` 工具列出选项和利弊，等待用户选择后再执行。不得在文档中写「降级方案」后自动采用该方案。
-7. **禁止吞异常**：空 `catch {}` / 只写注释的 catch 一律禁止；前端用户操作失败必须 `toast.error()`；后端必须 `log.warn/error()`；状态机非法转换用 `validateTransition()` 守卫而非 try/catch。详见 [.claude/rules/error-handling.md](.claude/rules/error-handling.md)。
+8. **禁止吞异常**：空 `catch {}` / 只写注释的 catch 一律禁止；前端用户操作失败必须 `toast.error()`；后端必须 `log.warn/error()`；状态机非法转换用 `validateTransition()` 守卫而非 try/catch。详见 [.claude/rules/error-handling.md](.claude/rules/error-handling.md)。
 ---
 
 ## 已知问题 / 技术风险
