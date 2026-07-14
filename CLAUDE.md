@@ -48,6 +48,12 @@ akari/
 │   │       ├── settings-store.ts      # SettingsStore（设置持久化）
 │   │       ├── git-utils.ts           # Git 工具函数
 │   │       ├── canvas-edge-store.ts   # CanvasEdgeStore（画布连线持久化）
+│   │       ├── db/
+│   │       │   └── repositories/
+│   │       │       ├── session.repository.ts    # 会话表数据访问
+│   │       │       ├── workspace.repository.ts  # 工作区表数据访问
+│   │       │       ├── settings.repository.ts   # 设置表数据访问
+│   │       │       └── canvas-edge.repository.ts # 画布连线表数据访问
 │   │       ├── types/
 │   │       │   └── fastify.d.ts       # Fastify 装饰器类型声明（共享依赖类型）
 │   │       ├── plugins/
