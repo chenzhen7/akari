@@ -9,7 +9,7 @@ import type { ClientMessage } from '@akari/shared-types'
 import { terminalBus } from '@/lib/terminalBus'
 import { resizeMutex } from '@/lib/ptyResizeMutex'
 import { attachImeAnchor } from '@/lib/xterm-ime-anchor'
-import { API_BASE } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 import { terminalInstances } from './terminal-instances'
 
 interface TerminalPanelProps {
@@ -323,9 +323,11 @@ function createTerminal(
   })
 
   // ── Fetch history from server ──────────────────────────────────────────
-  fetch(`${API_BASE}/sessions/${sessionId}/terminal-buffer?terminalId=${terminalId}`)
-    .then(r => r.json())
-    .then(({ buffer }: { buffer: string[] }) => {
+  apiClient.get<{ buffer: string[] }>(`/sessions/${sessionId}/terminal-buffer`, {
+    params: { terminalId },
+    toast: false,
+  })
+    .then(({ buffer }) => {
       // Skip TUI animation frames (\x1b[H = cursor home) that would push
       // duplicate history into scrollback on replay.
       buffer

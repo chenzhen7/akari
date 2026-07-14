@@ -1,9 +1,9 @@
 import { useState, useEffect, lazy, Suspense, useCallback, useRef, memo } from 'react'
 import { Loader2 } from 'lucide-react'
-import { toast, toastError } from '@/lib/toast'
+import { toast } from '@/lib/toast'
 import type { FileDiffLine } from '@akari/shared-types'
 import type { editor } from 'monaco-editor'
-import { API_BASE } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 import { useTheme } from '@/components/theme-provider'
 import { detectLanguage } from '@/lib/language-utils'
 import { useWorkspaceStore } from '@/stores/workspace-store'
@@ -46,9 +46,10 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   const fetchDiffLines = useCallback(async () => {
     if (!filePath || !sessionId) return
     try {
-      const res = await fetch(`${API_BASE}/sessions/${sessionId}/diff-lines?path=${encodeURIComponent(filePath)}`)
-      if (!res.ok) return
-      const data = await res.json() as { lines: FileDiffLine[] }
+      const data = await apiClient.get<{ lines: FileDiffLine[] }>(`/sessions/${sessionId}/diff-lines`, {
+        params: { path: filePath },
+        toast: false,
+      })
       setDiffLines(data.lines)
     } catch (err) {
       console.error('[FileEditor] fetch diff lines failed:', err)
@@ -91,17 +92,26 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     setDiffLines(null)
     decorationsRef.current?.clear()
 
-    fetch(`${API_BASE}/sessions/${sessionId}/file-content?path=${encodeURIComponent(filePath)}`)
-      .then(r => r.ok ? r.json() as Promise<{ content: string }> : Promise.reject(r.statusText))
+    const controller = new AbortController()
+    apiClient.get<{ content: string }>(`/sessions/${sessionId}/file-content`, {
+      params: { path: filePath },
+      signal: controller.signal,
+      toast: false,
+    })
       .then(data => {
         setContent(data.content)
         setOriginalContent(data.content)
       })
-      .catch((e: unknown) => setError(String(e)))
+      .catch((e: unknown) => {
+        if (e instanceof Error && e.name === 'AbortError') return
+        setError(String(e))
+      })
       .finally(() => setLoading(false))
 
     // Also fetch diff lines in parallel
     void fetchDiffLines()
+
+    return () => controller.abort()
   }, [filePath, sessionId, fetchDiffLines])
 
   // Apply diff decorations when diffLines changes and editor is ready
@@ -129,8 +139,10 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     return fileUpdateBus.on(sessionId, (event) => {
       if (event.filePath !== filePath) return
 
-      fetch(`${API_BASE}/sessions/${sessionId}/file-content?path=${encodeURIComponent(filePath)}`)
-        .then(r => r.ok ? r.json() as Promise<{ content: string }> : Promise.reject(r.statusText))
+      apiClient.get<{ content: string }>(`/sessions/${sessionId}/file-content`, {
+        params: { path: filePath },
+        toast: '重新加载文件失败',
+      })
         .then(data => {
           if (data.content === contentRef.current) return // own save or no real change
           if (isDirtyRef.current) {
@@ -143,7 +155,7 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
           setOriginalContent(data.content)
           void fetchDiffLines()
         })
-        .catch((e: unknown) => toastError(`重新加载文件失败: ${String(e)}`))
+        .catch((e: unknown) => console.error('[FileEditor] reload failed:', e))
     })
   }, [sessionId, filePath, fetchDiffLines])
 
@@ -151,15 +163,7 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     if (!isDirty || saving) return
     setSaving(true)
     try {
-      const res = await fetch(`${API_BASE}/sessions/${sessionId}/file-content`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body?.error ?? `HTTP ${res.status}`)
-      }
+      await apiClient.post(`/sessions/${sessionId}/file-content`, { path: filePath, content }, { toast: '保存失败' })
       setOriginalContent(content)
       // Refresh diff gutter after save
       await fetchDiffLines()

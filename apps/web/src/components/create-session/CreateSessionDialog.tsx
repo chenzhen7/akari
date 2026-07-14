@@ -21,7 +21,7 @@ import { Plus, Sparkles, Loader2 } from 'lucide-react'
 import { AgentTypeSelect } from '@/components/agent/AgentTypeSelect'
 import { useSessionStore } from '@/stores/session-store'
 import { useUIStore } from '@/stores/ui-store'
-import { API_BASE } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 
 interface RepoBranch {
@@ -53,10 +53,8 @@ export function CreateSessionDialog() {
       return
     }
     setBranchesLoading(true)
-    fetch(`${API_BASE}/repo/branches`)
-      .then(async res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = (await res.json()) as RepoBranch[]
+    apiClient.get<RepoBranch[]>('/repo/branches', { toast: false })
+      .then(data => {
         setBranches(data)
         // 默认以主会话的当前分支作为 baseBranch，否则使用仓库当前分支
         const defaultBranch = mainSession?.branchName ?? data.find(b => b.isCurrent)?.name ?? data[0]?.name ?? ''

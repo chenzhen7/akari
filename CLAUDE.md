@@ -106,7 +106,8 @@ akari/
 │           │   └── useResizablePanels.ts # 可拖拽分栏
 │           ├── lib/
 │           │   ├── utils.ts           # cn() 等工具函数
-│           │   ├── api.ts             # API 调用封装 + parseOkResponse
+│           │   ├── api.ts             # API 配置（API_BASE、parseOkResponse）
+│           │   ├── api-client.ts      # 统一 API 客户端（get/post/patch/delete）
 │           │   ├── feature-flags.ts   # 功能开关（CANVAS_ENABLED 等）
 │           │   ├── agent-config.ts    # Agent 品牌统一配置（图标、颜色、显示名、权限绕过）
 │           │   ├── terminalBus.ts     # 终端事件总线（模块级保活）

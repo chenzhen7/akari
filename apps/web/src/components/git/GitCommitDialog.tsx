@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { toast, toastError } from '@/lib/toast'
+import { toast } from '@/lib/toast'
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import type { DiffFile } from '@akari/shared-types'
-import { API_BASE } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 
 interface GitCommitDialogProps {
   open: boolean
@@ -26,25 +26,17 @@ export function GitCommitDialog({ open, onOpenChange, sessionId, diffFiles }: Gi
 
   const handleCommit = async () => {
     if (!message.trim()) {
-      toastError('请填写 commit message')
+      toast.error('请填写 commit message')
       return
     }
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/sessions/${sessionId}/git/commit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message.trim() }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error((body as { error?: string }).error ?? res.statusText)
-      }
+      await apiClient.post(`/sessions/${sessionId}/git/commit`, { message: message.trim() }, { toast: 'Commit 失败' })
       toast.success('Commit 成功')
       setMessage('')
       onOpenChange(false)
     } catch (err) {
-      toastError(`Commit 失败: ${err instanceof Error ? err.message : String(err)}`)
+      console.error('[GitCommitDialog] commit failed:', err)
     } finally {
       setLoading(false)
     }

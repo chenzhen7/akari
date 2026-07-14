@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { GitCommit, GitMerge, GitBranch, Copy, Check, FolderOpen } from 'lucide-react'
 import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { API_BASE } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 import type { AgentSession } from '@/types'
 
 interface SessionContextMenuProps {
@@ -44,18 +44,6 @@ function MenuGroup({ label }: { label: string }) {
 
 function MenuDivider() {
   return <div className="my-1 h-px bg-border" />
-}
-
-async function postJson(path: string, body: Record<string, unknown>) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error ?? `HTTP ${res.status}`)
-  }
 }
 
 export function SessionContextMenu({ session, x, y, onClose, onSwitchBranch }: SessionContextMenuProps) {
@@ -132,14 +120,12 @@ export function SessionContextMenu({ session, x, y, onClose, onSwitchBranch }: S
     }
     const loadingId = toast.loading('正在提交...')
     try {
-      await postJson(`/sessions/${session.id}/git/commit`, { message: message.trim() })
+      await apiClient.post(`/sessions/${session.id}/git/commit`, { message: message.trim() }, { toast: '提交失败' })
       toast.dismiss(loadingId)
       toast.success('提交成功')
     } catch (err) {
       toast.dismiss(loadingId)
-      const msg = err instanceof Error ? err.message : String(err)
       console.error('[commit] failed:', err)
-      toastError(`提交失败：${msg}`)
     }
     onClose()
   }
@@ -147,14 +133,12 @@ export function SessionContextMenu({ session, x, y, onClose, onSwitchBranch }: S
   const handleUpdateFromBase = async () => {
     const loadingId = toast.loading(`正在从 ${session.baseBranch} 更新...`)
     try {
-      await postJson(`/sessions/${session.id}/git/update-branch`, {})
+      await apiClient.post(`/sessions/${session.id}/git/update-branch`, {}, { toast: '更新失败' })
       toast.dismiss(loadingId)
       toast.success(`已从 ${session.baseBranch} 更新`)
     } catch (err) {
       toast.dismiss(loadingId)
-      const msg = err instanceof Error ? err.message : String(err)
       console.error('[updateFromBase] failed:', err)
-      toastError(`更新失败：${msg}`)
     }
     onClose()
   }

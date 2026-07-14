@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import { toast, toastError } from '@/lib/toast'
+import { toast } from '@/lib/toast'
+import { apiClient } from '@/lib/api-client'
 import type { Workspace } from '@akari/shared-types'
-import { API_BASE } from '@/lib/api'
 
 interface WorkspaceStore {
   workspaces: Workspace[]
@@ -19,9 +19,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   currentWorkspace: null,
 
   fetchWorkspaces: () => {
-    fetch(`${API_BASE}/workspaces`)
-      .then(r => r.json())
-      .then((workspaces: Workspace[]) => {
+    apiClient.get<Workspace[]>('/workspaces', { toast: false })
+      .then((workspaces) => {
         set({ workspaces })
         const current = workspaces.find(w => w.isCurrent)
         if (current) {
@@ -33,50 +32,26 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   addWorkspace: async (name, path) => {
     try {
-      const r = await fetch(`${API_BASE}/workspaces`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, path }),
-      })
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}))
-        throw new Error(body?.error ?? r.statusText)
-      }
-      const workspace = (await r.json()) as Workspace
+      const workspace = await apiClient.post<Workspace>('/workspaces', { name, path }, { toast: '添加工作区失败' })
       toast.success(`已添加工作区：${workspace.name}`)
       return workspace
     } catch (err) {
       console.error('[addWorkspace] failed:', err)
-      toastError(`添加工作区失败：${err instanceof Error ? err.message : String(err)}`)
       return undefined
     }
   },
 
   switchWorkspace: (id) => {
-    fetch(`${API_BASE}/workspaces/${id}/switch`, { method: 'POST' })
-      .then(async (r) => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}))
-          throw new Error(body?.error ?? r.statusText)
-        }
-      })
+    apiClient.post(`/workspaces/${id}/switch`, undefined, { toast: '切换工作区失败' })
       .catch((err) => {
         console.error('[switchWorkspace] failed:', err)
-        toastError(`切换工作区失败：${err instanceof Error ? err.message : String(err)}`)
       })
   },
 
   deleteWorkspace: (id) => {
-    fetch(`${API_BASE}/workspaces/${id}`, { method: 'DELETE' })
-      .then(async (r) => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}))
-          throw new Error(body?.error ?? r.statusText)
-        }
-      })
+    apiClient.delete(`/workspaces/${id}`, { toast: '删除工作区失败' })
       .catch((err) => {
         console.error('[deleteWorkspace] failed:', err)
-        toastError(`删除工作区失败：${err instanceof Error ? err.message : String(err)}`)
       })
   },
 

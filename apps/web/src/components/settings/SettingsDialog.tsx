@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2, FolderOpen, Sun, Moon, Monitor } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
-import { API_BASE } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 import { selectFolder } from '@/lib/native-file-picker'
 
 interface SettingsDialogProps {
@@ -29,36 +29,22 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   useEffect(() => {
     if (!open) return
     setLoading(true)
-    fetch(`${API_BASE}/settings`)
-      .then(async res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
+    apiClient.get<{ worktreeBaseDir?: string }>('/settings', { toast: '加载设置失败' })
+      .then((data) => {
         setWorktreeBaseDir(data.worktreeBaseDir ?? '')
       })
-      .catch(err => {
-        console.error('[SettingsDialog] load failed:', err)
-        toastError(`加载设置失败：${err instanceof Error ? err.message : String(err)}`)
-      })
+      .catch(err => console.error('[SettingsDialog] load failed:', err))
       .finally(() => setLoading(false))
   }, [open])
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      const res = await fetch(`${API_BASE}/settings`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ worktreeBaseDir: worktreeBaseDir.trim() }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body?.error ?? `HTTP ${res.status}`)
-      }
+      await apiClient.patch('/settings', { worktreeBaseDir: worktreeBaseDir.trim() }, { toast: '保存失败' })
       toast.success('设置已保存')
       onOpenChange(false)
     } catch (err) {
       console.error('[SettingsDialog] save failed:', err)
-      toastError(`保存失败：${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
     }

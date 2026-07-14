@@ -1,10 +1,9 @@
 import { useState, useEffect, lazy, Suspense, memo } from 'react'
 import { Loader2 } from 'lucide-react'
-import { toastError } from '@/lib/toast'
 import type { DiffFile } from '@akari/shared-types'
 import { useTheme } from '@/components/theme-provider'
 import { detectLanguage } from '@/lib/language-utils'
-import { API_BASE } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { resolveAbsoluteFilePath } from '@/lib/path-utils'
 import { fileUpdateBus } from '@/lib/fileUpdateBus'
@@ -33,11 +32,21 @@ export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFi
     setLoading(true)
     setError(null)
     setContent(null)
-    fetch(`${API_BASE}/sessions/${sessionId}/diff-content?file=${encodeURIComponent(filePath)}`)
-      .then(r => r.ok ? r.json() as Promise<{ original: string; modified: string }> : Promise.reject(r.statusText))
+
+    const controller = new AbortController()
+    apiClient.get<{ original: string; modified: string }>(`/sessions/${sessionId}/diff-content`, {
+      params: { file: filePath },
+      signal: controller.signal,
+      toast: false,
+    })
       .then(data => setContent(data))
-      .catch((e: unknown) => setError(String(e)))
+      .catch((e: unknown) => {
+        if (e instanceof Error && e.name === 'AbortError') return
+        setError(String(e))
+      })
       .finally(() => setLoading(false))
+
+    return () => controller.abort()
   }, [filePath, sessionId])
 
   // Listen for external file changes broadcast from the shared watcher
@@ -47,10 +56,12 @@ export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFi
       setLoading(true)
       setError(null)
       setContent(null)
-      fetch(`${API_BASE}/sessions/${sessionId}/diff-content?file=${encodeURIComponent(filePath)}`)
-        .then(r => r.ok ? r.json() as Promise<{ original: string; modified: string }> : Promise.reject(r.statusText))
+      apiClient.get<{ original: string; modified: string }>(`/sessions/${sessionId}/diff-content`, {
+        params: { file: filePath },
+        toast: '重新加载 diff 失败',
+      })
         .then(data => setContent(data))
-        .catch((e: unknown) => toastError(`重新加载 diff 失败: ${String(e)}`))
+        .catch((e: unknown) => console.error('[DiffViewer] reload failed:', e))
         .finally(() => setLoading(false))
     })
   }, [sessionId, filePath])

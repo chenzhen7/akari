@@ -16,8 +16,8 @@ import {
   GitCommit, Trash2, GitMerge, GitPullRequest, Loader2, FileIcon,
   RefreshCw,
 } from 'lucide-react'
-import { toast, toastError } from '@/lib/toast'
-import { API_BASE } from '@/lib/api'
+import { toast } from '@/lib/toast'
+import { apiClient } from '@/lib/api-client'
 import { useTabStore } from '@/stores/tab-store'
 
 function statusColor(s: DiffFile['status']) {
@@ -75,20 +75,10 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
     if (!commitMsg.trim()) return
     setCommitting(true)
     try {
-      const res = await fetch(`${API_BASE}/sessions/${session.id}/git/commit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: commitMsg.trim() }),
-      })
-      if (!res.ok) {
-        const body = await res.json() as { error?: string }
-        throw new Error(body.error ?? res.statusText)
-      }
+      await apiClient.post(`/sessions/${session.id}/git/commit`, { message: commitMsg.trim() }, { toast: '提交失败' })
       toast.success('已提交')
       setCommitMsg('')
       setCommitOpen(false)
-    } catch (e) {
-      toastError(`提交失败: ${String(e)}`)
     } finally {
       setCommitting(false)
     }
@@ -97,15 +87,9 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   async function handleDiscard() {
     setDiscarding(true)
     try {
-      const res = await fetch(`${API_BASE}/sessions/${session.id}/git/discard`, { method: 'POST' })
-      if (!res.ok) {
-        const body = await res.json() as { error?: string }
-        throw new Error(body.error ?? res.statusText)
-      }
+      await apiClient.post(`/sessions/${session.id}/git/discard`, undefined, { toast: '丢弃失败' })
       toast.success('已丢弃所有变更')
       setDiscardOpen(false)
-    } catch (e) {
-      toastError(`丢弃失败: ${String(e)}`)
     } finally {
       setDiscarding(false)
     }
@@ -118,19 +102,9 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   async function handleDiscardFile(file: DiffFile) {
     setDiscardingFile(true)
     try {
-      const res = await fetch(`${API_BASE}/sessions/${session.id}/git/discard-file`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath: file.path }),
-      })
-      if (!res.ok) {
-        const body = await res.json() as { error?: string }
-        throw new Error(body.error ?? res.statusText)
-      }
+      await apiClient.post(`/sessions/${session.id}/git/discard-file`, { filePath: file.path }, { toast: '丢弃文件失败' })
       toast.success(`已丢弃 ${file.path}`)
       setDiscardFileTarget(null)
-    } catch (e) {
-      toastError(`丢弃文件失败: ${String(e)}`)
     } finally {
       setDiscardingFile(false)
     }
@@ -139,13 +113,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   async function handleRefresh() {
     setRefreshing(true)
     try {
-      const res = await fetch(`${API_BASE}/sessions/${session.id}/diff-refresh`, { method: 'POST' })
-      if (!res.ok) {
-        const body = await res.json() as { error?: string }
-        throw new Error(body.error ?? res.statusText)
-      }
-    } catch (e) {
-      toastError(`刷新失败: ${String(e)}`)
+      await apiClient.post(`/sessions/${session.id}/diff-refresh`, undefined, { toast: '刷新失败' })
     } finally {
       setRefreshing(false)
     }
@@ -154,19 +122,9 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   async function handleMerge() {
     setMerging(true)
     try {
-      const res = await fetch(`${API_BASE}/sessions/${session.id}/git/merge`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceBranch: session.branchName }),
-      })
-      if (!res.ok) {
-        const body = await res.json() as { error?: string }
-        throw new Error(body.error ?? res.statusText)
-      }
+      await apiClient.post(`/sessions/${session.id}/git/merge`, { sourceBranch: session.branchName }, { toast: '合并失败' })
       toast.success(`已合并 ${session.branchName} → ${session.baseBranch}`)
       setMergeOpen(false)
-    } catch (e) {
-      toastError(`合并失败: ${String(e)}`)
     } finally {
       setMerging(false)
     }
@@ -175,15 +133,9 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   async function handleUpdateFromBase() {
     setUpdating(true)
     try {
-      const res = await fetch(`${API_BASE}/sessions/${session.id}/git/update-branch`, { method: 'POST' })
-      if (!res.ok) {
-        const body = await res.json() as { error?: string }
-        throw new Error(body.error ?? res.statusText)
-      }
+      await apiClient.post(`/sessions/${session.id}/git/update-branch`, undefined, { toast: '更新失败' })
       toast.success('已从主会话当前分支更新到当前分支')
       setUpdateOpen(false)
-    } catch (e) {
-      toastError(`更新失败: ${String(e)}`)
     } finally {
       setUpdating(false)
     }

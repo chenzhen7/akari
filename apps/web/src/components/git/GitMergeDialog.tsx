@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { toast, toastError } from '@/lib/toast'
+import { toast } from '@/lib/toast'
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { GitBranch } from '@akari/shared-types'
-import { API_BASE } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 
 interface GitMergeDialogProps {
   open: boolean
@@ -33,9 +33,8 @@ export function GitMergeDialog({ open, onOpenChange, sessionId, currentBranch }:
 
   useEffect(() => {
     if (!open) return
-    fetch(`${API_BASE}/sessions/${sessionId}/git-branches`)
-      .then(r => r.json())
-      .then((data: GitBranch[]) => {
+    apiClient.get<GitBranch[]>(`/sessions/${sessionId}/git-branches`, { toast: false })
+      .then((data) => {
         const candidates = data.filter(b => !b.isRemote && b.name !== currentBranch)
         setBranches(candidates)
         if (candidates[0]) setSourceBranch(candidates[0].name)
@@ -45,24 +44,16 @@ export function GitMergeDialog({ open, onOpenChange, sessionId, currentBranch }:
 
   const handleMerge = async () => {
     if (!sourceBranch) {
-      toastError('请选择要合并的分支')
+      toast.error('请选择要合并的分支')
       return
     }
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/sessions/${sessionId}/git/merge`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceBranch }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error((body as { error?: string }).error ?? res.statusText)
-      }
+      await apiClient.post(`/sessions/${sessionId}/git/merge`, { sourceBranch }, { toast: '合并失败' })
       toast.success(`已将 ${sourceBranch} 合并到 ${currentBranch}`)
       onOpenChange(false)
     } catch (err) {
-      toastError(`合并失败: ${err instanceof Error ? err.message : String(err)}`)
+      console.error('[GitMergeDialog] merge failed:', err)
     } finally {
       setLoading(false)
     }

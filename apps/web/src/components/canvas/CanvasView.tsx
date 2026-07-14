@@ -21,7 +21,7 @@ import FlowEdge from './FlowEdge'
 import { CanvasContextMenu } from './CanvasContextMenu'
 import { Loader2, ServerOff, LayoutGrid } from 'lucide-react'
 import { toastError } from '@/lib/toast'
-import { API_BASE } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 
 /** 模块级：跨组件挂载/卸载周期持久化 viewport，不写入 store */
 let _savedViewport: Viewport | null = null
@@ -83,23 +83,14 @@ function CanvasViewContent() {
       }
 
       try {
-        const res = await fetch(`${API_BASE}/canvas/edges`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sourceSessionId: source,
-            targetSessionId: target,
-            trigger: 'on-complete',
-            injectContext: true,
-          }),
-        })
-        if (!res.ok) {
-          const errData = await res.json()
-          throw new Error(errData.error || `HTTP 错误 ${res.status}`)
-        }
+        await apiClient.post('/canvas/edges', {
+          sourceSessionId: source,
+          targetSessionId: target,
+          trigger: 'on-complete',
+          injectContext: true,
+        }, { toast: '创建连线失败' })
         // canvas:edges WS 事件会自动更新 canvasEdges，触发上面的 useEffect 同步
       } catch (err: any) {
-        toastError(`创建连线失败: ${err instanceof Error ? err.message : err}`)
         return
       }
       setEdges(eds => addEdge(connection, eds))
@@ -112,12 +103,9 @@ function CanvasViewContent() {
     async (edgesToDelete: Edge[]) => {
       for (const edge of edgesToDelete) {
         try {
-          const res = await fetch(`${API_BASE}/canvas/edges/${edge.id}`, {
-            method: 'DELETE',
-          })
-          if (!res.ok && res.status !== 404) throw new Error(`HTTP ${res.status}`)
+          await apiClient.delete(`/canvas/edges/${edge.id}`, { toast: '删除连线失败' })
         } catch (err: any) {
-          toastError(`删除连线失败: ${err instanceof Error ? err.message : err}`)
+          // 404 已在 apiClient 抛错，这里忽略后续处理
         }
       }
     },

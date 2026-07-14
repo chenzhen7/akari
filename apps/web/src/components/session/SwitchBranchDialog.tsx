@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { GitBranch, Loader2 } from 'lucide-react'
-import { toast, toastError } from '@/lib/toast'
+import { toast } from '@/lib/toast'
 import {
   Dialog,
   DialogContent,
@@ -18,25 +18,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { GitBranch as GitBranchType } from '@akari/shared-types'
-import { API_BASE } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 
 interface SwitchBranchDialogProps {
   sessionId: string
   currentBranch: string
   open: boolean
   onOpenChange: (open: boolean) => void
-}
-
-async function postJson(path: string, body: Record<string, unknown>) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    throw new Error(data?.error ?? `HTTP ${res.status}`)
-  }
 }
 
 export function SwitchBranchDialog({ sessionId, currentBranch, open, onOpenChange }: SwitchBranchDialogProps) {
@@ -48,22 +36,12 @@ export function SwitchBranchDialog({ sessionId, currentBranch, open, onOpenChang
   useEffect(() => {
     if (!open) return
     setLoading(true)
-    fetch(`${API_BASE}/sessions/${sessionId}/git-branches`)
-      .then(async r => {
-        if (!r.ok) {
-          const data = await r.json().catch(() => ({}))
-          throw new Error(data?.error ?? `HTTP ${r.status}`)
-        }
-        return r.json() as Promise<GitBranchType[]>
-      })
+    apiClient.get<GitBranchType[]>(`/sessions/${sessionId}/git-branches`, { toast: '加载分支失败' })
       .then(data => {
         setBranches(data)
         setSelected(data.find(b => b.name === currentBranch && !b.isRemote)?.name ?? '')
       })
-      .catch(err => {
-        console.error('[SwitchBranchDialog] fetch branches failed:', err)
-        toastError(`加载分支失败：${err instanceof Error ? err.message : String(err)}`)
-      })
+      .catch(err => console.error('[SwitchBranchDialog] fetch branches failed:', err))
       .finally(() => setLoading(false))
   }, [open, sessionId, currentBranch])
 
@@ -80,15 +58,13 @@ export function SwitchBranchDialog({ sessionId, currentBranch, open, onOpenChang
     setSubmitting(true)
     const loadingId = toast.loading(`正在切换到 ${selected}...`)
     try {
-      await postJson(`/sessions/${sessionId}/git/checkout`, { branch: selected })
+      await apiClient.post(`/sessions/${sessionId}/git/checkout`, { branch: selected }, { toast: '切换分支失败' })
       toast.dismiss(loadingId)
       toast.success(`已切换到 ${selected}`)
       onOpenChange(false)
     } catch (err) {
       toast.dismiss(loadingId)
-      const msg = err instanceof Error ? err.message : String(err)
       console.error('[SwitchBranchDialog] checkout failed:', err)
-      toastError(`切换分支失败：${msg}`)
     } finally {
       setSubmitting(false)
     }

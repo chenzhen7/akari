@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
+import { apiClient } from './api-client'
 import type { FileNode } from '@akari/shared-types'
-import { API_BASE } from './api'
 
 const cache = new Map<string, FileNode[]>()
 const listeners = new Set<() => void>()
@@ -59,12 +59,10 @@ export function useFileTreeTick(): number {
 }
 
 export async function fetchFileTreeChildren(sessionId: string, path: string): Promise<FileNode[]> {
-  const res = await fetch(`${API_BASE}/sessions/${sessionId}/files?path=${encodeURIComponent(path)}`)
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error ?? `HTTP ${res.status}`)
-  }
-  const nodes: FileNode[] = await res.json()
+  const nodes = await apiClient.get<FileNode[]>(`/sessions/${sessionId}/files`, {
+    params: { path },
+    toast: false,
+  })
   setFileTreeChildren(sessionId, path, nodes)
   return nodes
 }

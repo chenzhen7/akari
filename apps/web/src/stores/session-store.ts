@@ -1,7 +1,6 @@
 import { create } from 'zustand'
-import { toastError } from '@/lib/toast'
+import { apiClient } from '@/lib/api-client'
 import type { AgentSession, AgentType, CanvasEdge, GitLogResponse, KanbanColumn, SessionStatus } from '@akari/shared-types'
-import { API_BASE, parseOkResponse } from '@/lib/api'
 
 const KANBAN_STATUS: Partial<Record<KanbanColumn, SessionStatus>> = {
   'in-progress': 'running',
@@ -47,22 +46,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   addSession: (name, task, baseBranch = 'main', agentType = 'claude', canvasPosition) => {
     const pendingPos = get().pendingCreatePosition
-    const body = JSON.stringify({ name: name.trim(), task: task.trim(), baseBranch, agentType, canvasPosition: canvasPosition ?? pendingPos })
-    fetch(`${API_BASE}/sessions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    })
-      .then(parseOkResponse)
-      .then(r => r.json() as Promise<AgentSession>)
-      .then((session: AgentSession) => {
+    const body = { name: name.trim(), task: task.trim(), baseBranch, agentType, canvasPosition: canvasPosition ?? pendingPos }
+    apiClient.post<AgentSession>('/sessions', body, { toast: '创建会话失败' })
+      .then((session) => {
         set(state => ({
           sessions: [...state.sessions.filter(s => s.id !== session.id), session],
           pendingCreatePosition: null,
         }))
         get().selectSession(session.id)
       })
-      .catch(err => { toastError(`创建会话失败: ${err instanceof Error ? err.message : String(err)}`); console.error('[addSession] failed:', err) })
+      .catch(err => { console.error('[addSession] failed:', err) })
   },
 
   moveToColumn: (id, column) => {
@@ -74,15 +67,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }))
     const targetStatus = KANBAN_STATUS[column]
     if (targetStatus) {
-      fetch(`${API_BASE}/sessions/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: targetStatus }),
-      })
-        .then(parseOkResponse)
+      apiClient.patch(`/sessions/${id}/status`, { status: targetStatus }, { toast: '无法移动卡片' })
         .catch(err => {
           console.error('[moveToColumn] status update failed:', err)
-          toastError(`无法移动卡片: ${err instanceof Error ? err.message : String(err)}`)
           if (prevColumn !== undefined) {
             set(state => ({
               sessions: state.sessions.map(s =>
@@ -101,15 +88,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         s.id === id ? { ...s, canvasPosition: pos } : s
       ),
     }))
-    fetch(`${API_BASE}/sessions/${id}/canvas`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pos),
-    })
-      .then(parseOkResponse)
+    apiClient.patch(`/sessions/${id}/canvas`, pos, { toast: '更新画布位置失败' })
       .catch(err => {
         console.error('[updateCanvasPosition] failed:', err)
-        toastError(`更新画布位置失败: ${err instanceof Error ? err.message : String(err)}`)
         if (prevPos !== undefined) {
           set(state => ({
             sessions: state.sessions.map(s =>
@@ -133,12 +114,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   archiveSession: (id) => {
     if (get().pendingOps.has(id)) return
     set(state => ({ pendingOps: new Set(state.pendingOps).add(id) }))
-    fetch(`${API_BASE}/sessions/${id}/archive`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    })
-      .then(parseOkResponse)
+    apiClient.post(`/sessions/${id}/archive`, {}, { toast: '归档失败' })
       .then(() => {
         set(state => ({
           sessions: state.sessions.map(s =>
@@ -148,7 +124,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       })
       .catch(err => {
         console.error('[archiveSession] failed:', err)
-        toastError(`归档失败: ${err instanceof Error ? err.message : String(err)}`)
       })
       .finally(() => {
         set(state => {
@@ -162,8 +137,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   deleteSession: (id) => {
     if (get().pendingOps.has(id)) return
     set(state => ({ pendingOps: new Set(state.pendingOps).add(id) }))
-    fetch(`${API_BASE}/sessions/${id}`, { method: 'DELETE' })
-      .then(parseOkResponse)
+    apiClient.delete(`/sessions/${id}`, { toast: '删除失败' })
       .then(() => {
         set(state => ({
           sessions: state.sessions.filter(s => s.id !== id),
@@ -172,7 +146,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       })
       .catch(err => {
         console.error('[deleteSession] failed:', err)
-        toastError(`删除失败: ${err instanceof Error ? err.message : String(err)}`)
       })
       .finally(() => {
         set(state => {
@@ -186,12 +159,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   restoreSession: (id) => {
     if (get().pendingOps.has(id)) return
     set(state => ({ pendingOps: new Set(state.pendingOps).add(id) }))
-    fetch(`${API_BASE}/sessions/${id}/restore`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    })
-      .then(parseOkResponse)
+    apiClient.post(`/sessions/${id}/restore`, {}, { toast: '恢复失败' })
       .then(() => {
         set(state => ({
           sessions: state.sessions.map(s =>
@@ -201,7 +169,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       })
       .catch(err => {
         console.error('[restoreSession] failed:', err)
-        toastError(`恢复失败: ${err instanceof Error ? err.message : String(err)}`)
       })
       .finally(() => {
         set(state => {
@@ -219,10 +186,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set(state => ({ selectedGitCommits: { ...state.selectedGitCommits, [sessionId]: hash } })),
 
   fetchCanvasEdges: () => {
-    fetch(`${API_BASE}/canvas/edges`)
-      .then(parseOkResponse)
-      .then(r => r.json() as Promise<CanvasEdge[]>)
-      .then((edges: CanvasEdge[]) => set({ canvasEdges: edges }))
+    apiClient.get<CanvasEdge[]>('/canvas/edges', { toast: false })
+      .then((edges) => set({ canvasEdges: edges }))
       .catch(err => console.error('[fetchCanvasEdges] failed:', err))
   },
 

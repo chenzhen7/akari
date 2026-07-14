@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { GitBranch, RefreshCw, ChevronDown } from 'lucide-react'
-import { toastError } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -19,7 +18,7 @@ import { computeIdeaGraphLayout } from '@/lib/git-graph-utils'
 import { GitGraphSvg } from './GitGraphSvg'
 import { GitGraphRow } from './GitGraphRow'
 import { cn } from '@/lib/utils'
-import { API_BASE } from '@/lib/api'
+import { apiClient } from '@/lib/api-client'
 
 const FULL_LOAD_LIMIT = 100
 const SEARCH_DEBOUNCE_MS = 200
@@ -159,25 +158,15 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
 
   const fetchLog = useCallback((branch?: string) => {
     setLoading(true)
-    const params = new URLSearchParams({ limit: String(FULL_LOAD_LIMIT) })
-    if (branch) params.set('branch', branch)
-
-    fetch(`${API_BASE}/sessions/${sessionId}/git-log?${params}`)
-      .then(async r => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}))
-          throw new Error(body?.error ?? `HTTP ${r.status}`)
-        }
-        return r.json() as Promise<GitLogResponse>
-      })
+    apiClient.get<GitLogResponse>(`/sessions/${sessionId}/git-log`, {
+      params: { limit: FULL_LOAD_LIMIT, branch },
+      toast: '加载 Git 日志失败',
+    })
       .then((data) => {
         setCommits(data.commits)
         setGitLog(sessionId, data)
       })
-      .catch(err => {
-        console.error('[GitGraphPanel] fetch failed:', err)
-        toastError(`加载 Git 日志失败: ${err instanceof Error ? err.message : String(err)}`)
-      })
+      .catch(err => console.error('[GitGraphPanel] fetch failed:', err))
       .finally(() => setLoading(false))
   }, [sessionId, setGitLog])
 
@@ -217,21 +206,8 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   )
 
   const handleCheckout = (hash: string) => {
-    fetch(`${API_BASE}/sessions/${sessionId}/git/checkout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branch: hash }),
-    })
-      .then(async r => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}))
-          throw new Error(body?.error ?? `HTTP ${r.status}`)
-        }
-      })
-      .catch(err => {
-        console.error('[GitGraphPanel] checkout failed:', err)
-        toastError(`Checkout 失败: ${err instanceof Error ? err.message : String(err)}`)
-      })
+    apiClient.post(`/sessions/${sessionId}/git/checkout`, { branch: hash }, { toast: 'Checkout 失败' })
+      .catch(err => console.error('[GitGraphPanel] checkout failed:', err))
   }
 
   const handleCreateBranch = (hash: string) => {
@@ -240,23 +216,16 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
 
   const submitNewBranch = () => {
     if (!newBranch.name.trim()) return
-    fetch(`${API_BASE}/sessions/${sessionId}/git/checkout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ branch: newBranch.name.trim(), createNew: true, from: newBranch.hash }),
-    })
-      .then(async r => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}))
-          throw new Error(body?.error ?? `HTTP ${r.status}`)
-        }
+    apiClient.post(`/sessions/${sessionId}/git/checkout`, {
+      branch: newBranch.name.trim(),
+      createNew: true,
+      from: newBranch.hash,
+    }, { toast: '创建分支失败' })
+      .then(() => {
         const branch = branchFilter === '__all__' ? undefined : branchFilter
         fetchLog(branch)
       })
-      .catch(err => {
-        console.error('[GitGraphPanel] create branch failed:', err)
-        toastError(`创建分支失败: ${err instanceof Error ? err.message : String(err)}`)
-      })
+      .catch(err => console.error('[GitGraphPanel] create branch failed:', err))
     setNewBranch(prev => ({ ...prev, open: false, name: '' }))
   }
 
