@@ -95,14 +95,19 @@ akari/
 │       ├── index.html
 │       └── src/
 │           ├── types/index.ts         # 重新导出 @akari/shared-types
-│           ├── stores/session-store.ts  # WebSocket 驱动，含 handleServerMessage
-│           ├── stores/workspace-store.ts # 工作区状态管理
+│           ├── stores/session-store.ts  # 会话核心状态（列表、看板/画布位置、Git Log、选中状态）
+│           ├── stores/ui-store.ts       # UI 状态（对话框、右侧面板、命令中心）
+│           ├── stores/connection-store.ts # WebSocket 连接、终端创建/输入
+│           ├── stores/tab-store.ts        # 标签创建/关闭/激活/排序
+│           ├── stores/server-message-handler.ts # WebSocket 消息分发
+│           ├── stores/workspace-store.ts  # 工作区状态管理
 │           ├── hooks/
 │           │   ├── useWebSocket.ts    # 连接管理 + 自动重连（指数退避）
 │           │   └── useResizablePanels.ts # 可拖拽分栏
 │           ├── lib/
 │           │   ├── utils.ts           # cn() 等工具函数
-│           │   ├── api.ts             # API 调用封装
+│           │   ├── api.ts             # API 调用封装 + parseOkResponse
+│           │   ├── feature-flags.ts   # 功能开关（CANVAS_ENABLED 等）
 │           │   ├── agent-config.ts    # Agent 品牌统一配置（图标、颜色、显示名、权限绕过）
 │           │   ├── terminalBus.ts     # 终端事件总线（模块级保活）
 │           │   ├── fileUpdateBus.ts   # 文件更新事件总线
@@ -331,6 +336,8 @@ export const AGENT_CONFIG: Record<AgentType, AgentConfig> = {
 | ~~`.agent-worktrees/` 未加入 `.gitignore`~~ | ~~F2 误提交~~ | 已解决：已在 `.gitignore` 中添加 |
 | 审批工作流未实现同步阻塞 | F8 安全性 | `PermissionRequest` Hook 当前仅记录日志，不挂起 HTTP 请求；Claude Code 仍使用原生权限确认。后续如需统一审批中心，需实现阻塞式审批 |
 | 画布功能默认关闭 | F1 功能可用性 | `CANVAS_ENABLED = false`，当前主入口为看板 + Tab 视图 |
+| `pnpm typecheck` 未真正检查 app 源文件 | 开发体验 | 项目使用 project references，`tsc --noEmit` 不编译 references；应使用 `tsc --build` 或 `-p tsconfig.app.json` |
+| `pnpm lint` 存在既有 ESLint 错误 | 代码质量 | `apps/web` 有 36 个既有错误（ref render 更新、useCallback 闭包等），需另开一轮修复 |
 
 ---
 
