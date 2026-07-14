@@ -20,6 +20,7 @@ import { TerminalMultiplexer } from './terminal-mux.js'
 import { createAgentAdapter, SHELL_STARTUP_DELAY_MS } from './agent-adapters/index.js'
 import type { AgentLaunchOptions } from './agent-adapters/base.js'
 import { SettingsStore } from './settings-store.js'
+import { SessionRepository } from './db/repositories/session.repository.js'
 
 export interface CreateSessionParams {
   name: string
@@ -48,35 +49,6 @@ function getAgentTabLabel(agentType: AgentType): string {
     default:
       return agentType.charAt(0).toUpperCase() + agentType.slice(1)
   }
-}
-
-interface DbRow {
-  id: string
-  name: string
-  task: string
-  status: string
-  agent_type: string
-  worktree_path: string
-  branch_name: string
-  base_branch: string
-  canvas_x: number
-  canvas_y: number
-  canvas_width: number
-  canvas_height: number
-  kanban_column: string
-  terminal_id: string
-  progress: number
-  diff_summary: string
-  created_at: string
-  tags: string
-  collaboration_role: string | null
-  parent_session_id: string | null
-  child_session_ids: string | null
-  last_ai_message: string
-  tabs: string
-  active_tab_id: string | null
-  workspace_id: string
-  is_main: number
 }
 
 const STATUS_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
@@ -115,7 +87,7 @@ export class SessionManager {
   /** 文档型 tab（file/diff）的最大保留数量，终端 / agent 类型不受限制 */
   private static readonly MAX_DOC_TABS = 10
 
-  private readonly db: Database.Database
+  private readonly sessionRepository: SessionRepository
   private repoRoot: string
   private worktreeManager: WorktreeManager
   private readonly terminalMux: TerminalMultiplexer
@@ -125,7 +97,7 @@ export class SessionManager {
   private readonly settingsStore: SettingsStore
 
   constructor(opts: { workspacePath: string; repoRoot: string; db: Database.Database; broadcast: (msg: ServerMessage) => void; workspaceId: string; isGitWorkspace?: boolean }) {
-    this.db = opts.db
+    this.sessionRepository = new SessionRepository(opts.db)
     this.repoRoot = opts.repoRoot
     this.workspaceId = opts.workspaceId
     this.isGitWorkspace = opts.isGitWorkspace ?? true
@@ -133,7 +105,6 @@ export class SessionManager {
     this.worktreeManager = new WorktreeManager(opts.repoRoot, opts.workspacePath, this.settingsStore.getWorktreeBaseDir())
     this.terminalMux = new TerminalMultiplexer()
     this.broadcast = opts.broadcast
-    this.initDb()
     this.wireEvents()
   }
 
@@ -176,7 +147,7 @@ export class SessionManager {
       workspaceId: this.workspaceId,
     }
 
-    this.insertRow(session)
+    this.sessionRepository.create(session)
     this.broadcast({ event: 'session:created', payload: session })
 
     this.initSession(session).catch(err => {
@@ -193,9 +164,7 @@ export class SessionManager {
       throw new Error(`Invalid transition: ${session.status} → ${status}`)
     }
     const kanbanColumn = STATUS_TO_KANBAN[status] ?? session.kanbanColumn
-    this.db
-      .prepare('UPDATE sessions SET status = ?, kanban_column = ? WHERE id = ?')
-      .run(status, kanbanColumn, sessionId)
+    this.sessionRepository.updateStatus(sessionId, status, kanbanColumn)
     this.broadcast({
       event: 'session:status',
       payload: { id: sessionId, status, progress: session.progress },
@@ -207,17 +176,11 @@ export class SessionManager {
   }
 
   getSession(sessionId: string): AgentSession | null {
-    const row = this.db
-      .prepare('SELECT * FROM sessions WHERE id = ?')
-      .get(sessionId) as DbRow | undefined
-    return row ? rowToSession(row) : null
+    return this.sessionRepository.getById(sessionId)
   }
 
   getMainSession(): AgentSession | null {
-    const row = this.db
-      .prepare('SELECT * FROM sessions WHERE workspace_id = ? AND is_main = 1')
-      .get(this.workspaceId) as DbRow | undefined
-    return row ? rowToSession(row) : null
+    return this.sessionRepository.getMainByWorkspaceId(this.workspaceId)
   }
 
   async ensureMainSession(workspacePath: string): Promise<AgentSession> {
@@ -229,9 +192,7 @@ export class SessionManager {
         // Re-read current branch in case it changed while this workspace was not active
         const currentBranch = await this.worktreeManager.getCurrentBranch()
         if (currentBranch !== existing.branchName) {
-          this.db
-            .prepare('UPDATE sessions SET branch_name = ?, base_branch = ? WHERE id = ?')
-            .run(currentBranch, currentBranch, existing.id)
+          this.sessionRepository.updateBranchAndBase(existing.id, currentBranch, currentBranch)
           const updated = this.getSession(existing.id)
           if (updated) {
             this.broadcast({ event: 'session:updated', payload: updated })
@@ -246,9 +207,7 @@ export class SessionManager {
           existing.diffSummary.deletions !== 0 ||
           existing.name !== workspaceName
         if (needsClear) {
-          this.db
-            .prepare('UPDATE sessions SET branch_name = ?, base_branch = ?, diff_summary = ?, name = ? WHERE id = ?')
-            .run('', '', '{"additions":0,"deletions":0,"files":0}', workspaceName, existing.id)
+          this.sessionRepository.updateMainSessionClear(existing.id, workspaceName)
           const updated = this.getSession(existing.id)
           if (updated) {
             this.broadcast({ event: 'session:updated', payload: updated })
@@ -287,7 +246,7 @@ export class SessionManager {
       workspaceId: this.workspaceId,
       isMain: true,
     }
-    this.insertRow(session)
+    this.sessionRepository.create(session)
     this.broadcast({ event: 'session:created', payload: session })
 
     // 主会话监听仓库根目录的文件变更
@@ -306,10 +265,7 @@ export class SessionManager {
   }
 
   listSessions(): AgentSession[] {
-    const rows = this.db
-      .prepare('SELECT * FROM sessions WHERE workspace_id = ? ORDER BY created_at DESC')
-      .all(this.workspaceId) as DbRow[]
-    return rows.map(rowToSession)
+    return this.sessionRepository.listByWorkspaceId(this.workspaceId)
   }
 
   sendToTerminal(terminalId: string, data: string): void {
@@ -341,12 +297,8 @@ export class SessionManager {
     this.settingsStore.setWorktreeBaseDir(settings.worktreeBaseDir)
   }
 
-  getDb(): Database.Database {
-    return this.db
-  }
-
   updateCanvasPosition(sessionId: string, x: number, y: number): void {
-    this.db.prepare('UPDATE sessions SET canvas_x = ?, canvas_y = ? WHERE id = ?').run(x, y, sessionId)
+    this.sessionRepository.updateCanvasPosition(sessionId, x, y)
   }
 
   broadcastMessage(msg: ServerMessage): void {
@@ -418,9 +370,7 @@ export class SessionManager {
       }
     }
 
-    this.db
-      .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ? WHERE id = ?')
-      .run(JSON.stringify(updatedTabs), activeTabId, sessionId)
+    this.sessionRepository.updateTabs(sessionId, updatedTabs, activeTabId)
 
     for (const evictedId of evictedTabIds) {
       this.broadcast({ event: 'tab:closed', payload: { sessionId, tabId: evictedId } })
@@ -454,9 +404,7 @@ export class SessionManager {
       activeTabId = updatedTabs.length > 0 ? updatedTabs[updatedTabs.length - 1].id : null
     }
 
-    this.db
-      .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ? WHERE id = ?')
-      .run(JSON.stringify(updatedTabs), activeTabId, sessionId)
+    this.sessionRepository.updateTabs(sessionId, updatedTabs, activeTabId)
 
     if ((tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
       this.terminalMux.killTerminal(tab.terminalId)
@@ -472,9 +420,7 @@ export class SessionManager {
     const session = this.getSession(sessionId)
     if (!session || !session.tabs.find(t => t.id === tabId)) return
 
-    this.db
-      .prepare('UPDATE sessions SET active_tab_id = ? WHERE id = ?')
-      .run(tabId, sessionId)
+    this.sessionRepository.updateActiveTab(sessionId, tabId)
 
     this.broadcast({ event: 'tab:activated', payload: { sessionId, tabId } })
   }
@@ -489,9 +435,7 @@ export class SessionManager {
     }
 
     const reordered = orderedTabIds.map(id => tabMap.get(id)!)
-    this.db
-      .prepare('UPDATE sessions SET tabs = ? WHERE id = ?')
-      .run(JSON.stringify(reordered), sessionId)
+    this.sessionRepository.updateTabs(sessionId, reordered)
 
     this.broadcast({
       event: 'tabs:sync',
@@ -512,7 +456,7 @@ export class SessionManager {
   }
 
   setLastAiMessage(sessionId: string, message: string): void {
-    this.db.prepare('UPDATE sessions SET last_ai_message = ? WHERE id = ?').run(message, sessionId)
+    this.sessionRepository.updateLastAiMessage(sessionId, message)
   }
 
   pushTerminalMessage(sessionId: string, data: string): void {
@@ -531,10 +475,8 @@ export class SessionManager {
         }
       }
     }
-    try {
+    if (session && validateTransition(session.status, 'archived')) {
       this.updateStatus(sessionId, 'archived')
-    } catch {
-      // already in terminal state
     }
   }
 
@@ -588,7 +530,7 @@ export class SessionManager {
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     await this.worktreeManager.checkoutBranch(sessionId, branch, createNew, session.worktreePath)
     if (session.isMain) {
-      this.db.prepare('UPDATE sessions SET branch_name = ? WHERE id = ?').run(branch, sessionId)
+      this.sessionRepository.updateBranch(sessionId, branch)
       const updated = this.getSession(sessionId)
       if (updated) {
         this.broadcast({ event: 'session:updated', payload: updated })
@@ -680,7 +622,7 @@ export class SessionManager {
       if (!session.isMain) {
         if (session.status === 'initializing') {
           if (validateTransition(session.status, 'failed')) {
-            this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
+            this.sessionRepository.updateStatusOnly(session.id, 'failed')
           } else {
             this.broadcast({
               event: 'session:status',
@@ -707,7 +649,7 @@ export class SessionManager {
           await access(session.worktreePath)
         } catch {
           if (validateTransition(session.status, 'failed')) {
-            this.db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run('failed', session.id)
+            this.sessionRepository.updateStatusOnly(session.id, 'failed')
           }
           this.clearSessionTerminalIds(session.id)
           continue
@@ -750,9 +692,7 @@ export class SessionManager {
       }
 
       const terminalId = this.resolveSessionTerminalId(tabs, activeTabId)
-      this.db
-        .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ?, terminal_id = ? WHERE id = ?')
-        .run(JSON.stringify(tabs), activeTabId, terminalId ?? '', session.id)
+      this.sessionRepository.updateTerminalIdAndTabs(session.id, tabs, activeTabId, terminalId ?? '')
       this.broadcast({ event: 'tabs:sync', payload: { sessionId: session.id, tabs, activeTabId } })
 
       this.pushTerminalDisplay(session.id, `\r\n\x1b[33m> [Server restarted — terminal restored]\x1b[0m\r\n`)
@@ -790,9 +730,7 @@ export class SessionManager {
 
     if (!changed && !session.terminalId) return
 
-    this.db
-      .prepare('UPDATE sessions SET tabs = ?, terminal_id = ? WHERE id = ?')
-      .run(JSON.stringify(clearedTabs), '', sessionId)
+    this.sessionRepository.updateTabsAndTerminalId(sessionId, clearedTabs, '')
     this.broadcast({ event: 'tabs:sync', payload: { sessionId, tabs: clearedTabs, activeTabId: session.activeTabId } })
   }
 
@@ -802,7 +740,7 @@ export class SessionManager {
       throw new Error('Cannot delete the main session')
     }
     if (!session) {
-      this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId)
+      this.sessionRepository.delete(sessionId)
       return
     }
     for (const tab of session.tabs) {
@@ -813,7 +751,7 @@ export class SessionManager {
     await this.worktreeManager.removeWorktree(sessionId, session.worktreePath, session.branchName).catch(err => {
       console.warn(`[SessionManager] removeWorktree failed for ${sessionId} during delete (non-fatal):`, err)
     })
-    this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId)
+    this.sessionRepository.delete(sessionId)
   }
 
   private async launchAgentInTerminal(
@@ -855,9 +793,7 @@ export class SessionManager {
       session.branchName = branchName
       session.baseBranch = resolvedBase
 
-      this.db
-        .prepare('UPDATE sessions SET worktree_path = ?, branch_name = ?, base_branch = ? WHERE id = ?')
-        .run(worktreePath, branchName, resolvedBase, id)
+      this.sessionRepository.updateWorktreeAndBranch(id, worktreePath, branchName, resolvedBase)
 
       this.broadcast({ event: 'session:updated', payload: session })
 
@@ -878,9 +814,7 @@ export class SessionManager {
       session.tabs = [tab]
       session.activeTabId = tab.id
       session.terminalId = terminalId
-      this.db
-        .prepare('UPDATE sessions SET tabs = ?, active_tab_id = ?, terminal_id = ? WHERE id = ?')
-        .run(JSON.stringify([tab]), tab.id, terminalId, id)
+      this.sessionRepository.updateTerminalIdAndTabs(id, [tab], tab.id, terminalId)
 
       this.broadcast({ event: 'tab:created', payload: { sessionId: id, tab } })
       this.broadcast({ event: 'tab:activated', payload: { sessionId: id, tabId: tab.id } })
@@ -895,10 +829,9 @@ export class SessionManager {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       this.pushTerminalDisplay(id, `> ❌ Init failed: ${msg}\r\n`)
-      try {
+      const session = this.getSession(id)
+      if (session && validateTransition(session.status, 'failed')) {
         this.updateStatus(id, 'failed')
-      } catch {
-        // ignore if transition is invalid
       }
     }
   }
@@ -927,10 +860,8 @@ export class SessionManager {
         const remaining = session.tabs.filter(t => t.type === 'terminal' && t.terminalId && t.terminalId !== terminalId)
         if (remaining.length === 0) {
           const status: SessionStatus = exitCode === 0 ? 'completed' : 'failed'
-          try {
+          if (validateTransition(session.status, status)) {
             this.updateStatus(sessionId, status)
-          } catch {
-            // ignore
           }
         }
       },
@@ -960,7 +891,7 @@ export class SessionManager {
 
   private broadcastDiffUpdate(sessionId: string): void {
     void this.getCurrentDiff(sessionId).then(diff => {
-      this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(JSON.stringify(diff.summary), sessionId)
+      this.sessionRepository.updateDiffSummary(sessionId, diff.summary)
       this.broadcast({ event: 'diff:update', payload: { sessionId, diff } })
     }).catch((err: unknown) => {
       console.warn(`[SessionManager] failed to broadcast diff update for ${sessionId}:`, err)
@@ -973,7 +904,7 @@ export class SessionManager {
   } {
     return {
       onDiff: (diff: GitDiff) => {
-        this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(JSON.stringify(diff.summary), sessionId)
+        this.sessionRepository.updateDiffSummary(sessionId, diff.summary)
         this.broadcast({ event: 'diff:update', payload: { sessionId, diff } })
         this.worktreeManager.getGitLog(sessionId, 100, 0, cwd).then(log => {
           this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
@@ -994,7 +925,7 @@ export class SessionManager {
         if (!session || !session.isMain) return
         const branch = await this.worktreeManager.getCurrentBranch(repoRoot)
         if (branch !== session.branchName) {
-          this.db.prepare('UPDATE sessions SET branch_name = ?, base_branch = ? WHERE id = ?').run(branch, branch, sessionId)
+          this.sessionRepository.updateBranchAndBase(sessionId, branch, branch)
           const updated = this.getSession(sessionId)
           if (updated) {
             this.broadcast({ event: 'session:updated', payload: updated })
@@ -1006,166 +937,6 @@ export class SessionManager {
     })
   }
 
-  private initDb(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        id                  TEXT PRIMARY KEY,
-        name                TEXT NOT NULL,
-        task                TEXT NOT NULL,
-        status              TEXT NOT NULL DEFAULT 'initializing',
-        agent_type          TEXT NOT NULL DEFAULT 'claude',
-        worktree_path       TEXT NOT NULL DEFAULT '',
-        branch_name         TEXT NOT NULL DEFAULT '',
-        base_branch         TEXT NOT NULL DEFAULT 'main',
-        canvas_x            REAL NOT NULL DEFAULT 100,
-        canvas_y            REAL NOT NULL DEFAULT 100,
-        canvas_width        REAL NOT NULL DEFAULT 280,
-        canvas_height       REAL NOT NULL DEFAULT 280,
-        kanban_column       TEXT NOT NULL DEFAULT 'backlog',
-        terminal_id         TEXT NOT NULL,
-        progress            INTEGER NOT NULL DEFAULT 0,
-        diff_summary        TEXT NOT NULL DEFAULT '{"additions":0,"deletions":0}',
-        created_at          TEXT NOT NULL,
-        tags                TEXT NOT NULL DEFAULT '[]',
-        pending_approval    TEXT,
-        collaboration_role  TEXT NOT NULL DEFAULT 'standalone',
-        parent_session_id   TEXT,
-        child_session_ids   TEXT NOT NULL DEFAULT '[]',
-        last_ai_message    TEXT NOT NULL DEFAULT '',
-        tabs               TEXT NOT NULL DEFAULT '[]',
-        active_tab_id      TEXT,
-        workspace_id       TEXT NOT NULL DEFAULT '',
-        is_main            INTEGER NOT NULL DEFAULT 0
-      )
-    `)
-
-    // Migration: add columns if they don't exist
-    const cols: string[] = this.db
-      .prepare('PRAGMA table_info(sessions)')
-      .all()
-      .map((row: any) => row.name as string)
-    if (!cols.includes('last_ai_message')) {
-      this.db.exec('ALTER TABLE sessions ADD COLUMN last_ai_message TEXT NOT NULL DEFAULT ""')
-    }
-    if (!cols.includes('tabs')) {
-      this.db.exec('ALTER TABLE sessions ADD COLUMN tabs TEXT NOT NULL DEFAULT "[]"')
-    }
-    if (!cols.includes('active_tab_id')) {
-      this.db.exec('ALTER TABLE sessions ADD COLUMN active_tab_id TEXT')
-    }
-    if (!cols.includes('workspace_id')) {
-      this.db.exec('ALTER TABLE sessions ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ""')
-    }
-    if (!cols.includes('is_main')) {
-      this.db.exec('ALTER TABLE sessions ADD COLUMN is_main INTEGER NOT NULL DEFAULT 0')
-    }
-
-    // Migration: 把旧数据中 type 为 'claude' 的标签页统一改为通用 'agent'
-    const rows = this.db.prepare('SELECT id, tabs FROM sessions').all() as { id: string; tabs: string }[]
-    for (const row of rows) {
-      let tabs: SessionTab[]
-      try {
-        tabs = JSON.parse(row.tabs)
-      } catch {
-        continue
-      }
-      let changed = false
-      for (const tab of tabs) {
-        if ((tab.type as string) === 'claude') {
-          tab.type = 'agent'
-          changed = true
-        }
-      }
-      if (changed) {
-        this.db.prepare('UPDATE sessions SET tabs = ? WHERE id = ?').run(JSON.stringify(tabs), row.id)
-      }
-    }
-    // pending_approval column removed — no longer used
-  }
-
-  private insertRow(s: AgentSession): void {
-    this.db
-      .prepare(
-        `INSERT INTO sessions (
-          id, name, task, status, agent_type, worktree_path, branch_name, base_branch,
-          canvas_x, canvas_y, canvas_width, canvas_height,
-          kanban_column, terminal_id, progress, diff_summary, last_ai_message, created_at, tags,
-          collaboration_role, parent_session_id, child_session_ids, tabs, active_tab_id, workspace_id, is_main
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      )
-      .run(
-        s.id,
-        s.name,
-        s.task,
-        s.status,
-        s.agentType,
-        s.worktreePath,
-        s.branchName,
-        s.baseBranch,
-        s.canvasPosition.x,
-        s.canvasPosition.y,
-        s.canvasSize.width,
-        s.canvasSize.height,
-        s.kanbanColumn,
-        s.terminalId,
-        s.progress,
-        JSON.stringify(s.diffSummary),
-        s.lastAiMessage,
-        s.createdAt instanceof Date ? s.createdAt.toISOString() : String(s.createdAt),
-        JSON.stringify(s.tags),
-        s.collaborationRole,
-        s.parentSessionId ?? null,
-        JSON.stringify(s.childSessionIds),
-        JSON.stringify(s.tabs),
-        s.activeTabId,
-        s.workspaceId,
-        s.isMain ? 1 : 0,
-      )
-  }
-}
-
-function parseDiffSummary(raw: string): { additions: number; deletions: number } {
-  try {
-    const parsed = JSON.parse(raw)
-    if (typeof parsed.additions === 'number' && typeof parsed.deletions === 'number') {
-      return parsed
-    }
-  } catch {
-    // fallback: try to parse old string format like "5 insertions(+), 3 deletions(-)"
-  }
-  const additions = parseInt(raw.match(/(\d+) insertion/)?.[1] ?? '0') || 0
-  const deletions = parseInt(raw.match(/(\d+) deletion/)?.[1] ?? '0') || 0
-  return { additions, deletions }
-}
-
-function rowToSession(r: DbRow): AgentSession {
-  return {
-    id: r.id,
-    name: r.name,
-    task: r.task,
-    status: r.status as SessionStatus,
-    agentType: r.agent_type as AgentType,
-    worktreePath: r.worktree_path,
-    branchName: r.branch_name,
-    baseBranch: r.base_branch,
-    canvasPosition: { x: r.canvas_x, y: r.canvas_y },
-    canvasSize: { width: r.canvas_width, height: r.canvas_height },
-    kanbanColumn: r.kanban_column as KanbanColumn,
-    terminalId: r.terminal_id,
-    progress: r.progress,
-    diffSummary: parseDiffSummary(r.diff_summary),
-    lastAiMessage: r.last_ai_message,
-    terminalOutput: [],
-    createdAt: new Date(r.created_at),
-    tags: JSON.parse(r.tags) as string[],
-    collaborationRole: (r.collaboration_role ?? 'standalone') as CollaborationRole,
-    parentSessionId: r.parent_session_id ?? undefined,
-    childSessionIds: JSON.parse(r.child_session_ids ?? '[]') as string[],
-    tabs: JSON.parse(r.tabs ?? '[]') as SessionTab[],
-    activeTabId: r.active_tab_id ?? null,
-    workspaceId: r.workspace_id ?? '',
-    isMain: r.is_main === 1,
-  }
 }
 
 export async function createSessionManager(opts: {

@@ -69,8 +69,7 @@ db.prepare("UPDATE sessions SET workspace_id = ? WHERE workspace_id = '' OR work
 // 确保当前工作区有主会话
 await sessionManager.ensureMainSession(currentWorkspace.path)
 
-const canvasEdgeStore = new CanvasEdgeStore(sessionManager.getDb())
-canvasEdgeStore.initDb()
+const canvasEdgeStore = new CanvasEdgeStore(db)
 
 fastify.decorate('db', db)
 fastify.decorate('workspaceManager', workspaceManager)
