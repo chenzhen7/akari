@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { useSessionStore } from '@/stores/session-store'
+import { useUIStore } from '@/stores/ui-store'
+import { useConnectionStore } from '@/stores/connection-store'
 import { useShallow } from 'zustand/react/shallow'
 import { API_BASE } from '@/lib/api'
 import {
@@ -141,9 +143,9 @@ function StatCard({
 }
 
 export function CommandCenter() {
-  const commandCenterOpen = useSessionStore(s => s.commandCenterOpen)
-  const toggleCommandCenter = useSessionStore(s => s.toggleCommandCenter)
-  const addTerminalLine = useSessionStore(s => s.addTerminalLine)
+  const commandCenterOpen = useUIStore(s => s.commandCenterOpen)
+  const toggleCommandCenter = useUIStore(s => s.toggleCommandCenter)
+  const addTerminalLine = useConnectionStore(s => s.addTerminalLine)
   const sessions = useSessionStore(useShallow(s => s.sessions))
 
   const [broadcastMsg, setBroadcastMsg] = useState('')

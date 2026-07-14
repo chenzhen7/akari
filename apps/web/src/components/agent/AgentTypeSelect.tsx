@@ -1,5 +1,4 @@
 import type { AgentType } from '@akari/shared-types'
-import type { ReactNode } from 'react'
 import {
   Select,
   SelectContent,

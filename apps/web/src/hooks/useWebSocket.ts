@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { useSessionStore, setWebSocket } from '@/stores/session-store'
-import type { ServerMessage, ClientMessage } from '@akari/shared-types'
+import { handleServerMessage } from '@/stores/server-message-handler'
+import { setWebSocket, useConnectionStore, type ConnectionStatus } from '@/stores/connection-store'
+import { useSessionStore } from '@/stores/session-store'
+import type { ClientMessage, ServerMessage } from '@akari/shared-types'
 
 function getWsUrl(): string {
   if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL
@@ -16,7 +18,7 @@ const RECONNECT_BASE_MS = 1000
 const RECONNECT_MAX_MS = 30000
 const RECONNECT_MAX_ATTEMPTS = 10
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'failed'
+export type { ConnectionStatus }
 
 let socketInstance: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -24,8 +26,7 @@ let attempt = 0
 
 export function useWebSocket() {
   const mountedRef = useRef(false)
-  const handleMessage = useSessionStore(s => s.handleServerMessage)
-  const setConnStatus = useSessionStore(s => s.setConnectionStatus)
+  const setConnStatus = useConnectionStore(s => s.setConnectionStatus)
 
   const connect = useCallback(() => {
     if (socketInstance && socketInstance.readyState < WebSocket.CLOSING) return
@@ -38,6 +39,7 @@ export function useWebSocket() {
       attempt = 0
       setConnStatus('connected')
       setWebSocket(ws)
+      useSessionStore.getState().fetchCanvasEdges()
       if (reconnectTimer) {
         clearTimeout(reconnectTimer)
         reconnectTimer = null
@@ -47,7 +49,7 @@ export function useWebSocket() {
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data as string) as ServerMessage
-        handleMessage(msg)
+        handleServerMessage(msg)
       } catch {
         console.warn('[WS] Failed to parse message', ev.data)
       }
@@ -69,7 +71,7 @@ export function useWebSocket() {
     ws.onerror = () => {
       ws.close()
     }
-  }, [handleMessage, setConnStatus])
+  }, [setConnStatus])
 
   useEffect(() => {
     mountedRef.current = true

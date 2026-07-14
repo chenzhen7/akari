@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { toast, toastError } from '@/lib/toast'
 import { API_BASE } from '@/lib/api'
-import { useSessionStore } from '@/stores/session-store'
+import { useTabStore } from '@/stores/tab-store'
 
 function statusColor(s: DiffFile['status']) {
   return s === 'A' ? 'text-green-500' : s === 'D' ? 'text-red-500' : s === 'R' ? 'text-blue-400' : 'text-amber-400'
@@ -112,7 +112,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   }
 
   function handleOpenFile(file: DiffFile) {
-    useSessionStore.getState().createTab(session.id, 'file', file.path)
+    useTabStore.getState().createTab(session.id, 'file', file.path)
   }
 
   async function handleDiscardFile(file: DiffFile) {

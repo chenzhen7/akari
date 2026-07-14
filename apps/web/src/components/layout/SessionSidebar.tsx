@@ -1,6 +1,8 @@
 import { memo, useCallback, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { useSessionStore, CANVAS_ENABLED } from '@/stores/session-store'
+import { useSessionStore } from '@/stores/session-store'
+import { useUIStore } from '@/stores/ui-store'
+import { CANVAS_ENABLED } from '@/lib/feature-flags'
 import { Button } from '@/components/ui/button'
 import {
   GitBranch,
@@ -279,8 +281,8 @@ function SidebarActionButton({ icon: Icon, label, active, shortcut, disabled, ti
 function SidebarActions() {
   const globalViewMode = useSessionStore(s => s.globalViewMode)
   const setGlobalViewMode = useSessionStore(s => s.setGlobalViewMode)
-  const openCreateDialog = useSessionStore(s => s.openCreateDialog)
-  const toggleCommandCenter = useSessionStore(s => s.toggleCommandCenter)
+  const openCreateDialog = useUIStore(s => s.openCreateDialog)
+  const toggleCommandCenter = useUIStore(s => s.toggleCommandCenter)
   const currentWorkspace = useWorkspaceStore(s => s.currentWorkspace)
   const canCreateSession = currentWorkspace?.isGit !== false
 
@@ -323,8 +325,8 @@ function SidebarActions() {
 export function SessionSidebar() {
   const sessions = useSessionStore(s => s.sessions)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
-  const settingsOpen = useSessionStore(s => s.settingsOpen)
-  const setSettingsOpen = useSessionStore(s => s.setSettingsOpen)
+  const settingsOpen = useUIStore(s => s.settingsOpen)
+  const setSettingsOpen = useUIStore(s => s.setSettingsOpen)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)
   const [switchBranchDialog, setSwitchBranchDialog] = useState<{ open: boolean; sessionId: string | null }>({
     open: false,

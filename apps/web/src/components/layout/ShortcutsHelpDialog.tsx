@@ -5,7 +5,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { useSessionStore } from '@/stores/session-store'
+import { useUIStore } from '@/stores/ui-store'
 import { SHORTCUTS, GOTO_SESSION_HELP, formatComboLabel } from '@/lib/shortcuts'
 
 interface HelpRow {
@@ -44,8 +44,8 @@ function Kbd({ label }: { label: string }) {
 }
 
 export function ShortcutsHelpDialog() {
-  const open = useSessionStore(s => s.shortcutsHelpOpen)
-  const setOpen = useSessionStore(s => s.setShortcutsHelpOpen)
+  const open = useUIStore(s => s.shortcutsHelpOpen)
+  const setOpen = useUIStore(s => s.setShortcutsHelpOpen)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

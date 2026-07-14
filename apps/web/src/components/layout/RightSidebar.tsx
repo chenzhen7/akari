@@ -2,6 +2,8 @@ import { GitBranch, FileCode, Info, FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
+import { useUIStore } from '@/stores/ui-store'
+import { useTabStore } from '@/stores/tab-store'
 import { GitGraphPanel } from '@/components/git/GitGraphPanel'
 import { DiffFileList } from '@/components/diff/DiffFileList'
 import { SessionInfoPanel } from '@/components/session/SessionInfoPanel'
@@ -21,11 +23,11 @@ interface RightSidebarProps {
 }
 
 export function RightSidebar({ session }: RightSidebarProps) {
-  const activeRightTab = useSessionStore(s => s.activeRightTab)
-  const setActiveRightTab = useSessionStore(s => s.setActiveRightTab)
+  const activeRightTab = useUIStore(s => s.activeRightTab)
+  const setActiveRightTab = useUIStore(s => s.setActiveRightTab)
   const selectSession = useSessionStore(s => s.selectSession)
-  const createTab = useSessionStore(s => s.createTab)
-  const activateTab = useSessionStore(s => s.activateTab)
+  const createTab = useTabStore(s => s.createTab)
+  const activateTab = useTabStore(s => s.activateTab)
 
   const handleSelectFile = (path: string) => {
     if (!session) return

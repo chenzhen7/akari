@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { destroyTerminalInstance } from './terminal-instances'
 import type { SessionTab } from '@akari/shared-types'
-import { useSessionStore } from '@/stores/session-store'
+import { useTabStore } from '@/stores/tab-store'
 
 interface TabContextMenuProps {
   sessionId: string
@@ -54,7 +54,7 @@ function isBatchClosable(tab: SessionTab): boolean {
 
 export function TabContextMenu({ sessionId, tab, tabs, x, y, onClose }: TabContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
-  const closeTab = useSessionStore(s => s.closeTab)
+  const closeTab = useTabStore(s => s.closeTab)
   const tabIndex = tabs.findIndex(t => t.id === tab.id)
 
   useEffect(() => {

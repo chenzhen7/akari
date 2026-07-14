@@ -3,6 +3,7 @@ import { FolderOpen, Copy, Check, Terminal } from 'lucide-react'
 import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session-store'
+import { useConnectionStore } from '@/stores/connection-store'
 import type { FileNode } from '@akari/shared-types'
 
 interface FileTreeContextMenuProps {
@@ -62,7 +63,7 @@ export function FileTreeContextMenu({
   onClose,
 }: FileTreeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
-  const sendTerminalInput = useSessionStore(s => s.sendTerminalInput)
+  const sendTerminalInput = useConnectionStore(s => s.sendTerminalInput)
   const activeTab = useSessionStore(
     useCallback(
       (s) => {

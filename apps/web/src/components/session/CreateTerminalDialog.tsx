@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Plus } from 'lucide-react'
 import { AgentTypeSelect } from '@/components/agent/AgentTypeSelect'
-import { useSessionStore } from '@/stores/session-store'
+import { useConnectionStore } from '@/stores/connection-store'
 import { AGENT_CONFIG } from '@/lib/agent-config'
 
 interface CreateTerminalDialogProps {
@@ -21,7 +21,7 @@ interface CreateTerminalDialogProps {
 }
 
 export function CreateTerminalDialog({ sessionId, open, onOpenChange }: CreateTerminalDialogProps) {
-  const createTerminal = useSessionStore(s => s.createTerminal)
+  const createTerminal = useConnectionStore(s => s.createTerminal)
   const [agentType, setAgentType] = useState<AgentType>('claude')
   const [bypassPermissions, setBypassPermissions] = useState(false)
 

@@ -1,12 +1,12 @@
 import type { AgentType } from '@akari/shared-types'
-import type { ComponentType } from 'react'
+import type { ComponentType, CSSProperties } from 'react'
 import { Bot, Code2, Terminal } from 'lucide-react'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { KimiIcon } from '@/components/icons/KimiIcon'
 
 export interface AgentConfig {
   displayName: string
-  icon: ComponentType<{ className?: string }>
+  icon: ComponentType<{ className?: string; style?: CSSProperties }>
   color: string
   supportsBypassPermissions: boolean
 }

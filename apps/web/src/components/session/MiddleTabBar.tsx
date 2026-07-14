@@ -4,7 +4,7 @@ import { CreateTerminalDialog } from './CreateTerminalDialog'
 import { TabContextMenu } from './TabContextMenu'
 import { cn } from '@/lib/utils'
 import type { AgentSession, SessionTab } from '@/types'
-import { useSessionStore } from '@/stores/session-store'
+import { useTabStore } from '@/stores/tab-store'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { resolveAbsoluteFilePath } from '@/lib/path-utils'
 import { destroyTerminalInstance } from './terminal-instances'
@@ -69,8 +69,8 @@ const SortableTab = memo(function SortableTab({
   tooltipContent: string
   onContextMenu?: (e: React.MouseEvent) => void
 }) {
-  const activateTab = useSessionStore(s => s.activateTab)
-  const closeTab = useSessionStore(s => s.closeTab)
+  const activateTab = useTabStore(s => s.activateTab)
+  const closeTab = useTabStore(s => s.closeTab)
 
   const {
     attributes,
@@ -160,7 +160,7 @@ const SortableTab = memo(function SortableTab({
 export function MiddleTabBar({ session }: MiddleTabBarProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ tab: SessionTab; x: number; y: number } | null>(null)
-  const reorderTabs = useSessionStore(s => s.reorderTabs)
+  const reorderTabs = useTabStore(s => s.reorderTabs)
   const tabs = session.tabs
   const activeTabId = session.activeTabId
   const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === session.workspaceId) ?? null)

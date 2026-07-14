@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useReactFlow } from '@xyflow/react'
 import { PlusCircle, Maximize2 } from 'lucide-react'
-import { useSessionStore } from '@/stores/session-store'
+import { useUIStore } from '@/stores/ui-store'
 
 interface CanvasContextMenuProps {
   x: number
@@ -11,7 +11,7 @@ interface CanvasContextMenuProps {
 }
 
 export function CanvasContextMenu({ x, y, flowPosition, onClose }: CanvasContextMenuProps) {
-  const openCreateDialog = useSessionStore(s => s.openCreateDialog)
+  const openCreateDialog = useUIStore(s => s.openCreateDialog)
   const { fitView } = useReactFlow()
   const ref = useRef<HTMLDivElement>(null)
 

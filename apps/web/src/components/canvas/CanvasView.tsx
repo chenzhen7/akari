@@ -15,6 +15,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useSessionStore } from '@/stores/session-store'
+import { useConnectionStore } from '@/stores/connection-store'
 import { SessionNode } from './SessionNode'
 import FlowEdge from './FlowEdge'
 import { CanvasContextMenu } from './CanvasContextMenu'
@@ -37,7 +38,7 @@ const edgeTypes = {
 function CanvasViewContent() {
   const sessions = useSessionStore(s => s.sessions)
   const canvasEdges = useSessionStore(s => s.canvasEdges)
-  const connectionStatus = useSessionStore(s => s.connectionStatus)
+  const connectionStatus = useConnectionStore(s => s.connectionStatus)
   const openTab = useSessionStore(s => s.openTab)
   const updateCanvasPosition = useSessionStore(s => s.updateCanvasPosition)
   const { screenToFlowPosition } = useReactFlow()

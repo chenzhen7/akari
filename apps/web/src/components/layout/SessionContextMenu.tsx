@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { GitCommit, GitMerge, GitBranch, Copy, Check, FolderOpen } from 'lucide-react'
 import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { API_BASE } from '@/stores/session-store'
+import { API_BASE } from '@/lib/api'
 import type { AgentSession } from '@/types'
 
 interface SessionContextMenuProps {

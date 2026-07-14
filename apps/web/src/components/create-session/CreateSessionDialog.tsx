@@ -20,7 +20,8 @@ import {
 import { Plus, Sparkles, Loader2 } from 'lucide-react'
 import { AgentTypeSelect } from '@/components/agent/AgentTypeSelect'
 import { useSessionStore } from '@/stores/session-store'
-import { API_BASE } from '@/stores/session-store'
+import { useUIStore } from '@/stores/ui-store'
+import { API_BASE } from '@/lib/api'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 
 interface RepoBranch {
@@ -29,8 +30,9 @@ interface RepoBranch {
 }
 
 export function CreateSessionDialog() {
-  const createDialogOpen = useSessionStore(s => s.createDialogOpen)
-  const toggleCreateDialog = useSessionStore(s => s.toggleCreateDialog)
+  const createDialogOpen = useUIStore(s => s.createDialogOpen)
+  const closeCreateDialog = useUIStore(s => s.closeCreateDialog)
+  const toggleCreateDialog = useUIStore(s => s.toggleCreateDialog)
   const addSession = useSessionStore(s => s.addSession)
   const mainSession = useSessionStore(s => s.sessions.find(s => s.isMain) ?? null)
   const currentWorkspace = useWorkspaceStore(s => s.currentWorkspace)
@@ -74,6 +76,7 @@ export function CreateSessionDialog() {
     if (!isGitWorkspace) return
     if (!name.trim() || !task.trim() || !baseBranch.trim()) return
     addSession(name.trim(), task.trim(), baseBranch, agentType)
+    closeCreateDialog()
     setName('')
     setTask('')
     setBaseBranch('')

@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useSessionStore } from '@/stores/session-store'
+import { useUIStore } from '@/stores/ui-store'
+import { useConnectionStore } from '@/stores/connection-store'
+import { useTabStore } from '@/stores/tab-store'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { destroyTerminalInstance } from '@/components/session/terminal-instances'
 import { toastError } from '@/lib/toast'
@@ -23,9 +26,11 @@ export function useGlobalShortcuts({ toggleLeft, toggleRight }: ShortcutHandlers
 
   useEffect(() => {
     function dispatch(id: ShortcutId): void {
-      const store = useSessionStore.getState()
-      const activeSessionId = store.activeSessionId
-      const session = activeSessionId ? store.sessions.find(s => s.id === activeSessionId) : undefined
+      const sessionStore = useSessionStore.getState()
+      const uiStore = useUIStore.getState()
+      const connectionStore = useConnectionStore.getState()
+      const activeSessionId = sessionStore.activeSessionId
+      const session = activeSessionId ? sessionStore.sessions.find(s => s.id === activeSessionId) : undefined
 
       switch (id) {
         case 'toggle-left':
@@ -40,11 +45,11 @@ export function useGlobalShortcuts({ toggleLeft, toggleRight }: ShortcutHandlers
             toastError('当前工作区不是 Git 仓库，无法创建会话')
             break
           }
-          store.openCreateDialog()
+          uiStore.openCreateDialog()
           break
         }
         case 'new-terminal':
-          if (session) store.createTerminal(session.id, 'shell')
+          if (session) connectionStore.createTerminal(session.id, 'shell')
           break
         case 'close-tab':
           if (session?.activeTabId) closeActiveTab(session.id, session.activeTabId)
@@ -56,16 +61,16 @@ export function useGlobalShortcuts({ toggleLeft, toggleRight }: ShortcutHandlers
           if (session) cycleTab(session.id, session.tabs, session.activeTabId, -1)
           break
         case 'command-center':
-          store.toggleCommandCenter()
+          uiStore.toggleCommandCenter()
           break
         case 'kanban':
-          store.setGlobalViewMode(store.globalViewMode === 'kanban' ? null : 'kanban')
+          sessionStore.setGlobalViewMode(sessionStore.globalViewMode === 'kanban' ? null : 'kanban')
           break
         case 'settings':
-          store.setSettingsOpen(true)
+          uiStore.setSettingsOpen(true)
           break
         case 'help':
-          store.toggleShortcutsHelp()
+          uiStore.toggleShortcutsHelp()
           break
       }
     }
@@ -76,7 +81,7 @@ export function useGlobalShortcuts({ toggleLeft, toggleRight }: ShortcutHandlers
       if (tab && (tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
         destroyTerminalInstance(tab.terminalId)
       }
-      useSessionStore.getState().closeTab(sessionId, tabId)
+      useTabStore.getState().closeTab(sessionId, tabId)
     }
 
     function cycleTab(
@@ -89,7 +94,7 @@ export function useGlobalShortcuts({ toggleLeft, toggleRight }: ShortcutHandlers
       const idx = tabs.findIndex(t => t.id === activeTabId)
       const current = idx === -1 ? 0 : idx
       const next = (current + dir + tabs.length) % tabs.length
-      useSessionStore.getState().activateTab(sessionId, tabs[next].id)
+      useTabStore.getState().activateTab(sessionId, tabs[next].id)
     }
 
     function gotoSession(n: number): boolean {

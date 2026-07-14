@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useSessionStore } from '@/stores/session-store'
+import { useConnectionStore } from '@/stores/connection-store'
 import { useTheme } from '@/components/theme-provider'
 import { Terminal, type IDisposable } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -78,7 +78,7 @@ function updateTerminalTheme(terminalId: string, isDark: boolean) {
 
 export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const terminalReadyTick = useSessionStore(s => s.terminalReadyTick[terminalId] ?? 0)
+  const terminalReadyTick = useConnectionStore(s => s.terminalReadyTick[terminalId] ?? 0)
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
 
