@@ -72,9 +72,13 @@ akari/
 │   │       │   ├── workspace.ts       # /workspaces/*
 │   │       │   ├── canvas.ts          # /canvas/edges
 │   │       │   └── hooks.ts           # /sessions/:id/hooks、/broadcast
-│   │       └── agent-adapters/        # AgentAdapter 接口 + ClaudeAdapter
-│   │           ├── base.ts            # AgentAdapter 接口 + PtyCommand 类型
+│   │       └── agent-adapters/        # AgentAdapter 接口 + 各品牌实现
+│   │           ├── base.ts            # AgentAdapter 接口 + PtyCommand / AgentLaunchOptions 类型
 │   │           ├── claude.ts          # ClaudeAdapter（注入 .claude/settings.local.json Hook 配置）
+│   │           ├── claude-orchestrator.ts # Claude Orchestrator 变体
+│   │           ├── kimi.ts            # KimiAdapter
+│   │           ├── aider.ts           # AiderAdapter
+│   │           ├── shell.ts           # ShellAdapter（未知 agentType 的默认回退）
 │   │           └── index.ts           # createAgentAdapter() 工厂
 │   ├── desktop/                       # Electron 桌面端
 │   │   ├── package.json
@@ -99,6 +103,7 @@ akari/
 │           ├── lib/
 │           │   ├── utils.ts           # cn() 等工具函数
 │           │   ├── api.ts             # API 调用封装
+│           │   ├── agent-config.ts    # Agent 品牌统一配置（图标、颜色、显示名、权限绕过）
 │           │   ├── terminalBus.ts     # 终端事件总线（模块级保活）
 │           │   ├── fileUpdateBus.ts   # 文件更新事件总线
 │           │   ├── ptyResizeMutex.ts  # 终端 resize 互斥锁
@@ -197,6 +202,98 @@ pnpm build:desktop
 - 找到根本原因前，不提交补丁；找到后，**回滚所有错误方向的补丁**，再应用最小化正确修复
 ---
 
+## Agent 集成协议
+
+实现 Agent 适配器时必须满足 `AgentAdapter` 接口：
+
+```typescript
+export interface PtyCommand {
+  cmd: string       // 发送到 PTY 的原始字符串（含换行符）
+  delayMs?: number  // 发送前等待的毫秒数（相对于前一条命令）
+}
+
+export interface AgentLaunchOptions {
+  bypassPermissions?: boolean
+}
+
+export interface AgentAdapter {
+  readonly agentType: string
+  readonly displayName: string
+  readonly requiresTty: boolean
+  readonly stdinSubmitSequence: string
+  readonly readyIndicatorPattern?: RegExp
+  readonly supportsBypassPermissions: boolean
+  readonly isAutomated: boolean
+
+  getTabLabel(): string
+  buildArgs?(opts: { task: string; worktreePath: string; bypassPermissions?: boolean }): string[]
+  formatPrompt?(task: string): string
+  prepare(worktreePath: string, task: string, sessionId: string, options?: AgentLaunchOptions): Promise<PtyCommand[]>
+}
+```
+
+字段说明：
+
+| 字段 | 说明 |
+|------|------|
+| `agentType` | 适配器唯一标识，对应 `AgentType` |
+| `displayName` | 前端展示名称 |
+| `requiresTty` | 是否需要 PTY |
+| `stdinSubmitSequence` | 向该 Agent 提交输入的换行/确认序列 |
+| `readyIndicatorPattern` | 可选：识别 Agent 就绪提示符的正则 |
+| `supportsBypassPermissions` | 是否支持权限绕过参数 |
+| `isAutomated` | 是否为自动化 Agent（决定默认创建 `agent` 类型标签还是 `terminal`） |
+| `getTabLabel()` | 该 Agent 的默认标签名 |
+| `buildArgs()` | 构造启动参数 |
+| `formatPrompt()` | 可选：格式化任务提示 |
+| `prepare()` | 在 worktree 创建后调用，返回要发送到 PTY 的命令序列 |
+
+**当前实现**：
+
+| 文件 | 说明 |
+|------|------|
+| `claude.ts` | Claude Code，注入 `.claude/settings.local.json` HTTP Hook |
+| `claude-orchestrator.ts` | Claude Orchestrator 变体，继承 ClaudeAdapter |
+| `kimi.ts` | Kimi CLI 适配 |
+| `aider.ts` | Aider 适配 |
+| `shell.ts` | 纯 Shell，未知 `agentType` 的回退适配器 |
+
+**ClaudeAdapter Hook 行为**：
+
+| Hook 事件 | 行为 |
+| :--- | :--- |
+| `PermissionRequest` | 记录审批日志（当前**不阻塞** Claude Code 原生权限流程） |
+| `SessionStart` | `initializing` → `idle` |
+| `UserPromptSubmit` | `paused` / `waiting` / `idle` → `running` |
+| `Stop` | `running` / `waiting` → `idle`，并广播 `session:lastMessage` |
+| `StopFailure` | `running` / `paused` / `waiting` → `failed` |
+
+> **历史说明**：早期版本通过终端输出解析 `[CHECKPOINT]` / `[APPROVAL_REQUIRED]` 魔法字符串驱动状态机，该机制已完全废弃，改为 HTTP Hook 单轨驱动。
+
+---
+
+## Agent 抽象与 Tab 类型规范
+
+- `AgentType`（`claude` / `claude-orchestrator` / `aider` / `shell` / `kimi` 等）描述“使用哪种 Agent 适配器”，属于会话/标签的元数据。
+- 标签页类型 `SessionTab.type` 只描述标签的**形态**，必须是通用的 `'terminal' | 'agent' | 'diff' | 'file'`：
+  - `'agent'` 代表“运行 Agent 的终端标签”，不区分具体 Agent 品牌。
+  - 具体品牌通过 `tab.agentType` 区分，用于图标、标签文字和 adapter 路由。
+- **禁止**把某个 Agent 品牌（如 `'claude'`）直接作为 `SessionTab.type` 写入。新增 Agent 时，只扩展 `AgentType` 和 `agent-adapters`，不要新增 tab 类型。
+- 前端所有 Agent 品牌相关的图标、颜色、显示名统一从 `apps/web/src/lib/agent-config.ts` 的 `AGENT_CONFIG` 读取，禁止在组件内硬编码。
+
+```typescript
+export const AGENT_CONFIG: Record<AgentType, AgentConfig> = {
+  claude: { displayName: 'Claude Code', icon: ClaudeIcon, color: '#7c3aed', supportsBypassPermissions: true },
+  'claude-orchestrator': { displayName: 'Claude Orchestrator', icon: Bot, color: '#b45309', supportsBypassPermissions: true },
+  aider: { displayName: 'Aider', icon: Code2, color: '#2563eb', supportsBypassPermissions: false },
+  kimi: { displayName: 'Kimi', icon: KimiIcon, color: '#1783FF', supportsBypassPermissions: true },
+  shell: { displayName: 'Shell', icon: Terminal, color: '#374151', supportsBypassPermissions: false },
+}
+```
+
+- 当已持久化的旧数据中出现被废弃的类型/字段时，应在 `SessionManager.initDb()` 里做一次性迁移，将数据改写为新形态，随后删除运行时兼容代码。不得以“兼容旧数据”为由在业务逻辑中保留分支。
+
+---
 
 ## Worktree 管理规范
 
@@ -214,7 +311,7 @@ pnpm build:desktop
 3. **终端即真相**：Agent 输出通过终端复用器捕获，不通过自定义协议通信
 4. **审批不可绕过**：危险操作必须经用户审批，Agent 适配器不得自动确认
 5. **禁止遗留历史债务**：完成任务后必须同步清理废弃文件、死代码、过时注释和临时脚手架。迁移后旧路径立即删除，重构后旧实现立即移除，不得以「后续清理」为由搁置。AGENTS.md / progress.md 中的「待清理」标记视为未完成任务。
-6. - 业务逻辑中保留最干净的分支，不要出现其他兼容或者历史债务代码，当已持久化的旧数据中出现被废弃的类型/字段时，应在 `SessionManager.initDb()` 里做一次性迁移，将数据改写为新形态，随后删除运行时兼容代码。不得以“兼容旧数据”为由在。
+6. **数据迁移一次性完成**：当已持久化的旧数据中出现被废弃的类型/字段时，应在 `SessionManager.initDb()` 里做一次性迁移，将数据改写为新形态，随后删除运行时兼容代码。不得以“兼容旧数据”为由在业务逻辑中保留分支。
 7. **重大决策必须先征询用户**：凡涉及以下任一情形，**禁止**自行做出决定并直接实施，必须先向用户说明方案对比、征得明确同意后再动手：
    - 技术方案降级或替代（如用 `child_process` 替代 `node-pty`、用 mock 替代真实实现）
    - 架构层面的设计取舍（如数据库选型、通信协议变更、模块拆分方式）
