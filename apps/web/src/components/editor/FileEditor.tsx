@@ -9,6 +9,7 @@ import { detectLanguage } from '@/lib/language-utils'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { resolveAbsoluteFilePath } from '@/lib/path-utils'
 import { fileUpdateBus } from '@/lib/fileUpdateBus'
+import { useShallow } from 'zustand/react/shallow'
 
 const MonacoEditor = lazy(() =>
   import('@monaco-editor/react').then(m => ({ default: m.Editor }))
@@ -210,7 +211,9 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     }
   }, [doSave, diffLines, applyDiffDecorations])
 
-  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === workspaceId) ?? null)
+  const workspace = useWorkspaceStore(
+    useShallow(s => s.workspaces.find(w => w.id === workspaceId) ?? null),
+  )
   const absoluteFilePath = resolveAbsoluteFilePath(worktreePath, filePath, workspace)
 
   return (

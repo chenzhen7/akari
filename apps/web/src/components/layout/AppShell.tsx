@@ -55,7 +55,7 @@ function ResizeHandle({
 }
 
 export function AppShell() {
-  const session = useSessionStore(s => s.activeSessionId ? s.sessions.find(ses => ses.id === s.activeSessionId) : undefined)
+  const activeSessionId = useSessionStore(s => s.activeSessionId)
   const globalViewMode = useSessionStore(s => s.globalViewMode)
   const { send } = useWebSocket()
 
@@ -163,11 +163,11 @@ export function AppShell() {
               <CanvasView />
             ) : globalViewMode === 'kanban' ? (
               <KanbanView />
-            ) : session ? (
+            ) : activeSessionId ? (
               <div className="flex h-full flex-col px-2 ">
-                <MiddleTabBar session={session} />
+                <MiddleTabBar sessionId={activeSessionId} />
                 <div className="flex-1 overflow-hidden">
-                  <TabContent session={session} send={send} />
+                  <TabContent sessionId={activeSessionId} send={send} />
                 </div>
               </div>
             ) : (
@@ -194,8 +194,8 @@ export function AppShell() {
             )}
             style={{ width: rightCollapsed ? '0px' : `${rightWidth}%` }}
           >
-            {session ? (
-              <RightSidebar session={session} />
+            {activeSessionId ? (
+              <RightSidebar sessionId={activeSessionId} />
             ) : (
               <RightSidebar />
             )}

@@ -6,11 +6,13 @@ import { cn } from '@/lib/utils'
 import type { AgentSession, SessionTab } from '@/types'
 import { useTabStore } from '@/stores/tab-store'
 import { useWorkspaceStore } from '@/stores/workspace-store'
+import { useSessionStore } from '@/stores/session-store'
 import { resolveAbsoluteFilePath } from '@/lib/path-utils'
 import { destroyTerminalInstance } from './terminal-instances'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AGENT_CONFIG } from '@/lib/agent-config'
+import { useShallow } from 'zustand/react/shallow'
 import {
   DndContext,
   closestCenter,
@@ -51,7 +53,7 @@ function getTabDisplayLabel(tab: SessionTab, allTabs: SessionTab[]): string {
 }
 
 interface MiddleTabBarProps {
-  session: AgentSession
+  sessionId: string
 }
 
 const SortableTab = memo(function SortableTab({
@@ -157,13 +159,27 @@ const SortableTab = memo(function SortableTab({
   )
 })
 
-export function MiddleTabBar({ session }: MiddleTabBarProps) {
+export function MiddleTabBar({ sessionId }: MiddleTabBarProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ tab: SessionTab; x: number; y: number } | null>(null)
   const reorderTabs = useTabStore(s => s.reorderTabs)
-  const tabs = session.tabs
-  const activeTabId = session.activeTabId
-  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === session.workspaceId) ?? null)
+  const { tabs, activeTabId, worktreePath, workspaceId } = useSessionStore(
+    useShallow(s => {
+      const session = s.sessions.find(ses => ses.id === sessionId)
+      if (!session) {
+        return { tabs: [] as SessionTab[], activeTabId: null as string | null, worktreePath: '', workspaceId: '' }
+      }
+      return {
+        tabs: session.tabs,
+        activeTabId: session.activeTabId,
+        worktreePath: session.worktreePath,
+        workspaceId: session.workspaceId,
+      }
+    }),
+  )
+  const workspace = useWorkspaceStore(
+    useShallow(s => s.workspaces.find(w => w.id === workspaceId) ?? null),
+  )
 
   const tabMeta = useMemo(() => {
     return tabs.map(tab => {
@@ -171,12 +187,12 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
       const displayLabel = tab.type === 'diff' ? `(diff) ${rawLabel}` : rawLabel
       const tooltipContent = tab.filePath
         ? tab.type === 'diff'
-          ? `Diff: ${resolveAbsoluteFilePath(session.worktreePath, tab.filePath, workspace)}`
-          : resolveAbsoluteFilePath(session.worktreePath, tab.filePath, workspace)
+          ? `Diff: ${resolveAbsoluteFilePath(worktreePath, tab.filePath, workspace)}`
+          : resolveAbsoluteFilePath(worktreePath, tab.filePath, workspace)
         : tab.label
       return { tab, displayLabel, tooltipContent }
     })
-  }, [tabs, session.worktreePath, workspace])
+  }, [tabs, worktreePath, workspace])
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -191,6 +207,14 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
     setContextMenu({ tab, x: e.clientX, y: e.clientY })
   }, [])
 
+  const contextMenuHandlers = useMemo(() => {
+    const handlers: Record<string, (e: React.MouseEvent) => void> = {}
+    for (const tab of tabs) {
+      handlers[tab.id] = (e) => handleContextMenu(tab, e)
+    }
+    return handlers
+  }, [tabs, handleContextMenu])
+
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event
     if (over && active.id !== over.id) {
@@ -200,10 +224,10 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
         const reordered = [...tabs]
         const [moved] = reordered.splice(oldIndex, 1)
         reordered.splice(newIndex, 0, moved)
-        reorderTabs(session.id, reordered.map(t => t.id))
+        reorderTabs(sessionId, reordered.map(t => t.id))
       }
     }
-  }, [tabs, session.id, reorderTabs])
+  }, [tabs, sessionId, reorderTabs])
 
   return (
     <div className="flex h-12 shrink-0 items-center bg-[var(--terminal-background)]">
@@ -220,12 +244,12 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
             {tabMeta.map(({ tab, displayLabel, tooltipContent }) => (
               <SortableTab
                 key={tab.id}
-                sessionId={session.id}
+                sessionId={sessionId}
                 tab={tab}
                 isActive={tab.id === activeTabId}
                 displayLabel={displayLabel}
                 tooltipContent={tooltipContent}
-                onContextMenu={e => handleContextMenu(tab, e)}
+                onContextMenu={contextMenuHandlers[tab.id]}
               />
             ))}
           </div>
@@ -234,7 +258,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
 
       {contextMenu && (
         <TabContextMenu
-          sessionId={session.id}
+          sessionId={sessionId}
           tab={contextMenu.tab}
           tabs={tabs}
           x={contextMenu.x}
@@ -254,7 +278,7 @@ export function MiddleTabBar({ session }: MiddleTabBarProps) {
       </Button>
 
       <CreateTerminalDialog
-        sessionId={session.id}
+        sessionId={sessionId}
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
       />

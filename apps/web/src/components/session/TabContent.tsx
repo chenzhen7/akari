@@ -3,13 +3,15 @@ import { TerminalPanel } from './TerminalPanel'
 import { DiffViewer } from '@/components/diff/DiffViewer'
 import { FileEditor } from '@/components/editor/FileEditor'
 import { cn } from '@/lib/utils'
-import type { AgentSession, DiffFile, SessionTab } from '@/types'
+import { useSessionStore } from '@/stores/session-store'
+import { useShallow } from 'zustand/react/shallow'
+import type { DiffFile, SessionTab } from '@/types'
 import type { ClientMessage } from '@akari/shared-types'
 
 const EMPTY_DIFF_FILES: DiffFile[] = []
 
 interface TabContentProps {
-  session: AgentSession
+  sessionId: string
   send: (msg: ClientMessage) => void
 }
 
@@ -71,10 +73,30 @@ const TabPane = memo(function TabPane({
   )
 })
 
-export const TabContent = memo(function TabContent({ session, send }: TabContentProps) {
-  const activeTabId = session.activeTabId
+export const TabContent = memo(function TabContent({ sessionId, send }: TabContentProps) {
+  const { tabs, activeTabId, workspaceId, worktreePath, diffFiles } = useSessionStore(
+    useShallow(s => {
+      const session = s.sessions.find(ses => ses.id === sessionId)
+      if (!session) {
+        return {
+          tabs: [] as SessionTab[],
+          activeTabId: null as string | null,
+          workspaceId: '',
+          worktreePath: '',
+          diffFiles: EMPTY_DIFF_FILES,
+        }
+      }
+      return {
+        tabs: session.tabs,
+        activeTabId: session.activeTabId,
+        workspaceId: session.workspaceId,
+        worktreePath: session.worktreePath,
+        diffFiles: session.diffFiles ?? EMPTY_DIFF_FILES,
+      }
+    }),
+  )
 
-  if (session.tabs.length === 0) {
+  if (tabs.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
         <p className="text-sm">暂无标签页</p>
@@ -85,18 +107,18 @@ export const TabContent = memo(function TabContent({ session, send }: TabContent
 
   return (
     <div className="relative h-full w-full">
-      {session.tabs.map(tab => (
+      {tabs.map(tab => (
         <TabPane
           key={tab.id}
-          sessionId={session.id}
+          sessionId={sessionId}
           type={tab.type}
           terminalId={tab.terminalId}
           filePath={tab.filePath}
           isActive={tab.id === activeTabId}
           send={send}
-          diffFiles={tab.type === 'diff' ? session.diffFiles ?? EMPTY_DIFF_FILES : undefined}
-          workspaceId={session.workspaceId}
-          worktreePath={session.worktreePath}
+          diffFiles={tab.type === 'diff' ? diffFiles : undefined}
+          workspaceId={workspaceId}
+          worktreePath={worktreePath}
         />
       ))}
     </div>

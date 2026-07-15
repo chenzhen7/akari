@@ -7,6 +7,7 @@ import { apiClient } from '@/lib/api-client'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { resolveAbsoluteFilePath } from '@/lib/path-utils'
 import { fileUpdateBus } from '@/lib/fileUpdateBus'
+import { useShallow } from 'zustand/react/shallow'
 
 const MonacoDiffEditor = lazy(() =>
   import('@monaco-editor/react').then(m => ({ default: m.DiffEditor }))
@@ -67,7 +68,9 @@ export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFi
   }, [sessionId, filePath])
 
   const currentFile = diffFiles.find(f => f.path === filePath)
-  const workspace = useWorkspaceStore(s => s.workspaces.find(w => w.id === workspaceId) ?? null)
+  const workspace = useWorkspaceStore(
+    useShallow(s => s.workspaces.find(w => w.id === workspaceId) ?? null),
+  )
   const absoluteFilePath = resolveAbsoluteFilePath(worktreePath, filePath, workspace)
 
   return (

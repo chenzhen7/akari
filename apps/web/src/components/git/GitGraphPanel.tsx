@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import type { GitCommit, GitLogResponse } from '@akari/shared-types'
 import { useSessionStore } from '@/stores/session-store'
+import { useShallow } from 'zustand/react/shallow'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { computeIdeaGraphLayout } from '@/lib/git-graph-utils'
 import { GitGraphSvg } from './GitGraphSvg'
@@ -134,11 +135,19 @@ interface GitGraphPanelProps {
 }
 
 export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
-  const gitLogs = useSessionStore(s => s.gitLogs)
+  const gitLogs = useSessionStore(s => s.gitLogs[sessionId] ?? null)
   const setGitLog = useSessionStore(s => s.setGitLog)
   const selectedHash = useSessionStore(s => s.selectedGitCommits[sessionId] ?? null)
   const setSelectedHash = useSessionStore(s => s.setSelectedGitCommit)
-  const session = useSessionStore(s => s.sessions.find(sess => sess.id === sessionId))
+  const { branchName, baseBranch } = useSessionStore(
+    useShallow(s => {
+      const session = s.sessions.find(sess => sess.id === sessionId)
+      return {
+        branchName: session?.branchName,
+        baseBranch: session?.baseBranch,
+      }
+    }),
+  )
 
   const [loading, setLoading] = useState(false)
   const [commits, setCommits] = useState<GitCommit[]>([])
@@ -149,12 +158,12 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
 
   // 默认选中当前分支
   useEffect(() => {
-    if (session?.branchName && branchFilter === '__all__') {
-      setBranchFilter(session.branchName)
+    if (branchName && branchFilter === '__all__') {
+      setBranchFilter(branchName)
     }
-  }, [session?.branchName])
+  }, [branchName])
 
-  const logData: GitLogResponse | null = gitLogs[sessionId] ?? null
+  const logData: GitLogResponse | null = gitLogs
 
   const fetchLog = useCallback((branch?: string) => {
     setLoading(true)
@@ -196,8 +205,8 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   }, [commits, search])
 
   const layout = useMemo(
-    () => computeIdeaGraphLayout(filteredCommits, logData?.head ?? '', session?.baseBranch),
-    [filteredCommits, logData?.head, session?.baseBranch],
+    () => computeIdeaGraphLayout(filteredCommits, logData?.head ?? '', baseBranch),
+    [filteredCommits, logData?.head, baseBranch],
   )
 
   const localBranchNames = useMemo(

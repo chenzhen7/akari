@@ -1,6 +1,5 @@
 import { GitBranch, FileCode, Info, FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { AgentSession } from '@/types'
 import { useSessionStore } from '@/stores/session-store'
 import { useUIStore } from '@/stores/ui-store'
 import { useTabStore } from '@/stores/tab-store'
@@ -10,6 +9,7 @@ import { SessionInfoPanel } from '@/components/session/SessionInfoPanel'
 import { ExplorerPanel } from '@/components/explorer/ExplorerPanel'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useShallow } from 'zustand/react/shallow'
 
 const TABS: { id: 'git-graph' | 'diff' | 'info' | 'explorer'; label: string; icon: React.ElementType }[] = [
   { id: 'explorer', label: '文件', icon: FolderTree },
@@ -19,15 +19,18 @@ const TABS: { id: 'git-graph' | 'diff' | 'info' | 'explorer'; label: string; ico
 ]
 
 interface RightSidebarProps {
-  session?: AgentSession
+  sessionId?: string
 }
 
-export function RightSidebar({ session }: RightSidebarProps) {
+export function RightSidebar({ sessionId }: RightSidebarProps) {
   const activeRightTab = useUIStore(s => s.activeRightTab)
   const setActiveRightTab = useUIStore(s => s.setActiveRightTab)
   const selectSession = useSessionStore(s => s.selectSession)
   const createTab = useTabStore(s => s.createTab)
   const activateTab = useTabStore(s => s.activateTab)
+  const session = useSessionStore(
+    useShallow(s => sessionId ? s.sessions.find(ses => ses.id === sessionId) : undefined),
+  )
 
   const handleSelectFile = (path: string) => {
     if (!session) return
