@@ -1,6 +1,11 @@
+import path from 'node:path'
 import type Database from 'better-sqlite3'
 import type { Workspace } from '@akari/shared-types'
 import { WorkspaceRepository, validatePath } from './db/repositories/workspace.repository.js'
+
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, '/')
+}
 
 export class WorkspaceManager {
   private readonly repository: WorkspaceRepository
@@ -29,8 +34,11 @@ export class WorkspaceManager {
     return this.repository.getById(id)
   }
 
-  async addWorkspace(name: string, path: string): Promise<Workspace> {
-    return this.repository.create(name, path)
+  async addWorkspace(name: string, path: string): Promise<Workspace | null> {
+    const normalizedPath = normalizePath(path)
+    const existing = this.repository.getByPath(normalizedPath)
+    if (existing) return existing
+    return this.repository.create(name, normalizedPath)
   }
 
   switchWorkspace(id: string): Workspace | null {

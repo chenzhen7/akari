@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import { handleServerMessage } from '@/stores/server-message-handler'
 import { setWebSocket, useConnectionStore, type ConnectionStatus } from '@/stores/connection-store'
 import { useSessionStore } from '@/stores/session-store'
+import { useWindowStore } from '@/stores/window-store'
 import type { ClientMessage, ServerMessage } from '@akari/shared-types'
 
 function getWsUrl(): string {
@@ -27,6 +28,7 @@ let attempt = 0
 export function useWebSocket() {
   const mountedRef = useRef(false)
   const setConnStatus = useConnectionStore(s => s.setConnectionStatus)
+  const workspaceId = useWindowStore(s => s.workspaceId)
 
   const connect = useCallback(() => {
     if (socketInstance && socketInstance.readyState < WebSocket.CLOSING) return
@@ -39,6 +41,13 @@ export function useWebSocket() {
       attempt = 0
       setConnStatus('connected')
       setWebSocket(ws)
+
+      // Subscribe to the current window's workspace so the server filters broadcasts
+      const currentWorkspaceId = useWindowStore.getState().workspaceId
+      if (currentWorkspaceId) {
+        ws.send(JSON.stringify({ event: 'subscribe:workspace', payload: { workspaceId: currentWorkspaceId } } satisfies ClientMessage))
+      }
+
       useSessionStore.getState().fetchCanvasEdges()
       if (reconnectTimer) {
         clearTimeout(reconnectTimer)
@@ -84,6 +93,12 @@ export function useWebSocket() {
       }
     }
   }, [connect])
+
+  // Re-subscribe when workspaceId changes (e.g. after window init resolves it)
+  useEffect(() => {
+    if (!workspaceId || !socketInstance || socketInstance.readyState !== WebSocket.OPEN) return
+    socketInstance.send(JSON.stringify({ event: 'subscribe:workspace', payload: { workspaceId } } satisfies ClientMessage))
+  }, [workspaceId])
 
   const send = useCallback((msg: ClientMessage) => {
     if (socketInstance?.readyState === WebSocket.OPEN) {

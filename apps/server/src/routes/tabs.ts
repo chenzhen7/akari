@@ -1,12 +1,12 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 export default async function tabsRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string } }>(
     '/sessions/:id/tabs',
     async (request, reply) => {
       const { id } = request.params
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-      return fastify.sessionManager.getTabs(id)
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      return request.sessionManager.getTabs(id)
     },
   )
 
@@ -15,9 +15,9 @@ export default async function tabsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params
       const { type, filePath } = request.body
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        const tab = fastify.sessionManager.createTab(id, type, filePath)
+        const tab = request.sessionManager.createTab(id, type, filePath)
         return reply.status(201).send(tab)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -30,8 +30,8 @@ export default async function tabsRoutes(fastify: FastifyInstance) {
     '/sessions/:id/tabs/:tabId',
     async (request, reply) => {
       const { id, tabId } = request.params
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-      fastify.sessionManager.closeTab(id, tabId)
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      request.sessionManager.closeTab(id, tabId)
       return { ok: true }
     },
   )
@@ -40,8 +40,8 @@ export default async function tabsRoutes(fastify: FastifyInstance) {
     '/sessions/:id/tabs/:tabId/activate',
     async (request, reply) => {
       const { id, tabId } = request.params
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-      fastify.sessionManager.activateTab(id, tabId)
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      request.sessionManager.activateTab(id, tabId)
       return { ok: true }
     },
   )

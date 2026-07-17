@@ -31,5 +31,10 @@ interface Window {
     clipboard?: {
       writeText: (text: string) => Promise<void>
     }
+    workspace?: {
+      openWindow: (workspaceId: string) => Promise<void>
+      getWindowId: () => Promise<number>
+      getWorkspaceId: () => Promise<string | null>
+    }
   }
 }

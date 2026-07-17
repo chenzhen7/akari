@@ -1,7 +1,13 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 export default async function workspaceRoutes(fastify: FastifyInstance) {
   fastify.get('/workspaces', async () => fastify.workspaceManager.listWorkspaces())
+
+  fastify.get<{ Params: { id: string } }>('/workspaces/:id', async (request, reply) => {
+    const workspace = fastify.workspaceManager.getWorkspaceById(request.params.id)
+    if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
+    return workspace
+  })
 
   fastify.post<{ Body: { name: string; path: string } }>('/workspaces', async (request, reply) => {
     const { name, path } = request.body
@@ -13,6 +19,9 @@ export default async function workspaceRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: validation.error })
     }
     const workspace = await fastify.workspaceManager.addWorkspace(name.trim(), path.trim())
+    if (!workspace) {
+      return reply.status(409).send({ error: 'workspace with this path already exists' })
+    }
     fastify.broadcast({ event: 'workspace:list', payload: fastify.workspaceManager.listWorkspaces() })
     return reply.status(201).send(workspace)
   })
@@ -21,11 +30,11 @@ export default async function workspaceRoutes(fastify: FastifyInstance) {
     const { id } = request.params
     const workspace = fastify.workspaceManager.switchWorkspace(id)
     if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
-    await fastify.sessionManager.setWorkspace(workspace.id, workspace.path, workspace.repoRoot, workspace.isGit)
-    await fastify.sessionManager.restoreSessions()
+    await request.sessionManager.setWorkspace(workspace.id, workspace.path, workspace.repoRoot, workspace.isGit)
+    await request.sessionManager.restoreSessions()
     fastify.broadcast({ event: 'workspace:current', payload: workspace })
-    await fastify.sessionManager.ensureMainSession(workspace.path)
-    fastify.broadcast({ event: 'sessions:list', payload: fastify.sessionManager.listSessions() })
+    await request.sessionManager.ensureMainSession(workspace.path)
+    fastify.broadcast({ event: 'sessions:list', payload: request.sessionManager.listSessions() })
     fastify.broadcast({ event: 'workspace:list', payload: fastify.workspaceManager.listWorkspaces() })
     return { ok: true }
   })

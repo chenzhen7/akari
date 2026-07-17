@@ -1,12 +1,12 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 export default async function diffRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
     '/sessions/:id/diff-refresh',
     async (request, reply) => {
       const { id } = request.params
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-      fastify.sessionManager.refreshDiff(id)
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      request.sessionManager.refreshDiff(id)
       return { ok: true }
     },
   )
@@ -17,9 +17,9 @@ export default async function diffRoutes(fastify: FastifyInstance) {
       const { id } = request.params
       const { file } = request.query
       if (!file) return reply.status(400).send({ error: 'file query param is required' })
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        const content = await fastify.sessionManager.getFileDiffContent(id, file)
+        const content = await request.sessionManager.getFileDiffContent(id, file)
         return content
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -35,9 +35,9 @@ export default async function diffRoutes(fastify: FastifyInstance) {
       const { id } = request.params
       const { path: filePath } = request.query
       if (!filePath) return reply.status(400).send({ error: 'path query param is required' })
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        const lines = await fastify.sessionManager.getFileDiffLines(id, filePath)
+        const lines = await request.sessionManager.getFileDiffLines(id, filePath)
         return { lines }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)

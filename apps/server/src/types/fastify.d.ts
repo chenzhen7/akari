@@ -12,6 +12,13 @@ declare module 'fastify' {
     sessionManager: SessionManager
     canvasEdgeStore: CanvasEdgeStore
     clients: Set<WebSocket>
-    broadcast: (msg: ServerMessage) => void
+    workspaceClients: Map<WebSocket, string>
+    broadcast: (msg: ServerMessage, workspaceId?: string) => void
+    getOrCreateSessionManager: (workspaceId: string) => Promise<SessionManager>
+  }
+
+  interface FastifyRequest {
+    workspaceId?: string
+    sessionManager: SessionManager
   }
 }

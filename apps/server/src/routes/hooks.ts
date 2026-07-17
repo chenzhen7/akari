@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { HookEvent } from '@akari/shared-types'
 import { dispatchHookEvent } from '../hook-dispatcher.js'
 
@@ -8,9 +8,9 @@ export default async function hooksRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params
       const event = request.body
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        const response = await dispatchHookEvent(id, event, fastify.sessionManager)
+        const response = await dispatchHookEvent(id, event, request.sessionManager)
         return response
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -24,7 +24,7 @@ export default async function hooksRoutes(fastify: FastifyInstance) {
     '/broadcast',
     async (request) => {
       const { message, targets } = request.body
-      const targetIds = fastify.sessionManager.broadcastMessage_legacy(message, targets)
+      const targetIds = request.sessionManager.broadcastMessage_legacy(message, targets)
       return { ok: true, targets: targetIds }
     },
   )

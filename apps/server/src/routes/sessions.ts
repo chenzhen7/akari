@@ -1,8 +1,8 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { AgentType, SessionStatus } from '@akari/shared-types'
 
 export default async function sessionsRoutes(fastify: FastifyInstance) {
-  fastify.get('/sessions', async () => fastify.sessionManager.listSessions())
+  fastify.get('/sessions', async (request: FastifyRequest) => request.sessionManager.listSessions())
 
   interface CreateSessionBody {
     name: string
@@ -19,7 +19,7 @@ export default async function sessionsRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'name and task are required' })
     }
     try {
-      const session = await fastify.sessionManager.createSession({ name, task, baseBranch, agentType, tags, canvasPosition })
+      const session = await request.sessionManager.createSession({ name, task, baseBranch, agentType, tags, canvasPosition })
       return reply.status(201).send(session)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -32,14 +32,14 @@ export default async function sessionsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params
       const { status } = request.body
-      const session = fastify.sessionManager.getSession(id)
+      const session = request.sessionManager.getSession(id)
       if (!session) return reply.status(404).send({ error: 'session not found' })
       const { validateTransition } = await import('../session-manager.js')
       if (!validateTransition(session.status, status)) {
         return reply.status(422).send({ error: `invalid transition: ${session.status} → ${status}` })
       }
-      fastify.sessionManager.updateStatus(id, status)
-      return fastify.sessionManager.getSession(id)
+      request.sessionManager.updateStatus(id, status)
+      return request.sessionManager.getSession(id)
     },
   )
 
@@ -47,9 +47,9 @@ export default async function sessionsRoutes(fastify: FastifyInstance) {
     '/sessions/:id/archive',
     async (request, reply) => {
       const { id } = request.params
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        fastify.sessionManager.archiveSession(id)
+        request.sessionManager.archiveSession(id)
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -62,9 +62,9 @@ export default async function sessionsRoutes(fastify: FastifyInstance) {
     '/sessions/:id/restore',
     async (request, reply) => {
       const { id } = request.params
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        fastify.sessionManager.restoreSession(id)
+        request.sessionManager.restoreSession(id)
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -78,8 +78,8 @@ export default async function sessionsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params
       const { x, y } = request.body
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-      fastify.sessionManager.updateCanvasPosition(id, x, y)
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      request.sessionManager.updateCanvasPosition(id, x, y)
       return { ok: true }
     },
   )
@@ -88,9 +88,9 @@ export default async function sessionsRoutes(fastify: FastifyInstance) {
     '/sessions/:id',
     async (request, reply) => {
       const { id } = request.params
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        await fastify.sessionManager.deleteSession(id)
+        await request.sessionManager.deleteSession(id)
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)

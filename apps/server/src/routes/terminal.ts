@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 export default async function terminalRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string }; Querystring: { terminalId?: string } }>(
@@ -6,9 +6,9 @@ export default async function terminalRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params
       const { terminalId } = request.query
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       if (!terminalId) return reply.status(400).send({ error: 'terminalId query param is required' })
-      return { buffer: fastify.sessionManager.getTerminalBuffer(terminalId) }
+      return { buffer: request.sessionManager.getTerminalBuffer(terminalId) }
     },
   )
 }

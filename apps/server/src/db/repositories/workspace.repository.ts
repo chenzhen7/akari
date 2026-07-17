@@ -111,6 +111,11 @@ export class WorkspaceRepository {
     return row ? rowToWorkspace(row) : null
   }
 
+  getByPath(path: string): Workspace | null {
+    const row = this.db.prepare('SELECT * FROM workspaces WHERE path = ?').get(path) as WorkspaceRow | undefined
+    return row ? rowToWorkspace(row) : null
+  }
+
   async create(name: string, path: string): Promise<Workspace> {
     const id = nanoid(8)
     const now = new Date().toISOString()

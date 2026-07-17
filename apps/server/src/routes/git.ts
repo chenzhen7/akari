@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 export default async function gitRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string }; Querystring: { limit?: string; offset?: string; branch?: string } }>(
@@ -8,8 +8,8 @@ export default async function gitRoutes(fastify: FastifyInstance) {
       const limit = parseInt(request.query.limit ?? '100') || 100
       const offset = parseInt(request.query.offset ?? '0') || 0
       const branch = request.query.branch
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-      return fastify.sessionManager.getGitLog(id, limit, offset, branch)
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      return request.sessionManager.getGitLog(id, limit, offset, branch)
     },
   )
 
@@ -17,8 +17,8 @@ export default async function gitRoutes(fastify: FastifyInstance) {
     '/sessions/:id/git-branches',
     async (request, reply) => {
       const { id } = request.params
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
-      return fastify.sessionManager.getGitBranches(id)
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      return request.sessionManager.getGitBranches(id)
     },
   )
 
@@ -28,9 +28,9 @@ export default async function gitRoutes(fastify: FastifyInstance) {
       const { id } = request.params
       const { message } = request.body
       if (!message?.trim()) return reply.status(400).send({ error: 'message is required' })
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        await fastify.sessionManager.commitAll(id, message.trim())
+        await request.sessionManager.commitAll(id, message.trim())
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -45,10 +45,10 @@ export default async function gitRoutes(fastify: FastifyInstance) {
       const { id } = request.params
       const { sourceBranch } = request.body
       if (!sourceBranch?.trim()) return reply.status(400).send({ error: 'sourceBranch is required' })
-      const session = fastify.sessionManager.getSession(id)
+      const session = request.sessionManager.getSession(id)
       if (!session) return reply.status(404).send({ error: 'session not found' })
       try {
-        await fastify.sessionManager.worktreeMerge(id, sourceBranch.trim())
+        await request.sessionManager.worktreeMerge(id, sourceBranch.trim())
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -61,9 +61,9 @@ export default async function gitRoutes(fastify: FastifyInstance) {
     '/sessions/:id/git/update-branch',
     async (request, reply) => {
       const { id } = request.params
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        await fastify.sessionManager.updateFromBase(id)
+        await request.sessionManager.updateFromBase(id)
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -78,9 +78,9 @@ export default async function gitRoutes(fastify: FastifyInstance) {
       const { id } = request.params
       const { branch, createNew = false } = request.body
       if (!branch?.trim()) return reply.status(400).send({ error: 'branch is required' })
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        await fastify.sessionManager.checkoutBranch(id, branch.trim(), createNew)
+        await request.sessionManager.checkoutBranch(id, branch.trim(), createNew)
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -93,9 +93,9 @@ export default async function gitRoutes(fastify: FastifyInstance) {
     '/sessions/:id/git/discard',
     async (request, reply) => {
       const { id } = request.params
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        await fastify.sessionManager.discardAll(id)
+        await request.sessionManager.discardAll(id)
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -110,9 +110,9 @@ export default async function gitRoutes(fastify: FastifyInstance) {
       const { id } = request.params
       const { filePath } = request.body
       if (!filePath?.trim()) return reply.status(400).send({ error: 'filePath is required' })
-      if (!fastify.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        await fastify.sessionManager.discardFile(id, filePath.trim())
+        await request.sessionManager.discardFile(id, filePath.trim())
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)

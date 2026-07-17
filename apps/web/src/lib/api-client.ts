@@ -1,5 +1,6 @@
 import { API_BASE, parseOkResponse } from './api'
 import { toastError } from './toast'
+import { useWindowStore } from '@/stores/window-store'
 
 export interface ApiRequestOptions {
   /** URL query params，自动编码 */
@@ -35,7 +36,11 @@ async function request<T>(
   body?: unknown,
   opts: ApiRequestOptions = {},
 ): Promise<T> {
-  const headers: Record<string, string> = { ...opts.headers }
+  const workspaceId = useWindowStore.getState().workspaceId
+  const headers: Record<string, string> = {
+    ...opts.headers,
+    ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
+  }
   const init: RequestInit = { method, headers, signal: opts.signal }
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json'

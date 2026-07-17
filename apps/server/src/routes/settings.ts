@@ -1,7 +1,7 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 
 export default async function settingsRoutes(fastify: FastifyInstance) {
-  fastify.get('/settings', async () => fastify.sessionManager.getSettings())
+  fastify.get('/settings', async (request: FastifyRequest) => request.sessionManager.getSettings())
 
   fastify.patch<{ Body: { worktreeBaseDir?: string } }>('/settings', async (request, reply) => {
     const { worktreeBaseDir } = request.body
@@ -9,8 +9,8 @@ export default async function settingsRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'worktreeBaseDir must be a string' })
     }
     if (worktreeBaseDir) {
-      fastify.sessionManager.updateSettings({ worktreeBaseDir })
+      request.sessionManager.updateSettings({ worktreeBaseDir })
     }
-    return fastify.sessionManager.getSettings()
+    return request.sessionManager.getSettings()
   })
 }

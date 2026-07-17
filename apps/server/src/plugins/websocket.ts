@@ -6,23 +6,57 @@ export default async function websocketPlugin(fastify: FastifyInstance) {
     fastify.clients.add(socket)
     fastify.log.info(`WebSocket client connected (total: ${fastify.clients.size})`)
 
+    // 连接建立时只发送全局工作区列表，具体工作区的初始化等客户端订阅后再发送
     if (socket.readyState === WebSocket.OPEN) {
       const currentWs = fastify.workspaceManager.getCurrentWorkspace()
       if (currentWs) {
         socket.send(JSON.stringify({ event: 'workspace:current', payload: currentWs }))
       }
       socket.send(JSON.stringify({ event: 'workspace:list', payload: fastify.workspaceManager.listWorkspaces() }))
-      socket.send(JSON.stringify({ event: 'sessions:list', payload: fastify.sessionManager.listSessions() }))
-      socket.send(JSON.stringify({ event: 'canvas:edges', payload: fastify.canvasEdgeStore.getAllEdges() }))
     }
 
-    // Push current diffs to the newly connected client so DiffViewer restores after refresh
+    socket.on('message', async (raw: Buffer | ArrayBuffer | Buffer[]) => {
+      try {
+        const msg = JSON.parse(raw.toString()) as ClientMessage
+        await handleClientMessage(msg, socket, fastify)
+      } catch {
+        fastify.log.warn('Invalid WS message received')
+      }
+    })
+
+    socket.on('close', () => {
+      fastify.clients.delete(socket)
+      fastify.workspaceClients.delete(socket)
+      fastify.log.info(`WebSocket client disconnected (total: ${fastify.clients.size})`)
+    })
+  })
+}
+
+async function handleClientMessage(msg: ClientMessage, socket: WebSocket, fastify: FastifyInstance): Promise<void> {
+  if (msg.event === 'subscribe:workspace') {
+    const { workspaceId } = msg.payload
+    fastify.workspaceClients.set(socket, workspaceId)
+    fastify.log.info(`WebSocket client subscribed to workspace ${workspaceId}`)
+
+    const sessionManager = await fastify.getOrCreateSessionManager(workspaceId)
+    const workspace = fastify.workspaceManager.getWorkspaceById(workspaceId)
+
+    // Push initial workspace-specific state
+    if (socket.readyState === WebSocket.OPEN) {
+      if (workspace) {
+        socket.send(JSON.stringify({ event: 'workspace:current', payload: workspace }))
+      }
+      socket.send(JSON.stringify({ event: 'sessions:list', payload: sessionManager.listSessions() }))
+      socket.send(JSON.stringify({ event: 'canvas:edges', payload: getCanvasEdgesForWorkspace(fastify, sessionManager) }))
+    }
+
+    // Push current diffs to the newly subscribed client so DiffViewer restores after refresh
     void (async () => {
-      const sessions = fastify.sessionManager.listSessions()
+      const sessions = sessionManager.listSessions()
       const active = sessions.filter(s => s.worktreePath && !['archived', 'initializing', 'failed'].includes(s.status))
       for (const session of active) {
         try {
-          const diff = await fastify.sessionManager.getCurrentDiff(session.id)
+          const diff = await sessionManager.getCurrentDiff(session.id)
           if (diff.files.length > 0 && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({
               event: 'diff:update',
@@ -35,43 +69,37 @@ export default async function websocketPlugin(fastify: FastifyInstance) {
       }
     })()
 
-    socket.on('message', (raw: Buffer | ArrayBuffer | Buffer[]) => {
-      try {
-        const msg = JSON.parse(raw.toString()) as ClientMessage
-        handleClientMessage(msg, fastify)
-      } catch {
-        fastify.log.warn('Invalid WS message received')
-      }
-    })
+    return
+  }
 
-    socket.on('close', () => {
-      fastify.clients.delete(socket)
-      fastify.log.info(`WebSocket client disconnected (total: ${fastify.clients.size})`)
-    })
-  })
-}
+  const workspaceId = fastify.workspaceClients.get(socket)
+  if (!workspaceId) {
+    fastify.log.warn('WebSocket message received before workspace subscription')
+    return
+  }
 
-function handleClientMessage(msg: ClientMessage, fastify: FastifyInstance): void {
+  const sessionManager = await fastify.getOrCreateSessionManager(workspaceId)
+
   switch (msg.event) {
     case 'terminal:input': {
       const { terminalId, data } = msg.payload
-      fastify.sessionManager.sendToTerminal(terminalId, data)
+      sessionManager.sendToTerminal(terminalId, data)
       break
     }
     case 'terminal:resize': {
       const { terminalId, cols, rows } = msg.payload
-      fastify.sessionManager.resizeTerminal(terminalId, cols, rows)
+      sessionManager.resizeTerminal(terminalId, cols, rows)
       break
     }
     case 'broadcast:send': {
       const { message, targets } = msg.payload
-      fastify.sessionManager.broadcastMessage_legacy(message, targets)
+      sessionManager.broadcastMessage_legacy(message, targets)
       break
     }
     case 'tab:create': {
       const { sessionId, type, filePath } = msg.payload
       try {
-        fastify.sessionManager.createTab(sessionId, type, filePath)
+        sessionManager.createTab(sessionId, type, filePath)
       } catch (err) {
         fastify.log.warn({ err, sessionId }, 'tab:create failed')
       }
@@ -79,23 +107,23 @@ function handleClientMessage(msg: ClientMessage, fastify: FastifyInstance): void
     }
     case 'tab:close': {
       const { sessionId, tabId } = msg.payload
-      fastify.sessionManager.closeTab(sessionId, tabId)
+      sessionManager.closeTab(sessionId, tabId)
       break
     }
     case 'tab:activate': {
       const { sessionId, tabId } = msg.payload
-      fastify.sessionManager.activateTab(sessionId, tabId)
+      sessionManager.activateTab(sessionId, tabId)
       break
     }
     case 'tab:reorder': {
       const { sessionId, orderedTabIds } = msg.payload
-      fastify.sessionManager.reorderTabs(sessionId, orderedTabIds)
+      sessionManager.reorderTabs(sessionId, orderedTabIds)
       break
     }
     case 'terminal:create': {
       const { sessionId, agentType, bypassPermissions } = msg.payload
       try {
-        fastify.sessionManager.createTab(
+        sessionManager.createTab(
           sessionId,
           agentType && agentType !== 'shell' ? 'agent' : 'terminal',
           undefined,
@@ -108,4 +136,12 @@ function handleClientMessage(msg: ClientMessage, fastify: FastifyInstance): void
       break
     }
   }
+}
+
+function getCanvasEdgesForWorkspace(fastify: FastifyInstance, sessionManager: import('../session-manager.js').SessionManager) {
+  const edges = fastify.canvasEdgeStore.getAllEdges()
+  const sessionIds = new Set(sessionManager.listSessions().map(s => s.id))
+  return edges.filter(
+    e => sessionIds.has(e.sourceSessionId) && sessionIds.has(e.targetSessionId),
+  )
 }

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import fs from 'node:fs'
 import type { ServerMessage } from '@akari/shared-types'
-import { createSessionManager } from './session-manager.js'
+import { createSessionManager, type SessionManager } from './session-manager.js'
 import { WorkspaceManager } from './workspace-manager.js'
 import { CanvasEdgeStore } from './canvas-edge-store.js'
 
@@ -44,24 +44,44 @@ await workspaceManager.migrate()
 await workspaceManager.ensureDefaultWorkspace(REPO_ROOT)
 
 const clients = new Set<WebSocket>()
+const workspaceClients = new Map<WebSocket, string>()
 
-function broadcast(message: ServerMessage): void {
+function broadcast(message: ServerMessage, workspaceId?: string): void {
   const data = JSON.stringify(message)
   for (const ws of clients) {
-    if (ws.readyState === WebSocket.OPEN) ws.send(data)
+    if (ws.readyState !== WebSocket.OPEN) continue
+    if (workspaceId && workspaceClients.get(ws) !== workspaceId) continue
+    ws.send(data)
   }
+}
+
+const workspaceSessionManagers = new Map<string, SessionManager>()
+
+async function getOrCreateSessionManager(workspaceId: string): Promise<SessionManager> {
+  const existing = workspaceSessionManagers.get(workspaceId)
+  if (existing) return existing
+
+  const workspace = workspaceManager.getWorkspaceById(workspaceId)
+  if (!workspace) {
+    throw new Error(`Workspace not found: ${workspaceId}`)
+  }
+
+  const manager = await createSessionManager({
+    workspacePath: workspace.path,
+    repoRoot: workspace.repoRoot,
+    db,
+    broadcast: (msg) => broadcast(msg, workspaceId),
+    workspaceId: workspace.id,
+    isGitWorkspace: workspace.isGit,
+  })
+
+  workspaceSessionManagers.set(workspaceId, manager)
+  return manager
 }
 
 const currentWorkspace = workspaceManager.getCurrentWorkspace()!
 
-const sessionManager = await createSessionManager({
-  workspacePath: currentWorkspace.path,
-  repoRoot: currentWorkspace.repoRoot,
-  db,
-  broadcast,
-  workspaceId: currentWorkspace.id,
-  isGitWorkspace: currentWorkspace.isGit,
-})
+const sessionManager = await getOrCreateSessionManager(currentWorkspace.id)
 
 // 迁移旧数据：将无 workspace_id 的 session 关联到默认工作区
 db.prepare("UPDATE sessions SET workspace_id = ? WHERE workspace_id = '' OR workspace_id IS NULL").run(currentWorkspace.id)
@@ -76,7 +96,21 @@ fastify.decorate('workspaceManager', workspaceManager)
 fastify.decorate('sessionManager', sessionManager)
 fastify.decorate('canvasEdgeStore', canvasEdgeStore)
 fastify.decorate('clients', clients)
+fastify.decorate('workspaceClients', workspaceClients)
 fastify.decorate('broadcast', broadcast)
+fastify.decorate('getOrCreateSessionManager', getOrCreateSessionManager)
+
+fastify.addHook('preHandler', async (request) => {
+  const workspaceId =
+    (request.headers['x-workspace-id'] as string | undefined)
+    ?? (request.query as Record<string, unknown> | undefined)?.workspaceId as string | undefined
+    ?? workspaceManager.getCurrentWorkspace()?.id
+
+  request.workspaceId = workspaceId
+  request.sessionManager = workspaceId
+    ? await getOrCreateSessionManager(workspaceId)
+    : sessionManager
+})
 
 await fastify.register(healthRoutes)
 await fastify.register(settingsRoutes)

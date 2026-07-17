@@ -19,11 +19,6 @@ import { useResizablePanels } from '@/hooks/useResizablePanels'
 import { cn } from '@/lib/utils'
 import { GripVertical, LayoutGrid } from 'lucide-react'
 
-function WebSocketProvider() {
-  useWebSocket()
-  return null
-}
-
 function ResizeHandle({
   onMouseDown,
   disabled,
@@ -129,7 +124,6 @@ export function AppShell() {
 
   return (
     <TooltipProvider>
-      <WebSocketProvider />
       <div className={cn('flex h-svh flex-col bg-panel select-none', isResizing && 'select-none cursor-col-resize')}>
         <TopNav
           leftCollapsed={leftCollapsed}

@@ -29,6 +29,7 @@ interface SessionStore {
   restoreSession: (id: string) => void
   setGitLog: (sessionId: string, log: GitLogResponse) => void
   setSelectedGitCommit: (sessionId: string, hash: string | null) => void
+  setSessions: (sessions: AgentSession[]) => void
   fetchCanvasEdges: () => void
   setPendingCreatePosition: (position: { x: number; y: number } | null) => void
   resetForWorkspace: () => void
@@ -184,6 +185,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   setSelectedGitCommit: (sessionId, hash) =>
     set(state => ({ selectedGitCommits: { ...state.selectedGitCommits, [sessionId]: hash } })),
+
+  setSessions: (sessions) => {
+    set(state => {
+      let nextActiveSessionId = state.activeSessionId
+      if (!nextActiveSessionId || !sessions.some(s => s.id === nextActiveSessionId)) {
+        nextActiveSessionId = sessions.length > 0 ? sessions[0].id : null
+      }
+      return { sessions, activeSessionId: nextActiveSessionId }
+    })
+  },
 
   fetchCanvasEdges: () => {
     apiClient.get<CanvasEdge[]>('/canvas/edges', { toast: false })

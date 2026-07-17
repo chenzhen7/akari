@@ -2,114 +2,32 @@ import { app, BrowserWindow, dialog, shell, Menu, ipcMain, clipboard } from 'ele
 import path from 'node:path'
 import fs from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
+import { WindowManager } from './window-manager.js'
+import { WindowStateStore } from './window-state-store.js'
+
+interface WorkspaceSummary {
+  id: string
+  name: string
+  path: string
+  repoRoot: string
+  isGit: boolean
+  isCurrent: boolean
+  createdAt?: string
+  lastOpenedAt?: string
+}
 
 const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev')
 
-let mainWindow: BrowserWindow | null = null
 let serverProcess: ChildProcess | null = null
 let serverPort: number | null = null
+let windowManager: WindowManager | null = null
+let windowStateStore: WindowStateStore | null = null
 
-function resolveIconPath(): string | undefined {
-  const candidates = [
-    path.join(__dirname, '..', 'build', 'icon.ico'),
-    path.join(process.resourcesPath, 'icon.ico'),
-  ]
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate
-    }
+function getServerUrl(): string {
+  if (isDev) {
+    return 'http://localhost:5173'
   }
-  return undefined
-}
-
-function createWindow(loadUrl: string): void {
-  mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 900,
-    minHeight: 600,
-    frame: false,
-    icon: resolveIconPath(),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-    show: false,
-  })
-
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show()
-    if (isDev) {
-      mainWindow?.webContents.openDevTools()
-    }
-  })
-
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
-    console.error(`[desktop] failed to load ${loadUrl}: ${errorCode} ${errorDescription}`)
-    dialog.showErrorBox('加载失败', `${loadUrl}\n${errorDescription} (${errorCode})`)
-  })
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
-    return { action: 'deny' }
-  })
-
-  Menu.setApplicationMenu(null)
-
-  // Window control IPC handlers
-  ipcMain.handle('window-minimize', () => {
-    mainWindow?.minimize()
-  })
-
-  ipcMain.handle('window-maximize', () => {
-    if (mainWindow?.isMaximized()) {
-      mainWindow?.unmaximize()
-    } else {
-      mainWindow?.maximize()
-    }
-  })
-
-  ipcMain.handle('window-close', () => {
-    mainWindow?.close()
-  })
-
-  ipcMain.handle('window-is-maximized', () => {
-    return mainWindow?.isMaximized() ?? false
-  })
-
-  // Native file/folder picker IPC handler
-  ipcMain.handle('dialog:showOpenDialog', async (_event, options) => {
-    if (!mainWindow) {
-      throw new Error('Main window is not ready')
-    }
-    return dialog.showOpenDialog(mainWindow, options)
-  })
-
-  // Open local file/folder in system default application
-  ipcMain.handle('shell:openPath', async (_event, filePath: string) => {
-    return shell.openPath(filePath)
-  })
-
-  // Write text to the system clipboard from the renderer
-  ipcMain.handle('clipboard:writeText', (_event, text: string) => {
-    clipboard.writeText(text)
-  })
-
-  mainWindow.on('maximize', () => {
-    mainWindow?.webContents.send('window-maximized-change', true)
-  })
-
-  mainWindow.on('unmaximize', () => {
-    mainWindow?.webContents.send('window-maximized-change', false)
-  })
-
-  void mainWindow.loadURL(loadUrl)
-
-  mainWindow.on('closed', () => {
-    mainWindow = null
-  })
+  return `http://localhost:${serverPort ?? 43917}`
 }
 
 function findServerEntry(): string | null {
@@ -222,15 +140,73 @@ async function startServer(): Promise<number> {
   })
 }
 
+async function fetchWorkspaces(): Promise<WorkspaceSummary[]> {
+  try {
+    const res = await fetch(`${getServerUrl()}/api/workspaces`)
+    if (!res.ok) return []
+    return (await res.json()) as WorkspaceSummary[]
+  } catch (err) {
+    console.error('[desktop] failed to fetch workspaces:', err)
+    return []
+  }
+}
+
+function getSenderWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow | null {
+  return BrowserWindow.fromWebContents(event.sender)
+}
+
+function registerGlobalIpcHandlers(): void {
+  // Window control IPC handlers (target the sender window)
+  ipcMain.handle('window-minimize', (event) => {
+    getSenderWindow(event)?.minimize()
+  })
+
+  ipcMain.handle('window-maximize', (event) => {
+    const win = getSenderWindow(event)
+    if (!win) return
+    if (win.isMaximized()) {
+      win.unmaximize()
+    } else {
+      win.maximize()
+    }
+  })
+
+  ipcMain.handle('window-close', (event) => {
+    getSenderWindow(event)?.close()
+  })
+
+  ipcMain.handle('window-is-maximized', (event) => {
+    return getSenderWindow(event)?.isMaximized() ?? false
+  })
+
+  ipcMain.handle('dialog:showOpenDialog', async (event, options) => {
+    const win = getSenderWindow(event)
+    if (win) {
+      return dialog.showOpenDialog(win, options)
+    }
+    return dialog.showOpenDialog(options)
+  })
+
+  ipcMain.handle('shell:openPath', async (_event, filePath: string) => {
+    return shell.openPath(filePath)
+  })
+
+  ipcMain.handle('clipboard:writeText', (_event, text: string) => {
+    clipboard.writeText(text)
+  })
+}
+
 async function main(): Promise<void> {
   await app.whenReady()
 
-  if (isDev) {
-    createWindow('http://localhost:5173')
-  } else {
+  Menu.setApplicationMenu(null)
+  registerGlobalIpcHandlers()
+
+  windowStateStore = new WindowStateStore()
+
+  if (!isDev) {
     try {
-      const port = await startServer()
-      createWindow(`http://localhost:${port}`)
+      await startServer()
     } catch (err) {
       dialog.showErrorBox('启动失败', err instanceof Error ? err.message : String(err))
       app.quit()
@@ -238,10 +214,32 @@ async function main(): Promise<void> {
     }
   }
 
-  app.on('activate', () => {
+  const loadUrl = getServerUrl()
+  windowManager = new WindowManager({
+    loadUrl,
+    preloadPath: path.join(__dirname, 'preload.js'),
+    stateStore: windowStateStore,
+    isDev,
+  })
+  windowManager.registerIpcHandlers()
+
+  const workspaces = await fetchWorkspaces()
+  if (workspaces.length > 0) {
+    await windowManager.restoreWindows(workspaces)
+  } else {
+    dialog.showErrorBox('启动失败', '无法获取工作区列表')
+    app.quit()
+    return
+  }
+
+  app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      const url = isDev ? 'http://localhost:5173' : `http://localhost:${serverPort ?? 3001}`
-      createWindow(url)
+      const allWorkspaces = await fetchWorkspaces()
+      const lastActiveId = windowStateStore?.getLastActiveWorkspaceId()
+      const workspaceToOpen = allWorkspaces.find(w => w.id === lastActiveId) ?? allWorkspaces.find(w => w.isCurrent) ?? allWorkspaces[0]
+      if (workspaceToOpen) {
+        await windowManager?.openWorkspaceWindow(workspaceToOpen.id)
+      }
     }
   })
 }

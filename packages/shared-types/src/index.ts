@@ -171,6 +171,7 @@ export type ClientMessage =
   | { event: 'tab:activate'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:reorder'; payload: { sessionId: string; orderedTabIds: string[] } }
   | { event: 'terminal:create'; payload: { sessionId: string; agentType?: AgentType; bypassPermissions?: boolean } }
+  | { event: 'subscribe:workspace'; payload: { workspaceId: string } }
 
 // ─── Phase 8: HTTP Hook Event Types ──────────────────────────────────────────
 

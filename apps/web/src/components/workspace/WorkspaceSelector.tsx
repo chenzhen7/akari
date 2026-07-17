@@ -12,6 +12,15 @@ import { Button } from '@/components/ui/button'
 import { Check, FolderOpen, ChevronDown } from 'lucide-react'
 import { selectFolder } from '@/lib/native-file-picker'
 
+function openWorkspaceWindow(workspaceId: string): void {
+  if (window.electron?.workspace?.openWindow) {
+    void window.electron.workspace.openWindow(workspaceId)
+    return
+  }
+  // Fallback for non-desktop builds: switch in the current window
+  useWorkspaceStore.getState().switchWorkspace(workspaceId)
+}
+
 export function WorkspaceSelector() {
   const {
     workspaces,
@@ -28,12 +37,19 @@ export function WorkspaceSelector() {
       const name = parts[parts.length - 1] || 'workspace'
       const workspace = await addWorkspace(name, path)
       if (workspace) {
-        switchWorkspace(workspace.id)
+        openWorkspaceWindow(workspace.id)
+      } else {
+        toastError('该路径的工作区已存在')
       }
     } catch (err) {
       toastError(`打开文件夹失败：${err instanceof Error ? err.message : String(err)}`)
     }
-  }, [addWorkspace, switchWorkspace])
+  }, [addWorkspace])
+
+  const handleSelectWorkspace = useCallback((workspaceId: string) => {
+    if (workspaceId === currentWorkspace?.id) return
+    openWorkspaceWindow(workspaceId)
+  }, [currentWorkspace?.id])
 
   return (
     <DropdownMenu>
@@ -82,7 +98,7 @@ export function WorkspaceSelector() {
                 <DropdownMenuItem
                   key={workspace.id}
                   className="flex items-center gap-2 text-sm cursor-pointer"
-                  onClick={() => switchWorkspace(workspace.id)}
+                  onClick={() => handleSelectWorkspace(workspace.id)}
                   title={`${workspace.name}\n${workspace.path}`}
                 >
                   <span className="w-3.5 shrink-0" />
