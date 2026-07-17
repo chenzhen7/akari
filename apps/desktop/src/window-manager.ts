@@ -185,7 +185,15 @@ export class WindowManager {
       this.stateStore.setLastActiveWorkspaceId(workspaceId)
     })
 
+    const debouncedSave = debounce(() => {
+      this.saveWindowState(window, workspaceId)
+    }, 500)
+
+    window.on('move', debouncedSave)
+    window.on('resize', debouncedSave)
+
     window.on('close', () => {
+      debouncedSave.flush()
       this.saveWindowState(window, workspaceId)
     })
 
@@ -223,6 +231,10 @@ export class WindowManager {
   getAllWindows(): AkariWindow[] {
     return Array.from(this.windows.values())
   }
+
+  flushState(): void {
+    this.stateStore.flush()
+  }
 }
 
 export function resolveIconPath(): string | undefined {
@@ -236,4 +248,42 @@ export function resolveIconPath(): string | undefined {
     }
   }
   return undefined
+}
+
+function debounce<T extends (...args: unknown[]) => void>(
+  fn: T,
+  ms: number,
+): { (...args: Parameters<T>): void; flush(): void } {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let pending = false
+  let lastArgs: Parameters<T> | null = null
+
+  const run = (): void => {
+    pending = false
+    timer = null
+    if (lastArgs) {
+      fn(...lastArgs)
+      lastArgs = null
+    }
+  }
+
+  const debounced = (...args: Parameters<T>): void => {
+    lastArgs = args
+    pending = true
+    if (timer) {
+      clearTimeout(timer)
+    }
+    timer = setTimeout(run, ms)
+  }
+
+  debounced.flush = (): void => {
+    if (timer) {
+      clearTimeout(timer)
+    }
+    if (pending) {
+      run()
+    }
+  }
+
+  return debounced
 }

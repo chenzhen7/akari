@@ -76,6 +76,7 @@ export class SessionManager {
   private workspaceId: string
   private isGitWorkspace: boolean
   private readonly settingsStore: SettingsStore
+  private disposed = false
 
   constructor(opts: { workspacePath: string; repoRoot: string; db: Database.Database; broadcast: (msg: ServerMessage) => void; workspaceId: string; isGitWorkspace?: boolean }) {
     this.sessionRepository = new SessionRepository(opts.db)
@@ -89,7 +90,29 @@ export class SessionManager {
     this.wireEvents()
   }
 
+  get isDisposed(): boolean {
+    return this.disposed
+  }
+
+  async dispose(): Promise<void> {
+    if (this.disposed) return
+    this.disposed = true
+
+    await this.worktreeManager.dispose().catch((err: unknown) => {
+      console.error(`[SessionManager] worktreeManager.dispose failed for ${this.workspaceId}:`, err)
+    })
+
+    this.terminalMux.dispose()
+  }
+
+  private guardDisposed(): void {
+    if (this.disposed) {
+      throw new Error(`SessionManager for workspace ${this.workspaceId} has been disposed`)
+    }
+  }
+
   async createSession(params: CreateSessionParams): Promise<AgentSession> {
+    this.guardDisposed()
     if (!this.isGitWorkspace) {
       throw new Error('当前工作区不是 Git 仓库，无法创建 Agent 会话')
     }
@@ -139,6 +162,7 @@ export class SessionManager {
   }
 
   updateStatus(sessionId: string, status: SessionStatus): void {
+    this.guardDisposed()
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     if (!validateTransition(session.status, status)) {
@@ -250,10 +274,12 @@ export class SessionManager {
   }
 
   sendToTerminal(terminalId: string, data: string): void {
+    this.guardDisposed()
     this.terminalMux.sendToTerminal(terminalId, data)
   }
 
   resizeTerminal(terminalId: string, cols: number, rows: number): void {
+    this.guardDisposed()
     this.terminalMux.resizeTerminal(terminalId, cols, rows)
   }
 
@@ -310,6 +336,7 @@ export class SessionManager {
     agentType?: AgentType,
     launchOptions?: AgentLaunchOptions,
   ): SessionTab {
+    this.guardDisposed()
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
 

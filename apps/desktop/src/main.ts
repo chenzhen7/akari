@@ -245,6 +245,7 @@ async function main(): Promise<void> {
 }
 
 app.on('before-quit', () => {
+  windowManager?.flushState()
   if (serverProcess && !serverProcess.killed) {
     serverProcess.kill('SIGTERM')
     setTimeout(() => {
@@ -253,6 +254,10 @@ app.on('before-quit', () => {
       }
     }, 5000)
   }
+})
+
+app.on('will-quit', () => {
+  windowManager?.flushState()
 })
 
 app.on('window-all-closed', () => {

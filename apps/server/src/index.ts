@@ -9,6 +9,7 @@ import type { ServerMessage } from '@akari/shared-types'
 import { createSessionManager, type SessionManager } from './session-manager.js'
 import { WorkspaceManager } from './workspace-manager.js'
 import { CanvasEdgeStore } from './canvas-edge-store.js'
+import { WorkspaceSessionRegistry } from './workspace-session-registry.js'
 
 import websocketPlugin from './plugins/websocket.js'
 import staticPlugin from './plugins/static.js'
@@ -79,6 +80,15 @@ async function getOrCreateSessionManager(workspaceId: string): Promise<SessionMa
   return manager
 }
 
+const workspaceSessionRegistry = new WorkspaceSessionRegistry({
+  getOrCreateSessionManager,
+  sessionManagers: workspaceSessionManagers,
+  ttlMs: 30000,
+  onDispose: (workspaceId) => {
+    fastify.log.info(`SessionManager for workspace ${workspaceId} disposed after inactivity`)
+  },
+})
+
 const currentWorkspace = workspaceManager.getCurrentWorkspace()!
 
 const sessionManager = await getOrCreateSessionManager(currentWorkspace.id)
@@ -99,6 +109,7 @@ fastify.decorate('clients', clients)
 fastify.decorate('workspaceClients', workspaceClients)
 fastify.decorate('broadcast', broadcast)
 fastify.decorate('getOrCreateSessionManager', getOrCreateSessionManager)
+fastify.decorate('workspaceSessionRegistry', workspaceSessionRegistry)
 
 fastify.addHook('preHandler', async (request) => {
   const workspaceId =
@@ -152,3 +163,23 @@ try {
   fastify.log.error(err)
   process.exit(1)
 }
+
+async function shutdown(signal: string): Promise<void> {
+  fastify.log.info(`Received ${signal}, disposing all session managers...`)
+  await workspaceSessionRegistry.disposeAll()
+
+  // The singleton sessionManager for the default workspace may not be tracked by the registry
+  // if no WebSocket client ever subscribed to it. Ensure it is disposed as well.
+  if (sessionManager && !sessionManager.isDisposed) {
+    await sessionManager.dispose().catch((err: unknown) => {
+      console.error('[shutdown] dispose default sessionManager failed:', err)
+    })
+  }
+
+  await fastify.close()
+  db.close()
+  process.exit(0)
+}
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'))
+process.on('SIGINT', () => void shutdown('SIGINT'))

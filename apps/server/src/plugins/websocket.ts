@@ -25,6 +25,10 @@ export default async function websocketPlugin(fastify: FastifyInstance) {
     })
 
     socket.on('close', () => {
+      const workspaceId = fastify.workspaceClients.get(socket)
+      if (workspaceId) {
+        fastify.workspaceSessionRegistry.unsubscribeClient(socket, workspaceId)
+      }
       fastify.clients.delete(socket)
       fastify.workspaceClients.delete(socket)
       fastify.log.info(`WebSocket client disconnected (total: ${fastify.clients.size})`)
@@ -35,10 +39,14 @@ export default async function websocketPlugin(fastify: FastifyInstance) {
 async function handleClientMessage(msg: ClientMessage, socket: WebSocket, fastify: FastifyInstance): Promise<void> {
   if (msg.event === 'subscribe:workspace') {
     const { workspaceId } = msg.payload
+    const previousWorkspaceId = fastify.workspaceClients.get(socket)
+    if (previousWorkspaceId && previousWorkspaceId !== workspaceId) {
+      fastify.workspaceSessionRegistry.unsubscribeClient(socket, previousWorkspaceId)
+    }
     fastify.workspaceClients.set(socket, workspaceId)
     fastify.log.info(`WebSocket client subscribed to workspace ${workspaceId}`)
 
-    const sessionManager = await fastify.getOrCreateSessionManager(workspaceId)
+    const sessionManager = await fastify.workspaceSessionRegistry.subscribeClient(socket, workspaceId)
     const workspace = fastify.workspaceManager.getWorkspaceById(workspaceId)
 
     // Push initial workspace-specific state

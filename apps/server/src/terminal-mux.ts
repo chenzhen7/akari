@@ -137,9 +137,23 @@ export class TerminalMultiplexer extends EventEmitter {
     return result
   }
 
+  dispose(): void {
+    for (const entry of this.terminals.values()) {
+      if (entry.status === 'running') {
+        entry.pty.kill()
+        entry.status = 'exited'
+      }
+    }
+    this.terminals.clear()
+    this.pendingResize.clear()
+    this.removeAllListeners()
+  }
+
   private appendBuffer(entry: TerminalEntry, data: string): void {
     if (entry.buffer.length >= this.BUFFER_LIMIT) entry.buffer.shift()
     entry.buffer.push(data)
   }
 
 }
+
+export type { TerminalEntry }
