@@ -14,10 +14,11 @@ export interface WindowState {
 interface StoredState {
   version: number
   windowStates: Record<string, WindowState>
+  openWorkspaceIds: string[]
   lastActiveWorkspaceId?: string
 }
 
-const STATE_VERSION = 1
+const STATE_VERSION = 2
 const STATE_FILE_NAME = 'window-state.json'
 const SAVE_DEBOUNCE_MS = 500
 const MIN_VISIBLE_OVERLAP = 100
@@ -53,6 +54,15 @@ export class WindowStateStore {
 
   delete(workspaceId: string): void {
     delete this.state.windowStates[workspaceId]
+    this.scheduleSave()
+  }
+
+  getOpenWorkspaceIds(): string[] {
+    return [...this.state.openWorkspaceIds]
+  }
+
+  setOpenWorkspaceIds(ids: string[]): void {
+    this.state.openWorkspaceIds = [...ids]
     this.scheduleSave()
   }
 
@@ -100,13 +110,23 @@ export class WindowStateStore {
     try {
       const raw = fs.readFileSync(this.statePath, 'utf-8')
       const parsed: unknown = JSON.parse(raw)
-      if (isStoredState(parsed)) {
-        return parsed
+      const validated = isStoredState(parsed) ? parsed : undefined
+      if (validated) {
+        // Migrate v1 -> v2: in v1 having window state implied the window was open.
+        if (validated.version === 1) {
+          return {
+            version: STATE_VERSION,
+            windowStates: validated.windowStates,
+            openWorkspaceIds: Object.keys(validated.windowStates),
+            lastActiveWorkspaceId: validated.lastActiveWorkspaceId,
+          }
+        }
+        return validated
       }
     } catch {
       // ignore missing or invalid state
     }
-    return { version: STATE_VERSION, windowStates: {} }
+    return { version: STATE_VERSION, windowStates: {}, openWorkspaceIds: [] }
   }
 
   /**
@@ -153,10 +173,9 @@ function isStoredState(obj: unknown): obj is StoredState {
     return false
   }
   const s = obj as Record<string, unknown>
-  return (
-    s.version === STATE_VERSION &&
-    typeof s.windowStates === 'object' &&
-    s.windowStates !== null &&
-    !Array.isArray(s.windowStates)
-  )
+  const hasValidVersion = typeof s.version === 'number' && s.version >= 1 && s.version <= STATE_VERSION
+  const hasValidWindowStates =
+    typeof s.windowStates === 'object' && s.windowStates !== null && !Array.isArray(s.windowStates)
+  const hasValidOpenIds = s.version === 1 || Array.isArray(s.openWorkspaceIds)
+  return hasValidVersion && hasValidWindowStates && hasValidOpenIds
 }

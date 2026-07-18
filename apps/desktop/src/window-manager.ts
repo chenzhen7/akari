@@ -71,6 +71,7 @@ export class WindowManager {
     }
     this.stateStore.delete(workspaceId)
     this.closeWorkspaceWindow(workspaceId)
+    this.stateStore.setOpenWorkspaceIds(this.getOpenWorkspaceIds())
   }
 
   closeWorkspaceWindow(workspaceId: string): boolean {
@@ -82,18 +83,18 @@ export class WindowManager {
   }
 
   async restoreWindows(workspaces: WorkspaceSummary[]): Promise<void> {
-    const states = this.stateStore.getAll()
-    const stateWorkspaceIds = Object.keys(states)
+    const openIds = this.stateStore.getOpenWorkspaceIds()
     const validWorkspaceIds = new Set(workspaces.map(w => w.id))
 
-    // Open windows for any workspace that has persisted state and still exists
-    const workspacesToRestore = workspaces.filter(w => stateWorkspaceIds.includes(w.id))
+    // Only restore workspaces that were explicitly open when the app last quit.
+    const workspacesToRestore = workspaces.filter(w => openIds.includes(w.id) && validWorkspaceIds.has(w.id))
 
     if (workspacesToRestore.length === 0) {
-      // No persisted state: open the most recently active workspace
-      const currentWorkspace = workspaces[0]
-      if (currentWorkspace) {
-        await this.openWorkspaceWindow(currentWorkspace.id, currentWorkspace.name)
+      // No open windows to restore: fall back to the most recently active workspace.
+      const lastActiveId = this.stateStore.getLastActiveWorkspaceId()
+      const fallbackWorkspace = workspaces.find(w => w.id === lastActiveId) ?? workspaces[0]
+      if (fallbackWorkspace) {
+        await this.openWorkspaceWindow(fallbackWorkspace.id, fallbackWorkspace.name)
       }
       return
     }
@@ -132,6 +133,7 @@ export class WindowManager {
     this.workspaceToWindow.set(workspaceId, window.id)
 
     this.attachWindowListeners(window, workspaceId)
+    this.stateStore.setOpenWorkspaceIds(this.getOpenWorkspaceIds())
 
     return window
   }
@@ -222,6 +224,7 @@ export class WindowManager {
     window.on('closed', () => {
       this.windows.delete(window.id)
       this.workspaceToWindow.delete(workspaceId)
+      this.stateStore.setOpenWorkspaceIds(this.getOpenWorkspaceIds())
     })
   }
 
@@ -255,7 +258,12 @@ export class WindowManager {
   }
 
   flushState(): void {
+    this.stateStore.setOpenWorkspaceIds(this.getOpenWorkspaceIds())
     this.stateStore.flush()
+  }
+
+  private getOpenWorkspaceIds(): string[] {
+    return Array.from(this.workspaceToWindow.keys())
   }
 }
 
