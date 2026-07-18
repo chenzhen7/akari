@@ -24,8 +24,9 @@ contextBridge.exposeInMainWorld('electron', {
     writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
   },
   workspace: {
-    openWindow: (workspaceId: string) => ipcRenderer.invoke('workspace:open-window', workspaceId),
+    openWindow: (workspaceId: string, workspaceName?: string) => ipcRenderer.invoke('workspace:open-window', workspaceId, workspaceName),
     getWindowId: () => ipcRenderer.invoke('workspace:get-window-id'),
     getWorkspaceId: () => ipcRenderer.invoke('workspace:get-workspace-id'),
+    notifyDeleted: (workspaceId: string) => ipcRenderer.invoke('workspace:notify-deleted', workspaceId),
   },
 })

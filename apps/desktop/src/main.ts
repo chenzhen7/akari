@@ -146,17 +146,11 @@ function getApiBasePath(): string {
 }
 
 async function fetchWorkspaces(): Promise<WorkspaceSummary[]> {
-  try {
-    const res = await fetch(`${getServerUrl()}${getApiBasePath()}`)
-    if (!res.ok) {
-      console.error(`[desktop] failed to fetch workspaces: HTTP ${res.status}`)
-      return []
-    }
-    return (await res.json()) as WorkspaceSummary[]
-  } catch (err) {
-    console.error('[desktop] failed to fetch workspaces:', err)
-    return []
+  const res = await fetch(`${getServerUrl()}${getApiBasePath()}`)
+  if (!res.ok) {
+    throw new Error(`无法获取工作区列表：HTTP ${res.status}`)
   }
+  return (await res.json()) as WorkspaceSummary[]
 }
 
 function getSenderWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow | null {
@@ -231,22 +225,34 @@ async function main(): Promise<void> {
   })
   windowManager.registerIpcHandlers()
 
-  const workspaces = await fetchWorkspaces()
-  if (workspaces.length > 0) {
-    await windowManager.restoreWindows(workspaces)
-  } else {
-    dialog.showErrorBox('启动失败', '无法获取工作区列表')
+  let workspaces: WorkspaceSummary[]
+  try {
+    workspaces = await fetchWorkspaces()
+  } catch (err) {
+    dialog.showErrorBox('启动失败', err instanceof Error ? err.message : String(err))
     app.quit()
     return
   }
 
+  if (workspaces.length === 0) {
+    dialog.showErrorBox('启动失败', '没有可用工作区')
+    app.quit()
+    return
+  }
+
+  await windowManager.restoreWindows(workspaces)
+
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      const allWorkspaces = await fetchWorkspaces()
-      const lastActiveId = windowStateStore?.getLastActiveWorkspaceId()
-      const workspaceToOpen = allWorkspaces.find(w => w.id === lastActiveId) ?? allWorkspaces[0]
-      if (workspaceToOpen) {
-        await windowManager?.openWorkspaceWindow(workspaceToOpen.id)
+      try {
+        const allWorkspaces = await fetchWorkspaces()
+        const lastActiveId = windowStateStore?.getLastActiveWorkspaceId()
+        const workspaceToOpen = allWorkspaces.find(w => w.id === lastActiveId) ?? allWorkspaces[0]
+        if (workspaceToOpen) {
+          await windowManager?.openWorkspaceWindow(workspaceToOpen.id, workspaceToOpen.name)
+        }
+      } catch (err) {
+        dialog.showErrorBox('恢复窗口失败', err instanceof Error ? err.message : String(err))
       }
     }
   })

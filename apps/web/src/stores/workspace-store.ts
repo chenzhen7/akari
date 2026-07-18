@@ -27,7 +27,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
           set({ currentWorkspace: workspaces[0] })
         }
       })
-      .catch(err => console.warn('[fetchWorkspaces] failed:', err))
+      .catch(err => {
+        console.error('[fetchWorkspaces] failed:', err)
+        toastError(`加载工作区失败：${err instanceof Error ? err.message : String(err)}`)
+      })
   },
 
   addWorkspace: async (name, path) => {
@@ -48,11 +51,15 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       })
   },
 
-  deleteWorkspace: (id) => {
-    apiClient.delete(`/workspaces/${id}`, { toast: '删除工作区失败' })
-      .catch((err) => {
-        console.error('[deleteWorkspace] failed:', err)
-      })
+  deleteWorkspace: async (id) => {
+    try {
+      await apiClient.delete(`/workspaces/${id}`, { toast: '删除工作区失败' })
+      if (window.electron?.workspace?.notifyDeleted) {
+        void window.electron.workspace.notifyDeleted(id)
+      }
+    } catch (err) {
+      console.error('[deleteWorkspace] failed:', err)
+    }
   },
 
   setCurrentWorkspace: (workspace) => {

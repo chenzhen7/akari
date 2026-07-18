@@ -12,9 +12,9 @@ import { Button } from '@/components/ui/button'
 import { Check, FolderOpen, ChevronDown } from 'lucide-react'
 import { selectFolder } from '@/lib/native-file-picker'
 
-function openWorkspaceWindow(workspaceId: string): void {
+function openWorkspaceWindow(workspaceId: string, workspaceName?: string): void {
   if (window.electron?.workspace?.openWindow) {
-    void window.electron.workspace.openWindow(workspaceId)
+    void window.electron.workspace.openWindow(workspaceId, workspaceName)
     return
   }
   // Fallback for non-desktop builds: activate in the current window
@@ -37,7 +37,7 @@ export function WorkspaceSelector() {
       const name = parts[parts.length - 1] || 'workspace'
       const workspace = await addWorkspace(name, path)
       if (workspace) {
-        openWorkspaceWindow(workspace.id)
+        openWorkspaceWindow(workspace.id, workspace.name)
       } else {
         toastError('该路径的工作区已存在')
       }
@@ -48,8 +48,9 @@ export function WorkspaceSelector() {
 
   const handleSelectWorkspace = useCallback((workspaceId: string) => {
     if (workspaceId === currentWorkspace?.id) return
-    openWorkspaceWindow(workspaceId)
-  }, [currentWorkspace?.id])
+    const workspace = workspaces.find(w => w.id === workspaceId)
+    openWorkspaceWindow(workspaceId, workspace?.name)
+  }, [currentWorkspace?.id, workspaces])
 
   return (
     <DropdownMenu>

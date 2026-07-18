@@ -32,9 +32,10 @@ interface Window {
       writeText: (text: string) => Promise<void>
     }
     workspace?: {
-      openWindow: (workspaceId: string) => Promise<void>
+      openWindow: (workspaceId: string, workspaceName?: string) => Promise<void>
       getWindowId: () => Promise<number>
       getWorkspaceId: () => Promise<string | null>
+      notifyDeleted?: (workspaceId: string) => Promise<void>
     }
   }
 }

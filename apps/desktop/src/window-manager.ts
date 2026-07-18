@@ -45,8 +45,12 @@ export class WindowManager {
   }
 
   registerIpcHandlers(): void {
-    ipcMain.handle('workspace:open-window', (_event: IpcMainInvokeEvent, workspaceId: string) => {
-      void this.openWorkspaceWindow(workspaceId)
+    ipcMain.handle('workspace:open-window', (_event: IpcMainInvokeEvent, workspaceId: string, workspaceName?: string) => {
+      void this.openWorkspaceWindow(workspaceId, workspaceName)
+    })
+
+    ipcMain.handle('workspace:notify-deleted', (_event: IpcMainInvokeEvent, workspaceId: string) => {
+      this.onWorkspaceDeleted(workspaceId)
     })
 
     ipcMain.handle('workspace:get-window-id', (event: IpcMainInvokeEvent) => {
@@ -61,6 +65,22 @@ export class WindowManager {
     })
   }
 
+  onWorkspaceDeleted(workspaceId: string): void {
+    if (this.stateStore.getLastActiveWorkspaceId() === workspaceId) {
+      this.stateStore.setLastActiveWorkspaceId(undefined)
+    }
+    this.stateStore.delete(workspaceId)
+    this.closeWorkspaceWindow(workspaceId)
+  }
+
+  closeWorkspaceWindow(workspaceId: string): boolean {
+    const windowId = this.workspaceToWindow.get(workspaceId)
+    const akariWindow = windowId ? this.windows.get(windowId) : undefined
+    if (!akariWindow) return false
+    akariWindow.window.close()
+    return true
+  }
+
   async restoreWindows(workspaces: WorkspaceSummary[]): Promise<void> {
     const states = this.stateStore.getAll()
     const stateWorkspaceIds = Object.keys(states)
@@ -73,13 +93,13 @@ export class WindowManager {
       // No persisted state: open the most recently active workspace
       const currentWorkspace = workspaces[0]
       if (currentWorkspace) {
-        await this.openWorkspaceWindow(currentWorkspace.id)
+        await this.openWorkspaceWindow(currentWorkspace.id, currentWorkspace.name)
       }
       return
     }
 
     for (const workspace of workspacesToRestore) {
-      await this.openWorkspaceWindow(workspace.id)
+      await this.openWorkspaceWindow(workspace.id, workspace.name)
     }
 
     const lastActiveId = this.stateStore.getLastActiveWorkspaceId()
@@ -91,7 +111,7 @@ export class WindowManager {
     }
   }
 
-  async openWorkspaceWindow(workspaceId: string): Promise<BrowserWindow> {
+  async openWorkspaceWindow(workspaceId: string, workspaceName?: string): Promise<BrowserWindow> {
     const existingWindowId = this.workspaceToWindow.get(workspaceId)
     const existing = existingWindowId ? this.windows.get(existingWindowId)?.window : undefined
     if (existing) {
@@ -103,7 +123,7 @@ export class WindowManager {
     }
 
     const state = this.stateStore.get(workspaceId)
-    const window = this.createBrowserWindow(workspaceId, state)
+    const window = this.createBrowserWindow(workspaceId, state, workspaceName)
     const url = this.buildLoadUrl(workspaceId)
     await window.loadURL(url)
 
@@ -116,7 +136,7 @@ export class WindowManager {
     return window
   }
 
-  private createBrowserWindow(workspaceId: string, state?: WindowState): BrowserWindow {
+  private createBrowserWindow(workspaceId: string, state?: WindowState, workspaceName?: string): BrowserWindow {
     const options: Electron.BrowserWindowConstructorOptions = {
       width: state?.width ?? DEFAULT_WIDTH,
       height: state?.height ?? DEFAULT_HEIGHT,
@@ -161,15 +181,18 @@ export class WindowManager {
       if (!window.isVisible()) {
         window.show()
       }
+      if (workspaceName) {
+        window.setTitle(`${workspaceName} - Akari`)
+      }
     })
 
     return window
   }
 
   private buildLoadUrl(workspaceId: string): string {
-    const base = this.loadUrl
-    const separator = base.includes('?') ? '&' : '?'
-    return `${base}${separator}workspaceId=${encodeURIComponent(workspaceId)}`
+    const url = new URL(this.loadUrl)
+    url.searchParams.set('workspaceId', workspaceId)
+    return url.toString()
   }
 
   private attachWindowListeners(window: BrowserWindow, workspaceId: string): void {
