@@ -30,7 +30,7 @@ export default async function workspaceRoutes(fastify: FastifyInstance) {
     const { id } = request.params
     const workspace = fastify.workspaceManager.activateWorkspace(id)
     if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
-    fastify.broadcast({ event: 'workspace:activated', payload: workspace })
+    fastify.broadcast({ event: 'workspace:activated', payload: workspace }, workspace.id)
     fastify.broadcast({ event: 'workspace:list', payload: fastify.workspaceManager.listWorkspaces() })
     return { ok: true }
   })
