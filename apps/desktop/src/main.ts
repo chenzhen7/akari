@@ -11,7 +11,6 @@ interface WorkspaceSummary {
   path: string
   repoRoot: string
   isGit: boolean
-  isCurrent: boolean
   createdAt?: string
   lastOpenedAt?: string
 }
@@ -140,10 +139,19 @@ async function startServer(): Promise<number> {
   })
 }
 
+function getApiBasePath(): string {
+  // In dev, the Vite dev server proxies /api to the backend.
+  // In production, the backend serves the API directly at the root path.
+  return isDev ? '/api/workspaces' : '/workspaces'
+}
+
 async function fetchWorkspaces(): Promise<WorkspaceSummary[]> {
   try {
-    const res = await fetch(`${getServerUrl()}/api/workspaces`)
-    if (!res.ok) return []
+    const res = await fetch(`${getServerUrl()}${getApiBasePath()}`)
+    if (!res.ok) {
+      console.error(`[desktop] failed to fetch workspaces: HTTP ${res.status}`)
+      return []
+    }
     return (await res.json()) as WorkspaceSummary[]
   } catch (err) {
     console.error('[desktop] failed to fetch workspaces:', err)
@@ -236,7 +244,7 @@ async function main(): Promise<void> {
     if (BrowserWindow.getAllWindows().length === 0) {
       const allWorkspaces = await fetchWorkspaces()
       const lastActiveId = windowStateStore?.getLastActiveWorkspaceId()
-      const workspaceToOpen = allWorkspaces.find(w => w.id === lastActiveId) ?? allWorkspaces.find(w => w.isCurrent) ?? allWorkspaces[0]
+      const workspaceToOpen = allWorkspaces.find(w => w.id === lastActiveId) ?? allWorkspaces[0]
       if (workspaceToOpen) {
         await windowManager?.openWorkspaceWindow(workspaceToOpen.id)
       }

@@ -8,10 +8,6 @@ export default async function websocketPlugin(fastify: FastifyInstance) {
 
     // 连接建立时只发送全局工作区列表，具体工作区的初始化等客户端订阅后再发送
     if (socket.readyState === WebSocket.OPEN) {
-      const currentWs = fastify.workspaceManager.getCurrentWorkspace()
-      if (currentWs) {
-        socket.send(JSON.stringify({ event: 'workspace:current', payload: currentWs }))
-      }
       socket.send(JSON.stringify({ event: 'workspace:list', payload: fastify.workspaceManager.listWorkspaces() }))
     }
 
@@ -52,7 +48,7 @@ async function handleClientMessage(msg: ClientMessage, socket: WebSocket, fastif
     // Push initial workspace-specific state
     if (socket.readyState === WebSocket.OPEN) {
       if (workspace) {
-        socket.send(JSON.stringify({ event: 'workspace:current', payload: workspace }))
+        socket.send(JSON.stringify({ event: 'workspace:activated', payload: workspace }))
       }
       socket.send(JSON.stringify({ event: 'sessions:list', payload: sessionManager.listSessions() }))
       socket.send(JSON.stringify({ event: 'canvas:edges', payload: getCanvasEdgesForWorkspace(fastify, sessionManager) }))

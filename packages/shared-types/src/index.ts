@@ -137,7 +137,6 @@ export interface Workspace {
   path: string
   repoRoot: string
   isGit: boolean
-  isCurrent: boolean
   createdAt: Date
   lastOpenedAt: Date
 }
@@ -160,7 +159,7 @@ export type ServerMessage =
   | { event: 'tab:activated'; payload: { sessionId: string; tabId: string } }
   | { event: 'tabs:sync'; payload: { sessionId: string; tabs: SessionTab[]; activeTabId: string | null } }
   | { event: 'workspace:list'; payload: Workspace[] }
-  | { event: 'workspace:current'; payload: Workspace }
+  | { event: 'workspace:activated'; payload: Workspace }
 
 export type ClientMessage =
   | { event: 'terminal:input'; payload: { sessionId: string; terminalId: string; data: string } }

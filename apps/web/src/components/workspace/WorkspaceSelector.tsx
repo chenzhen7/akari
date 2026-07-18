@@ -17,15 +17,15 @@ function openWorkspaceWindow(workspaceId: string): void {
     void window.electron.workspace.openWindow(workspaceId)
     return
   }
-  // Fallback for non-desktop builds: switch in the current window
-  useWorkspaceStore.getState().switchWorkspace(workspaceId)
+  // Fallback for non-desktop builds: activate in the current window
+  useWorkspaceStore.getState().activateWorkspace(workspaceId)
 }
 
 export function WorkspaceSelector() {
   const {
     workspaces,
     currentWorkspace,
-    switchWorkspace,
+    activateWorkspace,
     addWorkspace,
   } = useWorkspaceStore()
 

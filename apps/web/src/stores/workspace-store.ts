@@ -9,12 +9,12 @@ interface WorkspaceStore {
 
   fetchWorkspaces: () => void
   addWorkspace: (name: string, path: string) => Promise<Workspace | undefined>
-  switchWorkspace: (id: string) => void
+  activateWorkspace: (id: string) => void
   deleteWorkspace: (id: string) => void
   setCurrentWorkspace: (workspace: Workspace) => void
 }
 
-export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
+export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   workspaces: [],
   currentWorkspace: null,
 
@@ -22,9 +22,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
     apiClient.get<Workspace[]>('/workspaces', { toast: false })
       .then((workspaces) => {
         set({ workspaces })
-        const current = workspaces.find(w => w.isCurrent)
-        if (current) {
-          set({ currentWorkspace: current })
+        // If no workspace is currently selected, default to the most recently active one
+        if (!get().currentWorkspace && workspaces.length > 0) {
+          set({ currentWorkspace: workspaces[0] })
         }
       })
       .catch(err => console.warn('[fetchWorkspaces] failed:', err))
@@ -41,10 +41,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
     }
   },
 
-  switchWorkspace: (id) => {
-    apiClient.post(`/workspaces/${id}/switch`, undefined, { toast: '切换工作区失败' })
+  activateWorkspace: (id) => {
+    apiClient.post(`/workspaces/${id}/activate`, undefined, { toast: '切换工作区失败' })
       .catch((err) => {
-        console.error('[switchWorkspace] failed:', err)
+        console.error('[activateWorkspace] failed:', err)
       })
   },
 

@@ -126,7 +126,8 @@ export function handleServerMessage(msg: ServerMessage): void {
         ),
       }))
       break
-    case 'workspace:current':
+    case 'workspace:activated':
+      // 仅代表「某工作区被显式激活/切换」。桌面端每个窗口只会收到自己 workspace 的事件。
       useWorkspaceStore.getState().setCurrentWorkspace(msg.payload)
       useSessionStore.getState().resetForWorkspace()
       break

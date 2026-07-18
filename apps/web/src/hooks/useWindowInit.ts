@@ -55,4 +55,31 @@ export function useWindowInit() {
       cancelled = true
     }
   }, [workspaceId, setCurrentWorkspace, setSessions])
+
+  // Non-desktop web mode: if no workspaceId is in URL, redirect to the most recently active workspace
+  useEffect(() => {
+    if (workspaceId || typeof window === 'undefined' || window.electron?.workspace?.getWindowId) {
+      return
+    }
+
+    let cancelled = false
+
+    async function redirectToDefaultWorkspace() {
+      try {
+        const workspaces = await apiClient.get<Workspace[]>('/workspaces', { toast: false })
+        if (cancelled || workspaces.length === 0) return
+        const params = new URLSearchParams(window.location.search)
+        params.set('workspaceId', workspaces[0].id)
+        window.location.search = params.toString()
+      } catch (err) {
+        console.error('[useWindowInit] redirect failed:', err)
+      }
+    }
+
+    void redirectToDefaultWorkspace()
+
+    return () => {
+      cancelled = true
+    }
+  }, [workspaceId])
 }

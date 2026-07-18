@@ -76,6 +76,7 @@ async function getOrCreateSessionManager(workspaceId: string): Promise<SessionMa
     isGitWorkspace: workspace.isGit,
   })
 
+  await manager.ensureMainSession(workspace.path)
   workspaceSessionManagers.set(workspaceId, manager)
   return manager
 }
@@ -89,21 +90,16 @@ const workspaceSessionRegistry = new WorkspaceSessionRegistry({
   },
 })
 
-const currentWorkspace = workspaceManager.getCurrentWorkspace()!
-
-const sessionManager = await getOrCreateSessionManager(currentWorkspace.id)
-
-// 迁移旧数据：将无 workspace_id 的 session 关联到默认工作区
-db.prepare("UPDATE sessions SET workspace_id = ? WHERE workspace_id = '' OR workspace_id IS NULL").run(currentWorkspace.id)
-
-// 确保当前工作区有主会话
-await sessionManager.ensureMainSession(currentWorkspace.path)
+// 迁移旧数据：将无 workspace_id 的 session 关联到第一个工作区（任意一个即可，因为后续访问都会按 workspace 隔离）
+const firstWorkspace = workspaceManager.listWorkspaces()[0]
+if (firstWorkspace) {
+  db.prepare("UPDATE sessions SET workspace_id = ? WHERE workspace_id = '' OR workspace_id IS NULL").run(firstWorkspace.id)
+}
 
 const canvasEdgeStore = new CanvasEdgeStore(db)
 
 fastify.decorate('db', db)
 fastify.decorate('workspaceManager', workspaceManager)
-fastify.decorate('sessionManager', sessionManager)
 fastify.decorate('canvasEdgeStore', canvasEdgeStore)
 fastify.decorate('clients', clients)
 fastify.decorate('workspaceClients', workspaceClients)
@@ -111,16 +107,47 @@ fastify.decorate('broadcast', broadcast)
 fastify.decorate('getOrCreateSessionManager', getOrCreateSessionManager)
 fastify.decorate('workspaceSessionRegistry', workspaceSessionRegistry)
 
-fastify.addHook('preHandler', async (request) => {
-  const workspaceId =
+fastify.addHook('preHandler', async (request, reply) => {
+  const path = request.url.split('?')[0]
+
+  // Static files and SPA fallback: skip workspace scoping.
+  if (
+    path === '/' ||
+    path === '/index.html' ||
+    path.startsWith('/assets/') ||
+    /\.[a-zA-Z0-9]+$/.test(path)
+  ) {
+    return
+  }
+
+  // Health check and WebSocket upgrade: skip.
+  if (path === '/health' || path === '/ws') {
+    return
+  }
+
+  // Global workspace management routes: skip.
+  if (path.startsWith('/workspaces') || path.startsWith('/settings')) {
+    return
+  }
+
+  let workspaceId =
     (request.headers['x-workspace-id'] as string | undefined)
     ?? (request.query as Record<string, unknown> | undefined)?.workspaceId as string | undefined
-    ?? workspaceManager.getCurrentWorkspace()?.id
+
+  // HTTP hooks from external agents only include the sessionId; resolve workspace from DB.
+  const hooksMatch = /^\/sessions\/([^/]+)\/hooks$/.exec(path)
+  if (hooksMatch && !workspaceId) {
+    const sessionId = hooksMatch[1]
+    const row = db.prepare('SELECT workspace_id FROM sessions WHERE id = ?').get(sessionId) as { workspace_id: string } | undefined
+    workspaceId = row?.workspace_id
+  }
+
+  if (!workspaceId) {
+    return reply.status(400).send({ error: 'workspaceId is required via X-Workspace-Id header or workspaceId query param' })
+  }
 
   request.workspaceId = workspaceId
-  request.sessionManager = workspaceId
-    ? await getOrCreateSessionManager(workspaceId)
-    : sessionManager
+  request.sessionManager = await getOrCreateSessionManager(workspaceId)
 })
 
 await fastify.register(healthRoutes)
@@ -167,14 +194,6 @@ try {
 async function shutdown(signal: string): Promise<void> {
   fastify.log.info(`Received ${signal}, disposing all session managers...`)
   await workspaceSessionRegistry.disposeAll()
-
-  // The singleton sessionManager for the default workspace may not be tracked by the registry
-  // if no WebSocket client ever subscribed to it. Ensure it is disposed as well.
-  if (sessionManager && !sessionManager.isDisposed) {
-    await sessionManager.dispose().catch((err: unknown) => {
-      console.error('[shutdown] dispose default sessionManager failed:', err)
-    })
-  }
 
   await fastify.close()
   db.close()

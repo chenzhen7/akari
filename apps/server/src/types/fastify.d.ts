@@ -10,7 +10,6 @@ declare module 'fastify' {
   interface FastifyInstance {
     db: Database.Database
     workspaceManager: WorkspaceManager
-    sessionManager: SessionManager
     canvasEdgeStore: CanvasEdgeStore
     clients: Set<WebSocket>
     workspaceClients: Map<WebSocket, string>

@@ -11,7 +11,6 @@ interface WorkspaceRow {
   path: string
   repo_root: string
   is_git: number
-  is_current: number
   created_at: string
   last_opened_at: string
 }
@@ -27,7 +26,6 @@ function rowToWorkspace(r: WorkspaceRow): Workspace {
     path: r.path,
     repoRoot: r.repo_root,
     isGit: r.is_git === 1,
-    isCurrent: r.is_current === 1,
     createdAt: new Date(r.created_at),
     lastOpenedAt: new Date(r.last_opened_at),
   }
@@ -49,7 +47,6 @@ export class WorkspaceRepository {
         path TEXT NOT NULL UNIQUE,
         repo_root TEXT,
         is_git INTEGER NOT NULL DEFAULT 0,
-        is_current INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         last_opened_at TEXT NOT NULL
       )
@@ -58,9 +55,14 @@ export class WorkspaceRepository {
 
   async migrate(): Promise<void> {
     const cols: string[] = this.db
-      .prepare("PRAGMA table_info(workspaces)")
+      .prepare('PRAGMA table_info(workspaces)')
       .all()
       .map((row: any) => row.name as string)
+
+    // Drop the deprecated is_current column if it still exists.
+    if (cols.includes('is_current')) {
+      this.db.exec('ALTER TABLE workspaces DROP COLUMN is_current')
+    }
 
     const addedIsGit = !cols.includes('is_git')
     if (addedIsGit) {
@@ -92,18 +94,13 @@ export class WorkspaceRepository {
       const gitRoot = await getGitRoot(resolvedPath)
       const repoRoot = gitRoot ?? resolvedPath
       const isGit = gitRoot !== null
-      this.insertWorkspace(id, name, resolvedPath, repoRoot, isGit, true, now)
+      this.insertWorkspace(id, name, resolvedPath, repoRoot, isGit, now)
     }
   }
 
   list(): Workspace[] {
     const rows = this.db.prepare('SELECT * FROM workspaces ORDER BY last_opened_at DESC').all() as WorkspaceRow[]
     return rows.map(rowToWorkspace)
-  }
-
-  getCurrent(): Workspace | null {
-    const row = this.db.prepare('SELECT * FROM workspaces WHERE is_current = 1').get() as WorkspaceRow | undefined
-    return row ? rowToWorkspace(row) : null
   }
 
   getById(id: string): Workspace | null {
@@ -123,26 +120,24 @@ export class WorkspaceRepository {
     const gitRoot = await getGitRoot(resolvedPath)
     const repoRoot = gitRoot ?? resolvedPath
     const isGit = gitRoot !== null
-    this.insertWorkspace(id, name, resolvedPath, repoRoot, isGit, false, now)
+    this.insertWorkspace(id, name, resolvedPath, repoRoot, isGit, now)
     return {
       id,
       name,
       path: resolvedPath,
       repoRoot,
       isGit,
-      isCurrent: false,
       createdAt: new Date(now),
       lastOpenedAt: new Date(now),
     }
   }
 
-  switch(id: string): boolean {
+  touchLastOpened(id: string): boolean {
     const target = this.getById(id)
     if (!target) return false
 
     const now = new Date().toISOString()
-    this.db.prepare('UPDATE workspaces SET is_current = 0').run()
-    this.db.prepare('UPDATE workspaces SET is_current = 1, last_opened_at = ? WHERE id = ?').run(now, id)
+    this.db.prepare('UPDATE workspaces SET last_opened_at = ? WHERE id = ?').run(now, id)
     return true
   }
 
@@ -152,12 +147,11 @@ export class WorkspaceRepository {
     path: string,
     repoRoot: string,
     isGit: boolean,
-    isCurrent: boolean,
     now: string,
   ): void {
     this.db.prepare(
-      'INSERT INTO workspaces (id, name, path, repo_root, is_git, is_current, created_at, last_opened_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    ).run(id, name, path, repoRoot, isGit ? 1 : 0, isCurrent ? 1 : 0, now, now)
+      'INSERT INTO workspaces (id, name, path, repo_root, is_git, created_at, last_opened_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(id, name, path, repoRoot, isGit ? 1 : 0, now, now)
   }
 
   delete(id: string): boolean {

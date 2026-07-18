@@ -26,10 +26,6 @@ export class WorkspaceManager {
     return this.repository.list()
   }
 
-  getCurrentWorkspace(): Workspace | null {
-    return this.repository.getCurrent()
-  }
-
   getWorkspaceById(id: string): Workspace | null {
     return this.repository.getById(id)
   }
@@ -41,12 +37,12 @@ export class WorkspaceManager {
     return this.repository.create(name, normalizedPath)
   }
 
-  switchWorkspace(id: string): Workspace | null {
+  activateWorkspace(id: string): Workspace | null {
     const target = this.repository.getById(id)
     if (!target) return null
-    const switched = this.repository.switch(id)
-    if (!switched) return null
-    return { ...target, isCurrent: true, lastOpenedAt: new Date() }
+    const touched = this.repository.touchLastOpened(id)
+    if (!touched) return null
+    return { ...target, lastOpenedAt: new Date() }
   }
 
   deleteWorkspace(id: string): boolean {

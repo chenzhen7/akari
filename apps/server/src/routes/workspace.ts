@@ -26,15 +26,11 @@ export default async function workspaceRoutes(fastify: FastifyInstance) {
     return reply.status(201).send(workspace)
   })
 
-  fastify.post<{ Params: { id: string } }>('/workspaces/:id/switch', async (request, reply) => {
+  fastify.post<{ Params: { id: string } }>('/workspaces/:id/activate', async (request, reply) => {
     const { id } = request.params
-    const workspace = fastify.workspaceManager.switchWorkspace(id)
+    const workspace = fastify.workspaceManager.activateWorkspace(id)
     if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
-    await request.sessionManager.setWorkspace(workspace.id, workspace.path, workspace.repoRoot, workspace.isGit)
-    await request.sessionManager.restoreSessions()
-    fastify.broadcast({ event: 'workspace:current', payload: workspace })
-    await request.sessionManager.ensureMainSession(workspace.path)
-    fastify.broadcast({ event: 'sessions:list', payload: request.sessionManager.listSessions() })
+    fastify.broadcast({ event: 'workspace:activated', payload: workspace })
     fastify.broadcast({ event: 'workspace:list', payload: fastify.workspaceManager.listWorkspaces() })
     return { ok: true }
   })

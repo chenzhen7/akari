@@ -20,7 +20,6 @@ interface WorkspaceSummary {
   path: string
   repoRoot: string
   isGit: boolean
-  isCurrent: boolean
   createdAt?: string
   lastOpenedAt?: string
 }
@@ -71,8 +70,8 @@ export class WindowManager {
     const workspacesToRestore = workspaces.filter(w => stateWorkspaceIds.includes(w.id))
 
     if (workspacesToRestore.length === 0) {
-      // No persisted state: open the current workspace
-      const currentWorkspace = workspaces.find(w => w.isCurrent) ?? workspaces[0]
+      // No persisted state: open the most recently active workspace
+      const currentWorkspace = workspaces[0]
       if (currentWorkspace) {
         await this.openWorkspaceWindow(currentWorkspace.id)
       }
