@@ -76,7 +76,7 @@ export function matchCombo(e: KeyboardEvent, combo: KeyCombo): boolean {
   if (e.shiftKey !== wantShift) return false
   if (e.altKey !== wantAlt) return false
 
-  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
+  const key = e.key.toLowerCase()
   return key === combo.key.toLowerCase()
 }
 

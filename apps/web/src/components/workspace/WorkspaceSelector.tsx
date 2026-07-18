@@ -25,7 +25,6 @@ export function WorkspaceSelector() {
   const {
     workspaces,
     currentWorkspace,
-    activateWorkspace,
     addWorkspace,
   } = useWorkspaceStore()
 

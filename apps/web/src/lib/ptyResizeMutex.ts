@@ -58,7 +58,7 @@ export interface ResizeMutex {
   flush(sessionId: string): string[]
 }
 
-function createResizeMutex(): ResizeMutex {
+export function createResizeMutex(): ResizeMutex {
   const states = new Map<string, MutexState>()
 
   function getOrCreate(sessionId: string): MutexState {

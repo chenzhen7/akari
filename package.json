@@ -12,18 +12,27 @@
     "build:desktop": "cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ pnpm build && pnpm --filter @akari/server build:bundle && pnpm --filter @akari/desktop build && pnpm --filter @akari/desktop dist",
     "lint": "pnpm -r lint",
     "format": "prettier --write \"**/*.{ts,tsx}\" --ignore-path .prettierignore",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:server": "pnpm --filter @akari/server test",
+    "test:web": "pnpm --filter @akari/web test"
   },
   "engines": {
     "node": ">=24.15.0",
     "pnpm": ">=11"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.7",
+    "@vitest/ui": "^3.2.7",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "typescript": "~5.9.3",
+    "vitest": "^3.2.7",
     "wait-on": "^8.0.3"
   },
   "dependencies": {
