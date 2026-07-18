@@ -254,13 +254,15 @@ export class SessionManager {
     this.sessionRepository.create(session)
     this.broadcast({ event: 'session:created', payload: session })
 
-    // 主会话监听仓库根目录的文件变更
-    this.worktreeManager.watchDiff(
-      session.id,
-      this.createDiffCallbacks(session.id, session.worktreePath),
-      session.worktreePath,
-      session.worktreePath,
-    )
+    // 主会话监听仓库根目录的文件变更（仅在 Git 工作区）
+    if (this.isGitWorkspace) {
+      this.worktreeManager.watchDiff(
+        session.id,
+        this.createDiffCallbacks(session.id, session.worktreePath),
+        session.worktreePath,
+        session.worktreePath,
+      )
+    }
 
     if (this.isGitWorkspace) {
       this.watchMainBranch(session.id, this.repoRoot)
@@ -707,7 +709,7 @@ export class SessionManager {
 
       this.pushTerminalDisplay(session.id, `\r\n\x1b[33m> [Server restarted — terminal restored]\x1b[0m\r\n`)
 
-      if (!session.isMain) {
+      if (!session.isMain && session.worktreePath) {
         this.worktreeManager.watchDiff(
           session.id,
           this.createDiffCallbacks(session.id),

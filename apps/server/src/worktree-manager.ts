@@ -1,26 +1,40 @@
-import { execa } from 'execa'
 import { watch, type FSWatcher } from 'chokidar'
 import { mkdir, symlink, rm, access, constants, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join, resolve, dirname, basename, sep, relative } from 'node:path'
-import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileNode, FileDiffLine } from '@akari/shared-types'
+import type { GitDiff, GitBranch, GitLogResponse, FileNode } from '@akari/shared-types'
+import { GitCommandRunner } from './git-command-runner.js'
+import { GitRepositoryDetector } from './git-repository-detector.js'
+import { GitRepositoryRegistry } from './git-repository-registry.js'
 
 interface WatchDiffCallbacks {
   onDiff: (diff: GitDiff) => void
   onFileChange?: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void
 }
 
+/**
+ * Manages git worktrees for agent sessions.
+ *
+ * This class is intentionally focused on worktree lifecycle and filesystem
+ * operations. All Git repository state queries (diff, log, branches, etc.) are
+ * delegated to GitRepository instances via GitRepositoryRegistry.
+ */
 export class WorktreeManager {
   private readonly repoRoot: string
   private readonly workspacePath: string
   private readonly workspaceOffset: string
   private readonly worktreeBaseDir: string
   private readonly watchers = new Map<string, FSWatcher>()
+  private readonly detector: GitRepositoryDetector
+  private readonly registry: GitRepositoryRegistry
+  private readonly runner = new GitCommandRunner()
 
   constructor(repoRoot: string, workspacePath: string, worktreeBaseDir: string) {
     this.repoRoot = resolve(repoRoot)
     this.workspacePath = resolve(workspacePath)
     this.workspaceOffset = relative(this.repoRoot, this.workspacePath).replace(/\\/g, '/')
     this.worktreeBaseDir = resolve(worktreeBaseDir)
+    this.detector = new GitRepositoryDetector(this.repoRoot, this.workspacePath, this.worktreeBaseDir)
+    this.registry = new GitRepositoryRegistry(this.detector, this.runner)
   }
 
   private isAgentWorktree(cwd: string): boolean {
@@ -58,13 +72,14 @@ export class WorktreeManager {
     // Resolve base branch — fall back to current HEAD if requested branch doesn't exist
     let resolvedBase = baseBranch
     try {
-      await this.git(['rev-parse', '--verify', baseBranch])
+      await this.runner.run(['rev-parse', '--verify', baseBranch], this.repoRoot)
     } catch {
-      resolvedBase = (await this.git(['rev-parse', '--abbrev-ref', 'HEAD'])).trim()
+      resolvedBase = (await this.runner.run(['rev-parse', '--abbrev-ref', 'HEAD'], this.repoRoot)).trim()
     }
 
-    await this.git(['worktree', 'add', '-b', branchName, worktreePath, resolvedBase])
+    await this.runner.run(['worktree', 'add', '-b', branchName, worktreePath, resolvedBase], this.repoRoot)
     await this.linkNodeModules(worktreePath)
+    this.registry.create(worktreePath)
 
     return { branchName, worktreePath, resolvedBase }
   }
@@ -80,8 +95,9 @@ export class WorktreeManager {
       await branchWatcher.close()
       this.watchers.delete(`${sessionId}:branch`)
     }
+    this.registry.delete(worktreePath)
     try {
-      await this.git(['worktree', 'remove', '--force', worktreePath])
+      await this.runner.run(['worktree', 'remove', '--force', worktreePath], this.repoRoot)
     } catch {
       // worktree not registered in git — proceed to rm the directory directly
     }
@@ -92,13 +108,13 @@ export class WorktreeManager {
       // directory may not exist or be locked — non-fatal
     }
     try {
-      await this.git(['worktree', 'prune'])
+      await this.runner.run(['worktree', 'prune'], this.repoRoot)
     } catch {
       // prune failure is non-fatal
     }
     if (branchName) {
       try {
-        await this.git(['branch', '-D', branchName])
+        await this.runner.run(['branch', '-D', branchName], this.repoRoot)
       } catch {
         // branch may already be deleted — non-fatal
       }
@@ -106,156 +122,52 @@ export class WorktreeManager {
   }
 
   async getCurrentBranch(cwd = this.repoRoot): Promise<string> {
-    try {
-      const result = await this.git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
-      return result.trim()
-    } catch {
-      return 'main'
-    }
+    return (await this.registry.get(cwd)?.getCurrentBranch()) ?? 'main'
   }
 
   async getDiff(sessionId: string, cwd?: string): Promise<GitDiff> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
-    try {
-      const baseRef = 'HEAD'
-
-      const [stat, full, nameStatus, numStat] = await Promise.all([
-        this.git(['diff', '--stat', baseRef], worktreePath),
-        this.git(['diff', baseRef], worktreePath),
-        this.git(['diff', '--name-status', baseRef], worktreePath),
-        this.git(['diff', '--numstat', baseRef], worktreePath),
-      ])
-
-      const numStatMap = parseNumStat(numStat)
-
-      // git diff only covers tracked files; also capture untracked files
-      const gitCwd = this.isAgentWorktree(worktreePath) ? worktreePath : this.repoRoot
-      const untrackedRaw = await this.git(['ls-files', '--others', '--exclude-standard', '--full-name'], gitCwd).catch(() => '')
-      const untrackedFiles = untrackedRaw.trim() ? untrackedRaw.trim().split('\n').filter(Boolean) : []
-
-      let extraDiff = ''
-      const extraFiles: DiffFile[] = []
-      for (const file of untrackedFiles) {
-        // git diff --no-index exits with code 1 when differences exist (normal, not an error)
-        const fileDiff = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--no-index', '--', '/dev/null', file], { cwd: gitCwd })
-          .then(r => r.stdout)
-          .catch((e: unknown) => {
-            const err = e as { exitCode?: number; stdout?: string }
-            return err.exitCode === 1 ? (err.stdout ?? '') : ''
-          })
-        if (fileDiff) {
-          extraDiff += fileDiff + '\n'
-          const added = fileDiff.split('\n').filter(l => l.startsWith('+') && !l.startsWith('+++')).length
-          extraFiles.push({ path: file, status: 'A', additions: added, deletions: 0 })
-        }
-      }
-
-      const trackedFiles = parseFileStatus(nameStatus).map(f => ({
-        ...f,
-        additions: numStatMap.get(f.path)?.additions ?? 0,
-        deletions: numStatMap.get(f.path)?.deletions ?? 0,
-      }))
-
-      return {
-        stat,
-        fullDiff: full + extraDiff,
-        files: [...trackedFiles, ...extraFiles],
-        summary: parseStat(stat),
-      }
-    } catch {
-      return { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
-    }
+    const emptyDiff: GitDiff = { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
+    return (await this.registry.get(worktreePath)?.getDiff()) ?? emptyDiff
   }
 
   async getFileDiffContent(worktreePath: string, filePath: string): Promise<{ original: string; modified: string }> {
-    const gitCwd = this.isAgentWorktree(worktreePath) ? worktreePath : this.repoRoot
-    const original = await execa('git', ['-c', 'core.quotepath=false', 'show', `HEAD:${filePath}`], { cwd: gitCwd })
-      .then(r => r.stdout)
+    const modified = await this.resolveFilePath(filePath, worktreePath)
+      .then((p) => readFile(p, 'utf8'))
       .catch(() => '')
-    const absolutePath = await this.resolveFilePath(filePath, worktreePath)
-    const modified = await readFile(absolutePath, 'utf8').catch(() => '')
+    const repo = this.registry.get(worktreePath)
+    if (!repo) return { original: '', modified }
+    const { original } = await repo.getFileDiffContent(filePath)
     return { original, modified }
   }
 
-  async getFileDiffLines(worktreePath: string, filePath: string): Promise<FileDiffLine[]> {
-    const gitCwd = this.isAgentWorktree(worktreePath) ? worktreePath : this.repoRoot
-    const baseRef = 'HEAD'
-
-    // For untracked (new) files, use git diff --no-index against /dev/null
-    const isUntracked = await execa('git', ['-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard', '--full-name'], { cwd: gitCwd })
-      .then(r => r.stdout.split('\n').includes(filePath))
-      .catch(() => false)
-
-    let diffOutput: string
-    if (isUntracked) {
-      diffOutput = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--no-index', '--unified=0', '--', '/dev/null', filePath], { cwd: gitCwd })
-        .then(r => r.stdout)
-        .catch((e: unknown) => {
-          const err = e as { exitCode?: number; stdout?: string }
-          return err.exitCode === 1 ? (err.stdout ?? '') : ''
-        })
-    } else {
-      diffOutput = await execa('git', ['-c', 'core.quotepath=false', 'diff', '--unified=0', baseRef, '--', filePath], { cwd: gitCwd })
-        .then(r => r.stdout)
-        .catch(() => '')
-    }
-
-    if (!diffOutput) return []
-    return parseDiffLines(diffOutput)
+  async getFileDiffLines(worktreePath: string, filePath: string): Promise<import('@akari/shared-types').FileDiffLine[]> {
+    return (await this.registry.get(worktreePath)?.getFileDiffLines(filePath)) ?? []
   }
 
   watchDiff(sessionId: string, callbacks: WatchDiffCallbacks, watchPath?: string, cwd?: string): FSWatcher {
     const resolvedPath = resolve(watchPath ?? this.getWorktreePath(sessionId))
-    const watcher = watch(resolvedPath, {
-      ignored: /(node_modules|\.git)/,
-      persistent: true,
-      ignoreInitial: true,
-    })
-
-    let debounce: ReturnType<typeof setTimeout> | null = null
-    const scheduleDiff = () => {
-      if (debounce) clearTimeout(debounce)
-      debounce = setTimeout(() => {
-        void this.getDiff(sessionId, cwd).then(callbacks.onDiff)
-      }, 500)
+    const gitCwd = resolve(cwd ?? resolvedPath)
+    const repo = this.registry.get(gitCwd)
+    if (!repo) {
+      // Not a git directory: avoid spawning git commands that would spam stderr with usage text.
+      return watch([], { persistent: false, ignoreInitial: true })
     }
-
-    const handleChange = (absolutePath: string, changeType: 'add' | 'change' | 'unlink') => {
-      const relativePath = relative(resolvedPath, absolutePath).replace(/\\/g, '/')
-      if (!relativePath || relativePath.startsWith('..')) return
-      callbacks.onFileChange?.(relativePath, changeType)
-      scheduleDiff()
-    }
-
-    watcher
-      .on('add', (path) => handleChange(path, 'add'))
-      .on('change', (path) => handleChange(path, 'change'))
-      .on('unlink', (path) => handleChange(path, 'unlink'))
+    const watcher = repo.watchDiff(callbacks)
     this.watchers.set(sessionId, watcher)
-
-    // Push initial diff immediately so the client sees the starting state.
-    void this.getDiff(sessionId, cwd).then(callbacks.onDiff)
-
     return watcher
   }
 
   watchGitMetadata(sessionId: string, repoRoot: string, callback: () => void): FSWatcher | null {
-    const gitDir = join(resolve(repoRoot), '.git')
-    const paths = [join(gitDir, 'HEAD'), join(gitDir, 'index'), join(gitDir, 'refs', 'heads')]
-    try {
-      const watcher = watch(paths, { persistent: true, ignoreInitial: true })
-      let debounce: ReturnType<typeof setTimeout> | null = null
-      const scheduleCallback = () => {
-        if (debounce) clearTimeout(debounce)
-        debounce = setTimeout(() => callback(), 300)
-      }
-      watcher.on('change', scheduleCallback).on('add', scheduleCallback)
-      this.watchers.set(`${sessionId}:branch`, watcher)
-      return watcher
-    } catch (err) {
-      console.warn(`[WorktreeManager] failed to watch git metadata for ${sessionId}: ${gitDir}`, err)
+    const repo = this.registry.get(repoRoot)
+    if (!repo) {
+      console.warn(`[WorktreeManager] cannot watch git metadata for non-git path: ${repoRoot}`)
       return null
     }
+    const watcher = repo.watchGitMetadata(callback)
+    if (!watcher) return null
+    this.watchers.set(`${sessionId}:branch`, watcher)
+    return watcher
   }
 
   async mergeIntoCurrentBranch(
@@ -263,130 +175,60 @@ export class WorktreeManager {
     sourceBranch: string,
     strategy: 'squash' | 'merge' | 'rebase' = 'squash',
   ): Promise<void> {
-    // 直接把 sourceBranch 合并到当前分支（当前 worktree 已 checkout 的分支）
-    const currentBranch = await this.getCurrentBranch(worktreePath)
-    if (strategy === 'squash') {
-      await this.git(['merge', '--squash', sourceBranch], worktreePath)
-      await this.git(['commit', '-m', `chore: squash merge ${sourceBranch} into ${currentBranch}`], worktreePath)
-    } else if (strategy === 'merge') {
-      await this.git(['merge', '--no-ff', '-m', `Merge ${sourceBranch} into ${currentBranch}`, sourceBranch], worktreePath)
-    } else {
-      await this.git(['rebase', sourceBranch], worktreePath)
-    }
+    const repo = this.registry.get(worktreePath)
+    if (!repo) throw new Error(`not a git repository: ${worktreePath}`)
+    await repo.mergeIntoCurrentBranch(sourceBranch, strategy)
   }
 
   async updateFromBase(sessionId: string, sourceBranch: string, worktreePath: string): Promise<void> {
-    await this.git(['merge', '--no-ff', '-m', `Merge ${sourceBranch} into current branch`, sourceBranch], worktreePath)
+    const repo = this.registry.get(worktreePath)
+    if (!repo) throw new Error(`not a git repository: ${worktreePath}`)
+    await repo.updateFromBase(sourceBranch)
   }
 
   async getGitLog(sessionId: string, limit = 100, offset = 0, cwd?: string, branch?: string): Promise<GitLogResponse> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
-    try {
-      const sep = '||'
-      const fmt = `%H${sep}%h${sep}%s${sep}%an${sep}%ae${sep}%aI${sep}%P${sep}%D`
-      const logArgs = branch
-        ? ['log', branch, '--topo-order', `--skip=${offset}`, `--max-count=${limit}`, `--format=${fmt}`]
-        : ['log', '--all', '--topo-order', `--skip=${offset}`, `--max-count=${limit}`, `--format=${fmt}`]
-      const raw = await this.git(logArgs, worktreePath)
-      const commits: GitCommit[] = raw
-        .trim()
-        .split('\n')
-        .filter(Boolean)
-        .map(line => {
-          const parts = line.split(sep)
-          const hash = parts[0] ?? ''
-          const shortHash = parts[1] ?? ''
-          const message = parts[2] ?? ''
-          const author = parts[3] ?? ''
-          const email = parts[4] ?? ''
-          const date = parts[5] ?? ''
-          const parents = (parts[6] ?? '').trim() ? (parts[6] ?? '').trim().split(' ') : []
-          const decorations = parts[7] ?? ''
-          const refs = decorations
-            .split(',')
-            .map(r => r.trim())
-            .filter(r => r && r !== 'HEAD')
-            .map(r => r.replace(/^HEAD -> /, ''))
-          return { hash, shortHash, message, author, email, date, parents, refs }
-        })
-
-      const head = (await this.git(['rev-parse', 'HEAD'], worktreePath).catch(() => '')).trim()
-      const branches = await this.getGitBranches(sessionId, worktreePath)
-      return { commits, branches, head }
-    } catch {
-      return { commits: [], branches: [], head: '' }
-    }
+    const emptyLog: GitLogResponse = { commits: [], branches: [], head: '' }
+    return (await this.registry.get(worktreePath)?.getGitLog(limit, offset, branch)) ?? emptyLog
   }
 
   async getGitBranches(sessionId: string, cwd?: string): Promise<GitBranch[]> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
-    try {
-      const raw = await this.git(['branch', '-a', '--format=%(refname:short)|%(objectname:short)|%(HEAD)'], worktreePath)
-      return raw
-        .trim()
-        .split('\n')
-        .filter(Boolean)
-        .map(line => {
-          const parts = line.split('|')
-          const name = (parts[0] ?? '').trim()
-          const commit = (parts[1] ?? '').trim()
-          const isCurrent = (parts[2] ?? '').trim() === '*'
-          const isRemote = name.startsWith('remotes/') || name.startsWith('origin/')
-          return { name: name.replace(/^remotes\//, ''), commit, isCurrent, isRemote }
-        })
-        .filter(b => b.name && b.name !== 'HEAD')
-    } catch {
-      return []
-    }
+    return (await this.registry.get(worktreePath)?.getGitBranches()) ?? []
   }
 
   async getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]> {
-    try {
-      const raw = await this.git(['branch', '--format=%(refname:short)|%(HEAD)'])
-      return raw
-        .trim()
-        .split('\n')
-        .filter(Boolean)
-        .map(line => {
-          const parts = line.split('|')
-          const name = (parts[0] ?? '').trim()
-          const isCurrent = (parts[1] ?? '').trim() === '*'
-          return { name, isCurrent }
-        })
-        .filter(b => b.name)
-    } catch {
-      return []
-    }
+    return (await this.registry.get(this.repoRoot)?.getRepoBranches()) ?? []
   }
 
   async commitAll(sessionId: string, message: string, cwd?: string): Promise<void> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
-    await this.git(['add', '-A'], worktreePath)
-    await this.git(['commit', '-m', message], worktreePath)
+    const repo = this.registry.get(worktreePath)
+    if (!repo) throw new Error(`not a git repository: ${worktreePath}`)
+    await repo.commitAll(message)
   }
 
   async discardAll(sessionId: string, cwd?: string): Promise<void> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
-    await this.git(['checkout', '--', '.'], worktreePath)
-    await this.git(['clean', '-fd'], worktreePath)
+    const repo = this.registry.get(worktreePath)
+    if (!repo) throw new Error(`not a git repository: ${worktreePath}`)
+    await repo.discardAll()
   }
 
   async checkoutBranch(sessionId: string, branch: string, createNew = false, cwd?: string): Promise<void> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
-    if (createNew) {
-      await this.git(['checkout', '-b', branch], worktreePath)
-    } else {
-      await this.git(['checkout', branch], worktreePath)
-    }
+    const repo = this.registry.get(worktreePath)
+    if (!repo) throw new Error(`not a git repository: ${worktreePath}`)
+    await repo.checkoutBranch(branch, createNew)
   }
 
   async discardFile(sessionId: string, filePath: string, cwd?: string): Promise<void> {
     const worktreePath = cwd ?? this.getWorktreePath(sessionId)
     const absolutePath = await this.resolveFilePath(filePath, worktreePath)
     this.assertPathInWorktree(worktreePath, absolutePath)
-    const gitCwd = this.isAgentWorktree(worktreePath) ? worktreePath : this.repoRoot
-    await this.git(['checkout', '--', filePath], gitCwd)
-    await this.git(['clean', '-fd', '--', filePath], gitCwd)
+    const repo = this.registry.get(worktreePath)
+    if (!repo) throw new Error(`not a git repository: ${worktreePath}`)
+    await repo.discardFile(filePath)
   }
 
   private assertPathInWorktree(worktreePath: string, filePath: string): string {
@@ -405,20 +247,19 @@ export class WorktreeManager {
 
     try {
       const entries = await readdir(targetPath, { withFileTypes: true })
-      const filtered = entries.filter(entry => {
+      const filtered = entries.filter((entry) => {
         if (entry.name === 'node_modules') return false
         if (entry.name === '.git') return false
         if (entry.name === '.agent-worktrees') return false
         return true
       })
 
-      const nodes: FileNode[] = filtered.map(entry => ({
+      const nodes: FileNode[] = filtered.map((entry) => ({
         name: entry.name,
         path: join(relativePath, entry.name).replace(/\\/g, '/'),
         type: entry.isDirectory() ? 'directory' : 'file',
       }))
 
-      // Sort: directories first, then files, both alphabetically
       nodes.sort((a, b) => {
         if (a.type === b.type) return a.name.localeCompare(b.name)
         return a.type === 'directory' ? -1 : 1
@@ -440,8 +281,7 @@ export class WorktreeManager {
       .catch(() => false)
     if (!stats) throw new Error(`File not found: ${filePath}`)
 
-    const content = await readFile(fullPath, 'utf8')
-    return content
+    return readFile(fullPath, 'utf8')
   }
 
   async writeFileContent(sessionId: string, filePath: string, content: string, cwd?: string): Promise<void> {
@@ -474,17 +314,12 @@ export class WorktreeManager {
       await watcher.close()
     }
     this.watchers.clear()
-  }
-
-  private async git(args: string[], cwd = this.repoRoot): Promise<string> {
-    try {
-      const result = await execa('git', ['-c', 'core.quotepath=false', ...args], { cwd })
-      return result.stdout
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      console.error(`[git] command failed: git ${args.join(' ')} in ${cwd}: ${message}`)
-      throw err
-    }
+    await this.registry.dispose().catch((err) => {
+      console.warn('[WorktreeManager] registry.dispose failed (non-fatal):', err)
+    })
+    await this.detector.dispose().catch((err) => {
+      console.warn('[WorktreeManager] detector.dispose failed (non-fatal):', err)
+    })
   }
 
   private async linkNodeModules(worktreePath: string): Promise<void> {
@@ -499,128 +334,4 @@ export class WorktreeManager {
       // src doesn't exist, skip
     }
   }
-}
-
-function parseFileStatus(output: string): DiffFile[] {
-  if (!output.trim()) return []
-  return output
-    .trim()
-    .split('\n')
-    .flatMap(line => {
-      const parts = line.split('\t')
-      if (parts.length < 2) return []
-      const char = parts[0].charAt(0)
-      const validStatuses = new Set(['A', 'M', 'D', 'R'])
-      const status = validStatuses.has(char) ? (char as DiffFile['status']) : 'M'
-      const path = parts[1] ?? ''
-      if (!path) return []
-      return [{ path, status, additions: 0, deletions: 0 }]
-    })
-}
-
-function parseNumStat(output: string): Map<string, { additions: number; deletions: number }> {
-  const map = new Map<string, { additions: number; deletions: number }>()
-  if (!output.trim()) return map
-  for (const line of output.trim().split('\n')) {
-    const parts = line.split('\t')
-    if (parts.length < 3) continue
-    const additions = parseInt(parts[0] ?? '0') || 0
-    const deletions = parseInt(parts[1] ?? '0') || 0
-    const path = parts.slice(2).join('\t')
-    if (path) map.set(path, { additions, deletions })
-  }
-  return map
-}
-
-function parseStat(stat: string): { additions: number; deletions: number; files: number } {
-  if (!stat.trim()) return { additions: 0, deletions: 0, files: 0 }
-  return {
-    files: parseInt(stat.match(/(\d+) file/)?.[1] ?? '0'),
-    additions: parseInt(stat.match(/(\d+) insertion/)?.[1] ?? '0'),
-    deletions: parseInt(stat.match(/(\d+) deletion/)?.[1] ?? '0'),
-  }
-}
-
-function parseDiffLines(diffOutput: string): FileDiffLine[] {
-  const lines: FileDiffLine[] = []
-  const diffLines = diffOutput.split('\n')
-  let i = 0
-
-  while (i < diffLines.length) {
-    const line = diffLines[i]
-    if (!line.startsWith('@@')) {
-      i++
-      continue
-    }
-
-    // Parse hunk header: @@ -oldStart,oldCount +newStart,newCount @@
-    const match = line.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/)
-    if (!match) {
-      i++
-      continue
-    }
-
-    const oldStart = parseInt(match[1]!)
-    const oldCount = parseInt(match[2] ?? '1')
-    const newStart = parseInt(match[3]!)
-    const newCount = parseInt(match[4] ?? '1')
-
-    let oldLine = oldStart
-    let newLine = newStart
-    i++
-
-    // Collect all lines in this hunk
-    const hunkMinusLines: number[] = [] // old line numbers that were deleted
-    const hunkPlusLines: number[] = []  // new line numbers that were added
-
-    while (i < diffLines.length && !diffLines[i]!.startsWith('@@') && !diffLines[i]!.startsWith('diff --git')) {
-      const dline = diffLines[i]!
-      if (dline.startsWith(' ')) {
-        oldLine++
-        newLine++
-      } else if (dline.startsWith('+')) {
-        hunkPlusLines.push(newLine)
-        newLine++
-      } else if (dline.startsWith('-')) {
-        hunkMinusLines.push(oldLine)
-        oldLine++
-      }
-      i++
-    }
-
-    // Determine types
-    if (hunkMinusLines.length > 0 && hunkPlusLines.length > 0) {
-      // Mixed: some are modifications, remaining are pure additions/deletions
-      const pairCount = Math.min(hunkMinusLines.length, hunkPlusLines.length)
-      for (let j = 0; j < pairCount; j++) {
-        lines.push({ type: 'modified', lineNumber: hunkPlusLines[j]! })
-      }
-      for (let j = pairCount; j < hunkPlusLines.length; j++) {
-        lines.push({ type: 'added', lineNumber: hunkPlusLines[j]! })
-      }
-      // Remaining deletions → mark removed at the position of first plus line (or newStart if no plus)
-      if (hunkPlusLines.length > 0) {
-        for (let j = pairCount; j < hunkMinusLines.length; j++) {
-          lines.push({ type: 'removed', lineNumber: hunkPlusLines[0]! })
-        }
-      } else {
-        // Pure deletion hunk → mark removed at newStart
-        for (let j = 0; j < hunkMinusLines.length; j++) {
-          lines.push({ type: 'removed', lineNumber: newStart })
-        }
-      }
-    } else if (hunkPlusLines.length > 0) {
-      // Pure additions
-      for (const ln of hunkPlusLines) {
-        lines.push({ type: 'added', lineNumber: ln })
-      }
-    } else if (hunkMinusLines.length > 0) {
-      // Pure deletions
-      for (let j = 0; j < hunkMinusLines.length; j++) {
-        lines.push({ type: 'removed', lineNumber: newStart })
-      }
-    }
-  }
-
-  return lines
 }
