@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { fileUpdateBus } from './fileUpdateBus'
+import { fileUpdateBus } from '../fileUpdateBus'
 import type { FileChangeEvent } from '@akari/shared-types'
 
 describe('fileUpdateBus', () => {

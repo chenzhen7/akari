@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { ClaudeOrchestratorAdapter } from './claude-orchestrator.js'
-import { ClaudeAdapter } from './claude.js'
+import { ClaudeOrchestratorAdapter } from '../claude-orchestrator.js'
+import { ClaudeAdapter } from '../claude.js'
 
 describe('ClaudeOrchestratorAdapter', () => {
   const adapter = new ClaudeOrchestratorAdapter()

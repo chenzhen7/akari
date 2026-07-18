@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { createAgentAdapter } from './index.js'
-import { ClaudeAdapter } from './claude.js'
-import { KimiAdapter } from './kimi.js'
-import { ShellAdapter } from './shell.js'
-import { AiderAdapter } from './aider.js'
-import { ClaudeOrchestratorAdapter } from './claude-orchestrator.js'
+import { createAgentAdapter } from '../index.js'
+import { ClaudeAdapter } from '../claude.js'
+import { KimiAdapter } from '../kimi.js'
+import { ShellAdapter } from '../shell.js'
+import { AiderAdapter } from '../aider.js'
+import { ClaudeOrchestratorAdapter } from '../claude-orchestrator.js'
 
 describe('createAgentAdapter', () => {
   it('returns ClaudeAdapter for claude', () => {

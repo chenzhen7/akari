@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { KimiAdapter } from './kimi.js'
-import { SHELL_STARTUP_DELAY_MS } from './base.js'
+import { KimiAdapter } from '../kimi.js'
+import { SHELL_STARTUP_DELAY_MS } from '../base.js'
 
 describe('KimiAdapter', () => {
   const adapter = new KimiAdapter()

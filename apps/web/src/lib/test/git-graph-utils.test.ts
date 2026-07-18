@@ -14,7 +14,7 @@ import {
   PAD_LEFT,
   DOT_R,
   PAD_TOP,
-} from './git-graph-utils'
+} from '../git-graph-utils'
 import type { GitCommit } from '@akari/shared-types'
 
 function makeCommit(overrides: Partial<GitCommit> & { hash: string }): GitCommit {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { getGitRoot } from './git-utils.js'
+import { getGitRoot } from '../git-utils.js'
 
 vi.mock('execa', () => ({
   execa: vi.fn(),

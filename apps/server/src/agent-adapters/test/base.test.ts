@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SHELL_STARTUP_DELAY_MS, BaseAgentAdapter } from './base.js'
+import { SHELL_STARTUP_DELAY_MS, BaseAgentAdapter } from '../base.js'
 
 describe('SHELL_STARTUP_DELAY_MS', () => {
   it('is 800ms', () => {

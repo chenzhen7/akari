@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveAbsoluteFilePath } from './path-utils'
+import { resolveAbsoluteFilePath } from '../path-utils'
 import type { Workspace } from '@akari/shared-types'
 
 describe('resolveAbsoluteFilePath', () => {

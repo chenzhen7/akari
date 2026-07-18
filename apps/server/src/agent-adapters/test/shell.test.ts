@@ -1,20 +1,20 @@
 import { describe, it, expect } from 'vitest'
-import { AiderAdapter } from './aider.js'
+import { ShellAdapter } from '../shell.js'
 
-describe('AiderAdapter', () => {
-  const adapter = new AiderAdapter()
+describe('ShellAdapter', () => {
+  const adapter = new ShellAdapter()
 
   it('has correct metadata', () => {
-    expect(adapter.agentType).toBe('aider')
-    expect(adapter.displayName).toBe('Aider')
+    expect(adapter.agentType).toBe('shell')
+    expect(adapter.displayName).toBe('Shell')
     expect(adapter.requiresTty).toBe(true)
     expect(adapter.stdinSubmitSequence).toBe('\r\n')
     expect(adapter.supportsBypassPermissions).toBe(false)
     expect(adapter.isAutomated).toBe(false)
   })
 
-  it('returns Aider tab label', () => {
-    expect(adapter.getTabLabel()).toBe('Aider')
+  it('returns Shell tab label', () => {
+    expect(adapter.getTabLabel()).toBe('Shell')
   })
 
   it('prepare returns empty command sequence', async () => {

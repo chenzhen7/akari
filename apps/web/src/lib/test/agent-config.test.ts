@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { AGENT_CONFIG, AGENT_TYPES, getAgentConfig } from './agent-config'
+import { AGENT_CONFIG, AGENT_TYPES, getAgentConfig } from '../agent-config'
 import { ClaudeIcon } from '@/components/icons/ClaudeIcon'
 import { KimiIcon } from '@/components/icons/KimiIcon'
 import { Bot, Code2, Terminal } from 'lucide-react'

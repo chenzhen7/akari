@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { dispatchHookEvent } from './hook-dispatcher.js'
-import type { SessionManager } from './session-manager.js'
+import { dispatchHookEvent } from '../hook-dispatcher.js'
+import type { SessionManager } from '../session-manager.js'
 import type { AgentSession, SessionStatus } from '@akari/shared-types'
 
 function createMockSession(status: SessionStatus): AgentSession {

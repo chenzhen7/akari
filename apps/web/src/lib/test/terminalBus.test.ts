@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { terminalBus } from './terminalBus'
+import { terminalBus } from '../terminalBus'
 
 describe('terminalBus', () => {
   it('emits data to subscribed listeners', () => {

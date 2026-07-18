@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createResizeMutex } from './ptyResizeMutex'
+import { createResizeMutex } from '../ptyResizeMutex'
 
 describe('createResizeMutex', () => {
   it('acquires lock on first call', () => {

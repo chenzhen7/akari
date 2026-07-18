@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { CanvasEdgeStore } from './canvas-edge-store.js'
-import { CanvasEdgeRepository } from './db/repositories/canvas-edge.repository.js'
+import { CanvasEdgeStore } from '../canvas-edge-store.js'
+import { CanvasEdgeRepository } from '../db/repositories/canvas-edge.repository.js'
 
-vi.mock('./db/repositories/canvas-edge.repository.js', () => ({
+vi.mock('../db/repositories/canvas-edge.repository.js', () => ({
   CanvasEdgeRepository: vi.fn().mockImplementation(() => ({
     create: vi.fn(),
     delete: vi.fn(),

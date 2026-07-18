@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectLanguage } from './language-utils'
+import { detectLanguage } from '../language-utils'
 
 describe('detectLanguage', () => {
   it('detects TypeScript and TSX', () => {
