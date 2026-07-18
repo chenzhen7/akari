@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, shell, Menu, ipcMain, clipboard } from 'electron'
+import log from 'electron-log/main'
 import path from 'node:path'
 import fs from 'node:fs'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -21,6 +22,17 @@ let serverProcess: ChildProcess | null = null
 let serverPort: number | null = null
 let windowManager: WindowManager | null = null
 let windowStateStore: WindowStateStore | null = null
+
+process.on('uncaughtException', (err) => {
+  log.error('Uncaught exception:', err)
+  app.quit()
+})
+
+process.on('unhandledRejection', (reason) => {
+  log.error('Unhandled rejection:', reason)
+})
+
+log.transports.file.level = 'info'
 
 function getServerUrl(): string {
   if (isDev) {
@@ -106,7 +118,7 @@ async function startServer(): Promise<number> {
       if (settled) return
       const chunk = data.toString()
       stdout += chunk
-      console.log('[server]', chunk.trim())
+      log.info('[server]', chunk.trim())
       const match = /AKARI_PORT=(\d+)/.exec(stdout)
       if (match) {
         clearTimeout(timeout)
@@ -120,7 +132,7 @@ async function startServer(): Promise<number> {
     proc.stderr?.on('data', (data: Buffer) => {
       const chunk = data.toString()
       stderr += chunk
-      console.error('[server]', chunk.trim())
+      log.error('[server]', chunk.trim())
     })
 
     proc.on('error', (err) => {
@@ -195,6 +207,10 @@ function registerGlobalIpcHandlers(): void {
 
   ipcMain.handle('clipboard:writeText', (_event, text: string) => {
     clipboard.writeText(text)
+  })
+
+  ipcMain.handle('app:get-log-path', () => {
+    return log.transports.file.getFile().path
   })
 }
 
@@ -281,6 +297,6 @@ app.on('window-all-closed', () => {
 })
 
 void main().catch((err) => {
-  console.error(err)
+  log.error(err)
   app.quit()
 })

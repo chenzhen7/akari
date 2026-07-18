@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld('electron', {
   clipboard: {
     writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
   },
+  app: {
+    getLogPath: () => ipcRenderer.invoke('app:get-log-path'),
+  },
   workspace: {
     openWindow: (workspaceId: string, workspaceName?: string) => ipcRenderer.invoke('workspace:open-window', workspaceId, workspaceName),
     getWindowId: () => ipcRenderer.invoke('workspace:get-window-id'),
