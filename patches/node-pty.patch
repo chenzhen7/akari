@@ -1,0 +1,31 @@
+diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
+index 8c4fca9022a6d6f015bca87f61625cde2278f428..7f8bc983a344e438ffc4f0f3e92b5f7284779191 100644
+--- a/lib/conpty_console_list_agent.js
++++ b/lib/conpty_console_list_agent.js
+@@ -5,12 +5,25 @@
+  * This module fetches the console process list for a particular PID. It must be
+  * called from a different process (child_process.fork) as there can only be a
+  * single console attached to a process.
++ *
++ * [Akari patch] Reference community workaround for Electron/GUI apps on Windows:
++ * `getConsoleProcessList` internally calls `AttachConsole`, which fails when the
++ * process has no attached Windows console (e.g. an Electron app). Fall back to
++ * returning just the shell PID so the cleanup can continue gracefully.
++ * See: https://github.com/openai/codex/issues/25272
+  */
+ Object.defineProperty(exports, "__esModule", { value: true });
+ var utils_1 = require("./utils");
+ var getConsoleProcessList = utils_1.loadNativeModule('conpty_console_list').module.getConsoleProcessList;
+ var shellPid = parseInt(process.argv[2], 10);
+-var consoleProcessList = getConsoleProcessList(shellPid);
++var consoleProcessList;
++try {
++    consoleProcessList = getConsoleProcessList(shellPid);
++}
++catch (_a) {
++    // AttachConsole failed — no console available. Return shell PID as fallback.
++    consoleProcessList = [shellPid];
++}
+ process.send({ consoleProcessList: consoleProcessList });
+ process.exit(0);
+ //# sourceMappingURL=conpty_console_list_agent.js.map

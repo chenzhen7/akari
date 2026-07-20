@@ -7,6 +7,9 @@ settings:
 overrides:
   '@electron/get': ^3.1.0
 
+patchedDependencies:
+  node-pty: b2f5b2142ab04a6e655ac06a47ec66671f596f839b8fc81f13bc6a3c61e60612
+
 importers:
 
   .:
@@ -102,7 +105,7 @@ importers:
         version: 5.1.11
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0
+        version: 1.1.0(patch_hash=b2f5b2142ab04a6e655ac06a47ec66671f596f839b8fc81f13bc6a3c61e60612)
       simple-git:
         specifier: ^3.36.0
         version: 3.36.0
@@ -9926,7 +9929,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0:
+  node-pty@1.1.0(patch_hash=b2f5b2142ab04a6e655ac06a47ec66671f596f839b8fc81f13bc6a3c61e60612):
     dependencies:
       node-addon-api: 7.1.1
 

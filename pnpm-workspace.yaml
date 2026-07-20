@@ -12,3 +12,5 @@ allowBuilds:
   sharp: true
 overrides:
   '@electron/get': ^3.1.0
+patchedDependencies:
+  node-pty: patches/node-pty.patch
