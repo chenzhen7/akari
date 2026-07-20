@@ -17,6 +17,7 @@ import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { Toaster } from 'sonner'
 import { useResizablePanels } from '@/hooks/useResizablePanels'
 import { cn } from '@/lib/utils'
+import { runWhenIdle } from '@/lib/idle'
 import { GripVertical, LayoutGrid } from 'lucide-react'
 
 function ResizeHandle({
@@ -85,14 +86,13 @@ export function AppShell() {
 
   // 后台预加载 Monaco 编辑器，减少首次打开文件/Diff 的等待时间
   useEffect(() => {
-    const timer = setTimeout(() => {
+    return runWhenIdle(() => {
       void import('@monaco-editor/react')
         .then(m => m.loader?.init?.())
-        .catch(() => {
-          // 预加载失败不影响主流程，打开文件时会再次尝试加载
+        .catch((err: unknown) => {
+          console.debug('[AppShell] Monaco preload failed:', err)
         })
-    }, 500)
-    return () => clearTimeout(timer)
+    })
   }, [])
 
   const toggleLeft = () => {

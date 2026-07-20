@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { TerminalPanel } from './TerminalPanel'
 import { DiffViewer } from '@/components/diff/DiffViewer'
 import { FileEditor } from '@/components/editor/FileEditor'
@@ -96,6 +96,32 @@ export const TabContent = memo(function TabContent({ sessionId, send }: TabConte
     }),
   )
 
+  const [mountedTabIds, setMountedTabIds] = useState<Set<string>>(() => new Set())
+
+  useEffect(() => {
+    setMountedTabIds(prev => {
+      const validTabIds = new Set(tabs.map(tab => tab.id))
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (validTabIds.has(id)) {
+          next.add(id)
+        }
+      }
+      if (activeTabId) {
+        next.add(activeTabId)
+      }
+      if (next.size === prev.size && [...next].every(id => prev.has(id))) {
+        return prev
+      }
+      return next
+    })
+  }, [activeTabId, tabs])
+
+  const visibleTabs = useMemo(
+    () => tabs.filter(tab => tab.id === activeTabId || mountedTabIds.has(tab.id)),
+    [activeTabId, mountedTabIds, tabs],
+  )
+
   if (tabs.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -107,7 +133,7 @@ export const TabContent = memo(function TabContent({ sessionId, send }: TabConte
 
   return (
     <div className="relative h-full w-full">
-      {tabs.map(tab => (
+      {visibleTabs.map(tab => (
         <TabPane
           key={tab.id}
           sessionId={sessionId}

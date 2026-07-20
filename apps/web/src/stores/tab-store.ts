@@ -19,6 +19,13 @@ export const useTabStore = create<TabStore>(() => ({
   },
 
   activateTab: (sessionId, tabId) => {
+    useSessionStore.setState(state => ({
+      sessions: state.sessions.map(s => {
+        if (s.id !== sessionId || !s.tabs.some(tab => tab.id === tabId)) return s
+        return { ...s, activeTabId: tabId }
+      }),
+    }))
+
     sendWsMessage('tab:activate', { sessionId, tabId })
   },
 

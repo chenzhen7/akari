@@ -1,7 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { handleServerMessage } from '@/stores/server-message-handler'
 import { setWebSocket, useConnectionStore, type ConnectionStatus } from '@/stores/connection-store'
-import { useSessionStore } from '@/stores/session-store'
 import { useWindowStore } from '@/stores/window-store'
 import type { ClientMessage, ServerMessage } from '@akari/shared-types'
 
@@ -48,7 +47,6 @@ export function useWebSocket() {
         ws.send(JSON.stringify({ event: 'subscribe:workspace', payload: { workspaceId: currentWorkspaceId } } satisfies ClientMessage))
       }
 
-      useSessionStore.getState().fetchCanvasEdges()
       if (reconnectTimer) {
         clearTimeout(reconnectTimer)
         reconnectTimer = null

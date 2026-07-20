@@ -1,4 +1,5 @@
 import { GitBranch, FileCode, Info, FolderTree } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session-store'
 import { useUIStore } from '@/stores/ui-store'
@@ -11,7 +12,9 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useShallow } from 'zustand/react/shallow'
 
-const TABS: { id: 'git-graph' | 'diff' | 'info' | 'explorer'; label: string; icon: React.ElementType }[] = [
+type RightTabId = 'git-graph' | 'diff' | 'info' | 'explorer'
+
+const TABS: { id: RightTabId; label: string; icon: React.ElementType }[] = [
   { id: 'explorer', label: '文件', icon: FolderTree },
   { id: 'diff', label: '变更', icon: FileCode },
   { id: 'git-graph', label: 'Git Graph', icon: GitBranch },
@@ -31,6 +34,24 @@ export function RightSidebar({ sessionId }: RightSidebarProps) {
   const session = useSessionStore(
     useShallow(s => sessionId ? s.sessions.find(ses => ses.id === sessionId) : undefined),
   )
+  const sessionKey = session?.id ?? '__empty__'
+  const sessionKeyRef = useRef(sessionKey)
+  const [mountedPanels, setMountedPanels] = useState<Set<RightTabId>>(() => new Set([activeRightTab]))
+
+  useEffect(() => {
+    if (sessionKeyRef.current !== sessionKey) {
+      sessionKeyRef.current = sessionKey
+      setMountedPanels(new Set([activeRightTab]))
+      return
+    }
+
+    setMountedPanels(prev => {
+      if (prev.has(activeRightTab)) return prev
+      return new Set([...prev, activeRightTab])
+    })
+  }, [activeRightTab, sessionKey])
+
+  const shouldRenderPanel = (id: RightTabId): boolean => activeRightTab === id || mountedPanels.has(id)
 
   const handleSelectFile = (path: string) => {
     if (!session) return
@@ -88,21 +109,29 @@ export function RightSidebar({ sessionId }: RightSidebarProps) {
       <div className="relative flex-1 overflow-hidden">
         {session ? (
           <>
-            <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'explorer' && 'hidden')}>
-              <ExplorerPanel session={session} onOpenFile={handleOpenFile} />
-            </div>
-            <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'diff' && 'hidden')}>
-              <DiffFileList
-                session={session}
-                onSelectFile={handleSelectFile}
-              />
-            </div>
-            <div className={cn('absolute inset-0', activeRightTab !== 'git-graph' && 'hidden')}>
-              <GitGraphPanel sessionId={session.id} />
-            </div>
-            <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'info' && 'hidden')}>
-              <SessionInfoPanel session={session} />
-            </div>
+            {shouldRenderPanel('explorer') && (
+              <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'explorer' && 'hidden')}>
+                <ExplorerPanel session={session} onOpenFile={handleOpenFile} />
+              </div>
+            )}
+            {shouldRenderPanel('diff') && (
+              <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'diff' && 'hidden')}>
+                <DiffFileList
+                  session={session}
+                  onSelectFile={handleSelectFile}
+                />
+              </div>
+            )}
+            {shouldRenderPanel('git-graph') && (
+              <div className={cn('absolute inset-0', activeRightTab !== 'git-graph' && 'hidden')}>
+                <GitGraphPanel sessionId={session.id} />
+              </div>
+            )}
+            {shouldRenderPanel('info') && (
+              <div className={cn('absolute inset-0 overflow-hidden', activeRightTab !== 'info' && 'hidden')}>
+                <SessionInfoPanel session={session} />
+              </div>
+            )}
           </>
         ) : (
           <div className="flex h-full items-center justify-center text-muted-foreground">

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentSession, DiffFile } from '@akari/shared-types'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -41,6 +41,7 @@ interface DiffFileListProps {
 export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   const diffFiles = session.diffFiles ?? []
   const hasDiff = diffFiles.length > 0
+  const initialRefreshSessionRef = useRef<string | null>(null)
 
   const sortedFiles = useMemo(
     () => [...diffFiles].sort((a, b) => a.path.localeCompare(b.path)),
@@ -146,6 +147,20 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
 
   const activeTab = session.tabs.find(t => t.id === session.activeTabId)
   const selectedPath = activeTab?.type === 'diff' ? (activeTab.filePath ?? null) : null
+
+  useEffect(() => {
+    if (session.diffFiles !== undefined) return
+    if (initialRefreshSessionRef.current === session.id) return
+    if (session.diffSummary.additions === 0 && session.diffSummary.deletions === 0) return
+    if (session.status === 'initializing' || session.status === 'archived') return
+
+    initialRefreshSessionRef.current = session.id
+    apiClient.post(`/sessions/${session.id}/diff-refresh`, undefined, { toast: false })
+      .catch(err => {
+        console.error('[DiffFileList] initial diff refresh failed:', err)
+        initialRefreshSessionRef.current = null
+      })
+  }, [session.diffFiles, session.diffSummary.additions, session.diffSummary.deletions, session.id, session.status])
 
   return (
     <div className="flex h-full w-full flex-col">
