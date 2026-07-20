@@ -38,8 +38,10 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   const isDirty = content !== originalContent
   const contentRef = useRef(content)
   const isDirtyRef = useRef(isDirty)
+  const originalContentRef = useRef(originalContent)
   contentRef.current = content
   isDirtyRef.current = isDirty
+  originalContentRef.current = originalContent
   const { resolvedTheme } = useTheme()
   const monacoTheme = resolvedTheme === 'dark' ? 'vs-dark' : 'light'
 
@@ -122,19 +124,6 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     }
   }, [diffLines, applyDiffDecorations])
 
-  // Cleanup on unmount or filePath change
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimer.current) {
-        clearTimeout(autoSaveTimer.current)
-        autoSaveTimer.current = null
-      }
-      decorationsRef.current?.clear()
-      editorRef.current = null
-      monacoRef.current = null
-    }
-  }, [])
-
   // Listen for external file changes broadcast from the shared watcher
   useEffect(() => {
     return fileUpdateBus.on(sessionId, (event) => {
@@ -178,6 +167,29 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   // Auto-save on content change (debounced)
   const saveRef = useRef(doSave)
   saveRef.current = doSave
+
+  // Cleanup on unmount or filePath change. Flush pending edits before clearing
+  // the debounce timer so switching tabs cannot drop the latest keystrokes.
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer.current) {
+        clearTimeout(autoSaveTimer.current)
+        autoSaveTimer.current = null
+      }
+      if (isDirtyRef.current && contentRef.current !== originalContentRef.current) {
+        apiClient.post(`/sessions/${sessionId}/file-content`, {
+          path: filePath,
+          content: contentRef.current,
+        }, { toast: '保存失败' })
+          .catch((err: unknown) => {
+            console.error('[FileEditor] flush save on unmount failed:', err)
+          })
+      }
+      decorationsRef.current?.clear()
+      editorRef.current = null
+      monacoRef.current = null
+    }
+  }, [filePath, sessionId])
 
   useEffect(() => {
     if (!isDirty || loading || error) return

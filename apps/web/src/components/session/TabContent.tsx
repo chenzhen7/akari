@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useMemo } from 'react'
 import { TerminalPanel } from './TerminalPanel'
 import { DiffViewer } from '@/components/diff/DiffViewer'
 import { FileEditor } from '@/components/editor/FileEditor'
@@ -96,30 +96,9 @@ export const TabContent = memo(function TabContent({ sessionId, send }: TabConte
     }),
   )
 
-  const [mountedTabIds, setMountedTabIds] = useState<Set<string>>(() => new Set())
-
-  useEffect(() => {
-    setMountedTabIds(prev => {
-      const validTabIds = new Set(tabs.map(tab => tab.id))
-      const next = new Set<string>()
-      for (const id of prev) {
-        if (validTabIds.has(id)) {
-          next.add(id)
-        }
-      }
-      if (activeTabId) {
-        next.add(activeTabId)
-      }
-      if (next.size === prev.size && [...next].every(id => prev.has(id))) {
-        return prev
-      }
-      return next
-    })
-  }, [activeTabId, tabs])
-
-  const visibleTabs = useMemo(
-    () => tabs.filter(tab => tab.id === activeTabId || mountedTabIds.has(tab.id)),
-    [activeTabId, mountedTabIds, tabs],
+  const activeTab = useMemo(
+    () => tabs.find(tab => tab.id === activeTabId) ?? null,
+    [activeTabId, tabs],
   )
 
   if (tabs.length === 0) {
@@ -133,20 +112,20 @@ export const TabContent = memo(function TabContent({ sessionId, send }: TabConte
 
   return (
     <div className="relative h-full w-full">
-      {visibleTabs.map(tab => (
+      {activeTab && (
         <TabPane
-          key={tab.id}
+          key={activeTab.id}
           sessionId={sessionId}
-          type={tab.type}
-          terminalId={tab.terminalId}
-          filePath={tab.filePath}
-          isActive={tab.id === activeTabId}
+          type={activeTab.type}
+          terminalId={activeTab.terminalId}
+          filePath={activeTab.filePath}
+          isActive
           send={send}
-          diffFiles={tab.type === 'diff' ? diffFiles : undefined}
+          diffFiles={activeTab.type === 'diff' ? diffFiles : undefined}
           workspaceId={workspaceId}
           worktreePath={worktreePath}
         />
-      ))}
+      )}
     </div>
   )
 })
