@@ -42,7 +42,7 @@ const DARK_THEME = {
 }
 
 const LIGHT_THEME = {
-  background: '#fafafa',
+  background: '#ffffff',
   foreground: '#333333',
   cursor: '#333333',
   selectionBackground: '#add6ff',

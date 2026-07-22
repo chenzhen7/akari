@@ -152,7 +152,7 @@ export function AppShell() {
           />
 
           {/* Middle */}
-          <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl border bg-[var(--terminal-background)] shadow-sm">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-t-xl border bg-[var(--terminal-background)] shadow-md">
             {globalViewMode === 'canvas' && CANVAS_ENABLED ? (
               <CanvasView />
             ) : globalViewMode === 'kanban' ? (
