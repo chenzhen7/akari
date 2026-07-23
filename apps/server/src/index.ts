@@ -7,9 +7,9 @@ import { dirname, join, resolve } from 'node:path'
 import fs from 'node:fs'
 import type { ServerMessage } from '@akari/shared-types'
 import { createSessionManager, type SessionManager } from './session-manager.js'
-import { WorkspaceManager } from './workspace-manager.js'
-import { CanvasEdgeStore } from './canvas-edge-store.js'
-import { WorkspaceSessionRegistry } from './workspace-session-registry.js'
+import { WorkspaceService } from './services/workspace.service.js'
+import { CanvasEdgeStore } from './infrastructure/db/canvas-edge-store.js'
+import { WorkspaceSessionRegistryService } from './services/workspace-session-registry.service.js'
 
 import websocketPlugin from './plugins/websocket.js'
 import staticPlugin from './plugins/static.js'
@@ -40,7 +40,7 @@ await fastify.register(fastifyCors, { origin: true })
 await fastify.register(fastifyWebsocket)
 
 const db = new Database(join(DATA_DIR, 'akari.db'))
-const workspaceManager = new WorkspaceManager(db)
+const workspaceManager = new WorkspaceService(db)
 await workspaceManager.migrate()
 await workspaceManager.ensureDefaultWorkspace(REPO_ROOT)
 
@@ -81,7 +81,7 @@ async function getOrCreateSessionManager(workspaceId: string): Promise<SessionMa
   return manager
 }
 
-const workspaceSessionRegistry = new WorkspaceSessionRegistry({
+const workspaceSessionRegistry = new WorkspaceSessionRegistryService({
   getOrCreateSessionManager,
   sessionManagers: workspaceSessionManagers,
   ttlMs: 30000,

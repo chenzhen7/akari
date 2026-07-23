@@ -40,96 +40,102 @@ akari/
 │   │   ├── tsconfig.json
 │   │   └── src/
 │   │       ├── index.ts               # 入口：依赖组装、插件注册、服务启动
-│   │       ├── session-manager.ts     # SessionManager（SQLite + 状态机）
-│   │       ├── worktree-manager.ts    # WorktreeManager（git worktree + chokidar diff）
-│   │       ├── terminal-mux.ts        # TerminalMultiplexer（node-pty + 环形 Buffer）
-│   │       ├── hook-dispatcher.ts     # HookDispatcher（HTTP Hook 分发）
-│   │       ├── workspace-manager.ts   # WorkspaceManager（工作区管理）
-│   │       ├── settings-store.ts      # SettingsStore（设置持久化）
-│   │       ├── git-utils.ts           # Git 工具函数
-│   │       ├── canvas-edge-store.ts   # CanvasEdgeStore（画布连线持久化）
-│   │       ├── db/
-│   │       │   └── repositories/
-│   │       │       ├── session.repository.ts    # 会话表数据访问
-│   │       │       ├── workspace.repository.ts  # 工作区表数据访问
-│   │       │       ├── settings.repository.ts   # 设置表数据访问
-│   │       │       └── canvas-edge.repository.ts # 画布连线表数据访问
+│   │       ├── session-manager.ts     # SessionManager Facade（组合 Service / 事件连线）
+│   │       ├── core/                  # 领域核心（状态机、工厂）
+│   │       │   ├── session-state-machine.ts   # 会话状态机 + validateTransition
+│   │       │   └── session-factory.ts         # AgentSession / MainSession 工厂
+│   │       ├── services/              # 业务编排层（可单测、依赖接口）
+│   │       │   ├── session-lifecycle.service.ts
+│   │       │   ├── tab.service.ts
+│   │       │   ├── terminal.service.ts
+│   │       │   ├── worktree.service.ts
+│   │       │   ├── git-query.service.ts
+│   │       │   ├── workspace.service.ts
+│   │       │   ├── workspace-session-registry.service.ts
+│   │       │   └── hook-dispatcher.service.ts
+│   │       ├── infrastructure/        # 基础设施（实现细节）
+│   │       │   ├── db/
+│   │       │   │   ├── canvas-edge-store.ts
+│   │       │   │   ├── settings-store.ts
+│   │       │   │   └── repositories/
+│   │       │   │       ├── session.repository.ts
+│   │       │   │       ├── workspace.repository.ts
+│   │       │   │       ├── settings.repository.ts
+│   │       │   │       └── canvas-edge.repository.ts
+│   │       │   ├── git/
+│   │       │   │   ├── git-command-runner.ts
+│   │       │   │   ├── git-repository.ts
+│   │       │   │   ├── git-repository-registry.ts
+│   │       │   │   ├── git-repository-detector.ts
+│   │       │   │   └── git-utils.ts
+│   │       │   ├── pty/
+│   │       │   │   └── terminal-multiplexer.ts
+│   │       │   └── fs/
+│   │       │       └── file-system.service.ts
 │   │       ├── types/
-│   │       │   └── fastify.d.ts       # Fastify 装饰器类型声明（共享依赖类型）
+│   │       │   └── fastify.d.ts       # Fastify 装饰器类型声明
 │   │       ├── plugins/
 │   │       │   ├── websocket.ts       # WebSocket 注册与客户端消息处理
 │   │       │   └── static.ts          # SPA static fallback
-│   │       ├── routes/
-│   │       │   ├── health.ts          # GET /health
-│   │       │   ├── settings.ts        # /settings
-│   │       │   ├── repo.ts            # /repo/branches
-│   │       │   ├── sessions.ts        # /sessions/*
-│   │       │   ├── git.ts             # /sessions/:id/git/*
-│   │       │   ├── files.ts           # /sessions/:id/files、/sessions/:id/file-content
-│   │       │   ├── diff.ts            # /sessions/:id/diff-*
-│   │       │   ├── terminal.ts        # /sessions/:id/terminal-buffer
-│   │       │   ├── tabs.ts            # /sessions/:id/tabs/*
-│   │       │   ├── workspace.ts       # /workspaces/*
-│   │       │   ├── canvas.ts          # /canvas/edges
-│   │       │   └── hooks.ts           # /sessions/:id/hooks、/broadcast
+│   │       ├── routes/                # HTTP/WebSocket 入口（通过 SessionManager Facade 调用）
+│   │       │   ├── health.ts
+│   │       │   ├── settings.ts
+│   │       │   ├── repo.ts
+│   │       │   ├── sessions.ts
+│   │       │   ├── git.ts
+│   │       │   ├── files.ts
+│   │       │   ├── diff.ts
+│   │       │   ├── terminal.ts
+│   │       │   ├── tabs.ts
+│   │       │   ├── workspace.ts
+│   │       │   ├── canvas.ts
+│   │       │   └── hooks.ts
 │   │       └── agent-adapters/        # AgentAdapter 接口 + 各品牌实现
-│   │           ├── base.ts            # AgentAdapter 接口 + PtyCommand / AgentLaunchOptions 类型
-│   │           ├── claude.ts          # ClaudeAdapter（注入 .claude/settings.local.json Hook 配置）
-│   │           ├── claude-orchestrator.ts # Claude Orchestrator 变体
-│   │           ├── kimi.ts            # KimiAdapter
-│   │           ├── aider.ts           # AiderAdapter
-│   │           ├── shell.ts           # ShellAdapter（未知 agentType 的默认回退）
-│   │           └── index.ts           # createAgentAdapter() 工厂
+│   │           ├── base.ts
+│   │           ├── claude.ts
+│   │           ├── claude-orchestrator.ts
+│   │           ├── kimi.ts
+│   │           ├── aider.ts
+│   │           ├── shell.ts
+│   │           └── index.ts
 │   ├── desktop/                       # Electron 桌面端
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   ├── electron-builder.yml       # NSIS / portable 打包配置
 │   │   ├── src/
-│   │   │   ├── main.ts                # Electron 主进程（启动后端 + 加载前端）
-│   │   │   └── preload.ts             # 预加载脚本（暴露最小 API）
+│   │   │   ├── main.ts                # Electron 主进程
+│   │   │   └── preload.ts             # 预加载脚本
 │   │   └── dist/                      # tsc 输出
-│   └── web/                           # 前端
+│   └── web/                           # 前端（Feature/Module 架构）
 │       ├── package.json
-│       ├── vite.config.ts             # 含 /api 和 /ws 反向代理
+│       ├── vite.config.ts             # 含 /api 和 /ws 反向代理 + alias
 │       ├── tsconfig.json / app / node
 │       ├── index.html
 │       └── src/
-│           ├── types/index.ts         # 重新导出 @akari/shared-types
-│           ├── stores/session-store.ts  # 会话核心状态（列表、看板/画布位置、Git Log、选中状态）
-│           ├── stores/ui-store.ts       # UI 状态（对话框、右侧面板、命令中心）
-│           ├── stores/connection-store.ts # WebSocket 连接、终端创建/输入
-│           ├── stores/tab-store.ts        # 标签创建/关闭/激活/排序
-│           ├── stores/server-message-handler.ts # WebSocket 消息分发
-│           ├── stores/workspace-store.ts  # 工作区状态管理
-│           ├── hooks/
-│           │   ├── useWebSocket.ts    # 连接管理 + 自动重连（指数退避）
-│           │   └── useResizablePanels.ts # 可拖拽分栏
-│           ├── lib/
-│           │   ├── utils.ts           # cn() 等工具函数
-│           │   ├── api.ts             # API 配置（API_BASE、parseOkResponse）
-│           │   ├── api-client.ts      # 统一 API 客户端（get/post/patch/delete）
-│           │   ├── feature-flags.ts   # 功能开关（CANVAS_ENABLED 等）
-│           │   ├── agent-config.ts    # Agent 品牌统一配置（图标、颜色、显示名、权限绕过）
-│           │   ├── terminalBus.ts     # 终端事件总线（模块级保活）
-│           │   ├── fileUpdateBus.ts   # 文件更新事件总线
-│           │   ├── ptyResizeMutex.ts  # 终端 resize 互斥锁
-│           │   └── git-graph-utils.ts # Git 图布局算法
-│           └── components/
-│               ├── canvas/            # CanvasView + SessionNode + FlowEdge + CanvasContextMenu
-│               ├── kanban/            # KanbanView + KanbanCard + KanbanColumn
-│               ├── session/           # SessionSidebar + TerminalPanel + SessionInfoPanel + TaskPanel + MiddleTabBar + TabContent + DeleteSessionDialog
-│               ├── diff/              # DiffViewer（Monaco DiffEditor）+ DiffFileList
-│               ├── git/               # GitGraphPanel + GitContextMenu + GitCommitDialog + GitMergeDialog + GitGraphSvg + GitGraphRow
-│               ├── command-center/    # CommandCenter（广播调后端 API）
-│               ├── create-session/    # CreateSessionDialog（含 agentType 选择）
-│               ├── layout/            # AppShell + TopNav + RightSidebar + SessionContextMenu
-│               ├── settings/          # SettingsDialog
-│               ├── workspace/         # WorkspaceSelector
-│               ├── explorer/          # ExplorerPanel + FileTreeNode
-│               ├── editor/            # FileEditor
-│               ├── icons/             # ClaudeIcon
-│               ├── theme-provider.tsx # 主题提供者
-│               └── ui/                # shadcn/ui 组件
+│           ├── app/
+│           │   ├── App.tsx            # 应用根组件
+│           │   └── main.tsx           # 渲染入口
+│           ├── features/              # 按功能模块组织
+│           │   ├── session/           # 会话相关组件、store、lib
+│           │   ├── terminal/          # 终端连接 store、terminalBus
+│           │   ├── git/               # Git 图组件 + git-graph-utils
+│           │   ├── diff/              # Diff 查看器
+│           │   ├── explorer/          # 文件树 + 编辑器 + file-tree-store
+│           │   ├── kanban/            # 看板视图
+│           │   ├── canvas/            # 画布视图
+│           │   ├── workspace/         # 工作区选择器 + store
+│           │   ├── command-center/    # 广播命令中心
+│           │   ├── settings/          # 设置对话框
+│           │   └── layout/            # AppShell、TopNav、Sidebar 等布局组件
+│           └── shared/                # 跨 feature 的通用能力
+│               ├── components/
+│               │   ├── ui/            # shadcn/ui 组件
+│               │   ├── icons/         # ClaudeIcon、KimiIcon
+│               │   └── theme-provider.tsx
+│               ├── lib/               # 通用工具（api、utils、toast、agent-config 等）
+│               ├── hooks/             # 通用 hooks
+│               ├── stores/            # 跨 feature 的 store（ui-store、window-store 等）
+│               └── types/             # 通用类型
 ├── packages/
 │   └── shared-types/                  # 前后端共享类型包
 │       ├── package.json

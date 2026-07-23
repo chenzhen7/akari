@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { dispatchHookEvent } from '../hook-dispatcher.js'
+import { dispatchHookEvent } from '../services/hook-dispatcher.service.js'
 import type { SessionManager } from '../session-manager.js'
 import type { AgentSession, SessionStatus } from '@akari/shared-types'
 

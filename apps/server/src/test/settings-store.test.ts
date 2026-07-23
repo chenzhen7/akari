@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { SettingsStore } from '../settings-store.js'
-import { SettingsRepository } from '../db/repositories/settings.repository.js'
+import { SettingsStore } from '../infrastructure/db/settings-store.js'
+import { SettingsRepository } from '../infrastructure/db/repositories/settings.repository.js'
 
-vi.mock('../db/repositories/settings.repository.js', () => ({
+vi.mock('../infrastructure/db/repositories/settings.repository.js', () => ({
   SettingsRepository: vi.fn().mockImplementation(() => ({
     get: vi.fn(),
     set: vi.fn(),

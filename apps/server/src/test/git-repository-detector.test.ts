@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { resolve, join } from 'node:path'
-import { GitRepositoryDetector } from '../git-repository-detector.js'
+import { GitRepositoryDetector } from '../infrastructure/git/git-repository-detector.js'
 
 vi.mock('node:fs', () => ({
   existsSync: vi.fn(),

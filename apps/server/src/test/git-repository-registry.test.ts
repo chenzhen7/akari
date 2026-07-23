@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { GitRepositoryRegistry } from '../git-repository-registry.js'
+import { GitRepositoryRegistry } from '../infrastructure/git/git-repository-registry.js'
 
 describe('GitRepositoryRegistry', () => {
   const detector = {

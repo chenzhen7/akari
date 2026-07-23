@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { GitRepository } from '../git-repository.js'
+import { GitRepository } from '../infrastructure/git/git-repository.js'
 
 const run = vi.fn()
 const runner = { run } as unknown as import('../git-command-runner.js').GitCommandRunner

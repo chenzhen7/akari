@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { GitCommandRunner, GitError } from '../git-command-runner.js'
+import { GitCommandRunner, GitError } from '../infrastructure/git/git-command-runner.js'
 
 const execa = vi.fn()
 

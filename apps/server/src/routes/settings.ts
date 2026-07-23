@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { SettingsStore } from '../settings-store.js'
+import { SettingsStore } from '../infrastructure/db/settings-store.js'
 
 export default async function settingsRoutes(fastify: FastifyInstance) {
   const settingsStore = new SettingsStore(fastify.db)

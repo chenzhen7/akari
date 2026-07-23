@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { HookEvent } from '@akari/shared-types'
-import { dispatchHookEvent } from '../hook-dispatcher.js'
+import { dispatchHookEvent } from '../services/hook-dispatcher.service.js'
 
 export default async function hooksRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string }; Body: HookEvent }>(
