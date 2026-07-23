@@ -159,7 +159,7 @@ export function AppShell() {
             )}
             style={{ width: rightCollapsed ? '0px' : `${rightWidth}%` }}
           >
-            <RightSidebar sessionId={activeSessionId} />
+            <RightSidebar sessionId={activeSessionId ?? undefined} />
           </div>
         </div>
         <CommandCenter />
