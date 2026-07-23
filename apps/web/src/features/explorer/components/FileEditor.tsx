@@ -1,19 +1,14 @@
-import { useState, useEffect, lazy, Suspense, useCallback, useRef, memo } from 'react'
-import { Loader2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, memo } from 'react'
+import { Editor as MonacoEditor } from '@monaco-editor/react'
 import { toast } from '@/shared/lib/toast'
 import type { FileDiffLine } from '@akari/shared-types'
 import type { editor } from 'monaco-editor'
 import { apiClient } from '@/shared/lib/api-client'
-import { useTheme } from '@/shared/components/theme-provider'
 import { detectLanguage } from '@/shared/lib/language-utils'
-import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
-import { resolveAbsoluteFilePath } from '@/shared/lib/path-utils'
 import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
-import { useShallow } from 'zustand/react/shallow'
-
-const MonacoEditor = lazy(() =>
-  import('@monaco-editor/react').then(m => ({ default: m.Editor }))
-)
+import { useMonacoTheme } from '@/shared/hooks/useMonacoTheme'
+import { useAbsoluteFilePath } from '@/shared/hooks/useAbsoluteFilePath'
+import { EditorContainer } from '@/shared/components/EditorContainer'
 
 const AUTO_SAVE_DELAY = 800
 
@@ -45,8 +40,7 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   isDirtyRef.current = isDirty
   originalContentRef.current = originalContent
   isActiveRef.current = isActive
-  const { resolvedTheme } = useTheme()
-  const monacoTheme = resolvedTheme === 'dark' ? 'vs-dark' : 'light'
+  const monacoTheme = useMonacoTheme()
 
   // Fetch diff lines helper
   const fetchDiffLines = useCallback(async () => {
@@ -243,60 +237,27 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     }
   }, [doSave, diffLines, applyDiffDecorations])
 
-  const workspace = useWorkspaceStore(
-    useShallow(s => s.workspaces.find(w => w.id === workspaceId) ?? null),
-  )
-  const absoluteFilePath = resolveAbsoluteFilePath(worktreePath, filePath, workspace)
+  const absoluteFilePath = useAbsoluteFilePath(worktreePath, filePath, workspaceId)
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-card">
-      {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-2 bg-muted/30 px-3 py-1.5">
-        <span className="truncate text-[11px] text-muted-foreground font-mono">{absoluteFilePath}</span>
-      </div>
-
-      {/* Monaco Editor */}
-      <div className="relative min-w-0 flex-1 overflow-hidden">
-        {loading && (
-          <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            加载文件内容...
-          </div>
-        )}
-        {error && !loading && (
-          <div className="flex h-full items-center justify-center p-4 text-sm text-red-400">
-            加载失败: {error}
-          </div>
-        )}
-        {!loading && !error && (
-          <Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                加载编辑器...
-              </div>
-            }
-          >
-            <MonacoEditor
-              height="100%"
-              language={detectLanguage(filePath)}
-              value={content}
-              theme={monacoTheme}
-              onChange={(value) => setContent(value ?? '')}
-              onMount={handleEditorMount}
-              options={{
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                fontSize: 13,
-                lineNumbers: 'on',
-                padding: { top: 8, bottom: 8 },
-                wordWrap: 'on',
-                automaticLayout: true,
-              }}
-            />
-          </Suspense>
-        )}
-      </div>
-    </div>
+    <EditorContainer filePath={absoluteFilePath} loading={loading} error={error}>
+      <MonacoEditor
+        height="100%"
+        language={detectLanguage(filePath)}
+        value={content}
+        theme={monacoTheme}
+        onChange={(value) => setContent(value ?? '')}
+        onMount={handleEditorMount}
+        options={{
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          fontSize: 13,
+          lineNumbers: 'on',
+          padding: { top: 8, bottom: 8 },
+          wordWrap: 'on',
+          automaticLayout: true,
+        }}
+      />
+    </EditorContainer>
   )
 })

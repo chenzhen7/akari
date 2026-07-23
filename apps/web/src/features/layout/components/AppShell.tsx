@@ -17,18 +17,15 @@ import { useGlobalShortcuts } from '@/shared/hooks/useGlobalShortcuts'
 import { Toaster } from 'sonner'
 import { useResizablePanels } from '@/shared/hooks/useResizablePanels'
 import { cn } from '@/shared/lib/utils'
-import { runWhenIdle } from '@/shared/lib/idle'
 import { GripVertical, LayoutGrid } from 'lucide-react'
 
 function ResizeHandle({
   onMouseDown,
   disabled,
-  isDragging: _isDragging,
   className,
 }: {
   onMouseDown: (e: React.MouseEvent) => void
   disabled?: boolean
-  isDragging?: boolean
   className?: string
 }) {
   return (
@@ -84,32 +81,8 @@ export function AppShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 后台预加载 Monaco 编辑器，减少首次打开文件/Diff 的等待时间
-  useEffect(() => {
-    return runWhenIdle(() => {
-      void import('@monaco-editor/react')
-        .then(m => m.loader?.init?.())
-        .catch((err: unknown) => {
-          console.debug('[AppShell] Monaco preload failed:', err)
-        })
-    })
-  }, [])
-
-  const toggleLeft = () => {
-    if (leftCollapsed) {
-      expandLeft()
-    } else {
-      collapseLeft()
-    }
-  }
-
-  const toggleRight = () => {
-    if (rightCollapsed) {
-      expandRight()
-    } else {
-      collapseRight()
-    }
-  }
+  const toggleLeft = () => (leftCollapsed ? expandLeft() : collapseLeft())
+  const toggleRight = () => (rightCollapsed ? expandRight() : collapseRight())
 
   useGlobalShortcuts({ toggleLeft, toggleRight })
 
@@ -148,7 +121,6 @@ export function AppShell() {
           <ResizeHandle
             onMouseDown={onLeftHandleMouseDown}
             disabled={leftCollapsed}
-            isDragging={isDraggingLeft}
           />
 
           {/* Middle */}
@@ -176,7 +148,6 @@ export function AppShell() {
           <ResizeHandle
             onMouseDown={onRightHandleMouseDown}
             disabled={rightCollapsed}
-            isDragging={isDraggingRight}
           />
 
           {/* Right Sidebar */}
@@ -188,11 +159,7 @@ export function AppShell() {
             )}
             style={{ width: rightCollapsed ? '0px' : `${rightWidth}%` }}
           >
-            {activeSessionId ? (
-              <RightSidebar sessionId={activeSessionId} />
-            ) : (
-              <RightSidebar />
-            )}
+            <RightSidebar sessionId={activeSessionId} />
           </div>
         </div>
         <CommandCenter />

@@ -339,7 +339,7 @@ export const AGENT_CONFIG: Record<AgentType, AgentConfig> = {
 |------|------|----------|
 | `node-pty` Windows 需 VC++ Build Tools | F3 开发环境 | 已解决：VC++ Build Tools 已安装，node-pty 编译成功；Shell 已切换为 PowerShell 7.6.2 |
 | ~~xterm.js + React 18 Strict Mode 双重挂载~~ | ~~F3 内存泄露~~ | 已解决：`TerminalPanel` 改用模块级 `terminalInstances` Map 保活 xterm 实例，切 Tab 不再 dispose/重建，terminalBus 订阅全程存活 |
-| Monaco Editor 包体积 ~2MB | F4 首屏性能 | 动态 `import()` 懒加载，Diff 面板 / 文件编辑器打开时才加载 |
+| Monaco Editor 包体积 ~3.7MB（gzip ~1MB） | 启动耗时 | 编辑器是主界面，Monaco 核心作为启动成本：`main.tsx` 静态导入 `shared/lib/monaco-setup.ts`（`loader.config({ monaco })` 本地打包，不走 CDN），随入口 chunk 加载，首次打开文件/Diff 零等待 |
 | ~~`.agent-worktrees/` 未加入 `.gitignore`~~ | ~~F2 误提交~~ | 已解决：已在 `.gitignore` 中添加 |
 | 审批工作流未实现同步阻塞 | F8 安全性 | `PermissionRequest` Hook 当前仅记录日志，不挂起 HTTP 请求；Claude Code 仍使用原生权限确认。后续如需统一审批中心，需实现阻塞式审批 |
 | 画布功能默认关闭 | F1 功能可用性 | `CANVAS_ENABLED = false`，当前主入口为看板 + Tab 视图 |
