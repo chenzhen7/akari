@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { sendWsMessage } from './connection-store'
-import { useSessionStore } from './session-store'
+import { sendWsMessage } from '@/features/terminal/stores/connection-store'
+import { useSessionStore } from '@/features/session/stores/session-store'
 
 interface TabStore {
   createTab: (sessionId: string, type: 'terminal' | 'agent' | 'diff' | 'file', filePath?: string) => void

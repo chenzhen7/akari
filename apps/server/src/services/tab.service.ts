@@ -1,10 +1,12 @@
 import path from 'node:path'
 import { nanoid } from 'nanoid'
 import type { AgentSession, AgentType, ServerMessage, SessionTab } from '@akari/shared-types'
-import { createAgentAdapter, SHELL_STARTUP_DELAY_MS } from '../agent-adapters/index.js'
+import { createAgentAdapter } from '../agent-adapters/index.js'
 import type { AgentLaunchOptions } from '../agent-adapters/base.js'
 import { SessionRepository } from '../infrastructure/db/repositories/session.repository.js'
 import { ITerminalService } from './terminal.service.js'
+import { isTerminalLikeTab } from './tab-utils.js'
+import { launchAgentInTerminal } from './agent-launcher.js'
 
 export interface ITabService {
   createTab(sessionId: string, type: 'terminal' | 'agent' | 'diff' | 'file', filePath?: string, agentType?: AgentType, launchOptions?: AgentLaunchOptions): SessionTab
@@ -78,7 +80,7 @@ export class TabService implements ITabService {
     if ((resolvedType === 'terminal' || resolvedType === 'agent') && terminalId) {
       this.terminalService.createTerminal(terminalId, sessionId, session.worktreePath)
       if (agentType) {
-        this.launchAgentInTab(sessionId, terminalId, session.worktreePath, agentType, session.task, launchOptions).catch(err => {
+        launchAgentInTerminal(this.terminalService, terminalId, session.worktreePath, agentType, session.task, sessionId, launchOptions).catch(err => {
           console.error(`[TabService] launchAgentInTab failed for ${sessionId}:`, err)
         })
       }
@@ -105,7 +107,7 @@ export class TabService implements ITabService {
 
     this.sessionRepository.updateTabs(sessionId, updatedTabs, activeTabId)
 
-    if ((tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
+    if (isTerminalLikeTab(tab) && tab.terminalId) {
       this.terminalService.killTerminal(tab.terminalId)
     }
 
@@ -147,31 +149,5 @@ export class TabService implements ITabService {
 
   private getSession(sessionId: string): AgentSession | null {
     return this.sessionRepository.getById(sessionId)
-  }
-
-  private async launchAgentInTab(
-    sessionId: string,
-    terminalId: string,
-    worktreePath: string,
-    agentType: AgentType,
-    task: string,
-    launchOptions?: AgentLaunchOptions,
-  ): Promise<void> {
-    const adapter = createAgentAdapter(agentType)
-    if (!adapter.isAutomated) return
-
-    const display = `> Launching ${agentType}...\r\n`
-    this.terminalService.sendToTerminal(terminalId, display)
-
-    const commands = await adapter.prepare(worktreePath, task, sessionId, launchOptions)
-    let cumulativeDelay = SHELL_STARTUP_DELAY_MS
-    for (const { cmd, delayMs = 0 } of commands) {
-      cumulativeDelay += delayMs
-      setTimeout(() => {
-        if (this.terminalService.hasTerminal(terminalId)) {
-          this.terminalService.sendToTerminal(terminalId, cmd)
-        }
-      }, cumulativeDelay)
-    }
   }
 }

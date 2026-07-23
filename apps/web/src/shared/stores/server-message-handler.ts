@@ -1,9 +1,9 @@
 import type { AgentSession, ServerMessage } from '@akari/shared-types'
 import { terminalBus } from '@/features/terminal/lib/terminalBus'
 import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
-import { useSessionStore } from './session-store'
-import { useConnectionStore } from './connection-store'
-import { useWorkspaceStore } from './workspace-store'
+import { useSessionStore } from '@/features/session/stores/session-store'
+import { useConnectionStore } from '@/features/terminal/stores/connection-store'
+import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 
 export function handleServerMessage(msg: ServerMessage): void {
   switch (msg.event) {

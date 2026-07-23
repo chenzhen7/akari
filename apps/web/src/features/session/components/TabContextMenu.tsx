@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
-import { destroyTerminalInstance } from './terminal-instances'
+import { destroyTerminalInstance } from '@/features/session/lib/terminal-instances'
 import type { SessionTab } from '@akari/shared-types'
 import { useTabStore } from '@/features/session/stores/tab-store'
 

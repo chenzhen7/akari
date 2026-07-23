@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { useSessionStore } from './session-store'
+import { useSessionStore } from '@/features/session/stores/session-store'
 
 interface UIStore {
   commandCenterOpen: boolean

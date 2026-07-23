@@ -1,14 +1,16 @@
 import { access } from 'node:fs/promises'
 import { nanoid } from 'nanoid'
 import type { AgentSession, AgentType, GitDiff, GitLogResponse, ServerMessage, SessionStatus, SessionTab } from '@akari/shared-types'
-import { createAgentAdapter, SHELL_STARTUP_DELAY_MS } from '../agent-adapters/index.js'
+import { createAgentAdapter } from '../agent-adapters/index.js'
 import { createAgentSession, createMainSession } from '../core/session-factory.js'
 import { STATUS_TO_KANBAN, validateTransition } from '../core/session-state-machine.js'
 import { SessionRepository } from '../infrastructure/db/repositories/session.repository.js'
 import { SettingsStore } from '../infrastructure/db/settings-store.js'
+import { launchAgentInTerminal } from './agent-launcher.js'
 import { ITabService } from './tab.service.js'
 import { ITerminalService } from './terminal.service.js'
 import { IWorktreeService } from './worktree.service.js'
+import { isTerminalLikeTab } from './tab-utils.js'
 
 export interface CreateSessionParams {
   name: string
@@ -205,7 +207,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
     }
     if (session) {
       for (const tab of session.tabs) {
-        if ((tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
+        if (isTerminalLikeTab(tab) && tab.terminalId) {
           this.terminalService.killTerminal(tab.terminalId)
         }
       }
@@ -231,7 +233,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
       return
     }
     for (const tab of session.tabs) {
-      if ((tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
+      if (isTerminalLikeTab(tab) && tab.terminalId) {
         this.terminalService.killTerminal(tab.terminalId)
       }
     }
@@ -311,7 +313,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
       } else {
         const restoredTabs: SessionTab[] = []
         for (const tab of tabs) {
-          if (tab.type === 'terminal' || tab.type === 'agent') {
+          if (isTerminalLikeTab(tab)) {
             const terminalId = nanoid(8)
             this.terminalService.createTerminal(terminalId, session.id, session.worktreePath)
             restoredTabs.push({ ...tab, terminalId })
@@ -350,7 +352,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
 
     let changed = false
     const clearedTabs = session.tabs.map(tab => {
-      if ((tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
+      if (isTerminalLikeTab(tab) && tab.terminalId) {
         this.terminalService.killTerminal(tab.terminalId)
         changed = true
         return { ...tab, terminalId: undefined }
@@ -366,10 +368,10 @@ export class SessionLifecycleService implements ISessionLifecycleService {
 
   private resolveSessionTerminalId(tabs: SessionTab[], activeTabId: string | null): string | undefined {
     const activeTab = tabs.find(t => t.id === activeTabId)
-    if ((activeTab?.type === 'terminal' || activeTab?.type === 'agent') && activeTab.terminalId) {
+    if (isTerminalLikeTab(activeTab) && activeTab.terminalId) {
       return activeTab.terminalId
     }
-    return tabs.find(t => (t.type === 'terminal' || t.type === 'agent') && t.terminalId)?.terminalId
+    return tabs.find(t => isTerminalLikeTab(t) && t.terminalId)?.terminalId
   }
 
   private async initSession(session: AgentSession): Promise<void> {
@@ -411,7 +413,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
 
       this.pushTerminalDisplay(id, `> Terminal ready (agent: ${session.agentType})\r\n`)
 
-      await this.launchAgentInTerminal(id, terminalId, worktreePath, session.agentType, session.task)
+      await launchAgentInTerminal(this.terminalService, terminalId, worktreePath, session.agentType, session.task, id)
 
       this.worktreeService.watchDiff(id, this.createDiffCallbacks(id))
       this.updateStatus(id, 'idle')
@@ -425,33 +427,10 @@ export class SessionLifecycleService implements ISessionLifecycleService {
     }
   }
 
-  private async launchAgentInTerminal(
-    sessionId: string,
-    terminalId: string,
-    worktreePath: string,
-    agentType: AgentType,
-    task: string,
-  ): Promise<void> {
-    const adapter = createAgentAdapter(agentType)
-    if (!adapter.isAutomated) return
-
-    this.terminalService.sendToTerminal(terminalId, `> Launching ${agentType}...\r\n`)
-    const commands = await adapter.prepare(worktreePath, task, sessionId)
-    let cumulativeDelay = SHELL_STARTUP_DELAY_MS
-    for (const { cmd, delayMs = 0 } of commands) {
-      cumulativeDelay += delayMs
-      setTimeout(() => {
-        if (this.terminalService.hasTerminal(terminalId)) {
-          this.terminalService.sendToTerminal(terminalId, cmd)
-        }
-      }, cumulativeDelay)
-    }
-  }
-
   private pushTerminalDisplay(sessionId: string, data: string): void {
     const session = this.getSession(sessionId)
     const activeTab = session?.tabs.find(t => t.id === session.activeTabId)
-    const terminalId = (activeTab?.type === 'terminal' || activeTab?.type === 'agent') ? activeTab.terminalId : session?.tabs.find(t => t.type === 'terminal' || t.type === 'agent')?.terminalId
+    const terminalId = isTerminalLikeTab(activeTab) ? activeTab.terminalId : session?.tabs.find(isTerminalLikeTab)?.terminalId
     if (terminalId) {
       this.broadcast({ event: 'terminal:data', payload: { sessionId, terminalId, data } })
     }

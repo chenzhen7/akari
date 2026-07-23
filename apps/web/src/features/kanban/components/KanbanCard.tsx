@@ -2,7 +2,7 @@ import { useDraggable } from '@dnd-kit/core'
 import { Card, CardContent } from '@/shared/components/ui/card'
 import { Circle } from 'lucide-react'
 import { Badge } from '@/shared/components/ui/badge'
-import type { AgentSession } from '@/types'
+import type { AgentSession } from '@/shared/types'
 import { useSessionStore } from '@/features/session/stores/session-store'
 
 interface KanbanCardProps {

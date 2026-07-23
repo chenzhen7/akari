@@ -1,7 +1,7 @@
 import { DndContext, type DragEndEvent, rectIntersection } from '@dnd-kit/core'
 import { useSessionStore } from '@/features/session/stores/session-store'
 import { KanbanColumn } from './KanbanColumn'
-import type { KanbanColumn as KanbanColumnType } from '@/types'
+import type { KanbanColumn as KanbanColumnType } from '@/shared/types'
 
 const COLUMNS: { id: KanbanColumnType; label: string }[] = [
   { id: 'backlog', label: '待办' },

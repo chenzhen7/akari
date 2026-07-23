@@ -4,7 +4,7 @@ import { Badge } from '@/shared/components/ui/badge'
 import { Textarea } from '@/shared/components/ui/textarea'
 import { Button } from '@/shared/components/ui/button'
 import { DeleteSessionDialog } from './DeleteSessionDialog'
-import type { AgentSession } from '@/types'
+import type { AgentSession } from '@/shared/types'
 import { useSessionStore } from '@/features/session/stores/session-store'
 
 const statusLabelMap: Record<string, string> = {

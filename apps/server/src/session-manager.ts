@@ -12,6 +12,7 @@ import { SessionLifecycleService, type CreateSessionParams } from './services/se
 import { TabService } from './services/tab.service.js'
 import { TerminalService } from './services/terminal.service.js'
 import { WorktreeService } from './services/worktree.service.js'
+import { isTerminalLikeTab } from './services/tab-utils.js'
 import { validateTransition } from './core/session-state-machine.js'
 
 export { validateTransition, CreateSessionParams }
@@ -126,10 +127,8 @@ export class SessionManager {
   async setWorkspace(workspaceId: string, workspacePath: string, repoRoot: string, isGitWorkspace = true): Promise<void> {
     await this.worktreeService.dispose()
     this.sessionLifecycle.setWorkspace(workspaceId, workspacePath, repoRoot, isGitWorkspace)
-    const worktreeBaseDir = this.settingsStore.getWorktreeBaseDir()
-    this.fileService // existing instance still references old paths; re-create services on workspace switch
-    // For now, keep the simplified behavior: dispose old worktree service and let future operations use updated lifecycle state.
-    // A full re-creation of services would require rebuilding GitRepositoryRegistry, which is left as a follow-up if workspace switching becomes hot.
+    // NOTE: fileService / gitQuery / worktreeService still reference the old workspace paths.
+    // A full rebuild is left as follow-up if hot workspace switching becomes necessary.
   }
 
   getSettings(): { worktreeBaseDir: string } {
@@ -154,7 +153,7 @@ export class SessionManager {
     const targets = sessionIds ? active.filter(s => sessionIds.includes(s.id)) : active
     for (const s of targets) {
       const data = `\r\n📢 Broadcast: ${message}\r\n`
-      const terminalTab = s.tabs.find(t => t.type === 'terminal' || t.type === 'agent')
+      const terminalTab = s.tabs.find(isTerminalLikeTab)
       if (terminalTab?.terminalId) {
         this.terminalService.sendToTerminal(terminalTab.terminalId, `${message}\n`)
         this.broadcast({ event: 'terminal:data', payload: { sessionId: s.id, terminalId: terminalTab.terminalId, data } })
@@ -205,7 +204,7 @@ export class SessionManager {
   pushTerminalMessage(sessionId: string, data: string): void {
     const session = this.getSession(sessionId)
     const activeTab = session?.tabs.find(t => t.id === session.activeTabId)
-    const terminalId = (activeTab?.type === 'terminal' || activeTab?.type === 'agent') ? activeTab.terminalId : session?.tabs.find(t => t.type === 'terminal' || t.type === 'agent')?.terminalId
+    const terminalId = isTerminalLikeTab(activeTab) ? activeTab.terminalId : session?.tabs.find(isTerminalLikeTab)?.terminalId
     if (terminalId) {
       this.broadcast({ event: 'terminal:data', payload: { sessionId, terminalId, data } })
     }

@@ -23,7 +23,7 @@ import {
   Radio,
   type LucideIcon,
 } from 'lucide-react'
-import type { AgentSession } from '@/types'
+import type { AgentSession } from '@/shared/types'
 import { DeleteSessionDialog } from '@/features/session/components/DeleteSessionDialog'
 import { SwitchBranchDialog } from '@/features/session/components/SwitchBranchDialog'
 import { SessionContextMenu } from './SessionContextMenu'

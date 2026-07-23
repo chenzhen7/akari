@@ -10,7 +10,7 @@ import { terminalBus } from '@/features/terminal/lib/terminalBus'
 import { resizeMutex } from '@/shared/lib/ptyResizeMutex'
 import { attachImeAnchor } from '@/shared/lib/xterm-ime-anchor'
 import { apiClient } from '@/shared/lib/api-client'
-import { terminalInstances } from './terminal-instances'
+import { terminalInstances } from '@/features/session/lib/terminal-instances'
 
 interface TerminalPanelProps {
   sessionId: string

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { apiClient } from './api-client'
+import { apiClient } from '@/shared/lib/api-client'
 import type { FileNode } from '@akari/shared-types'
 
 const cache = new Map<string, FileNode[]>()

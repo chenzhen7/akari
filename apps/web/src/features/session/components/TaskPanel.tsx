@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog'
-import type { AgentSession } from '@/types'
+import type { AgentSession } from '@/shared/types'
 import { useSessionStore } from '@/features/session/stores/session-store'
 
 const statusLabelMap: Record<string, string> = {

@@ -5,7 +5,7 @@ import { FileEditor } from '@/features/explorer/components/FileEditor'
 import { cn } from '@/shared/lib/utils'
 import { useSessionStore } from '@/features/session/stores/session-store'
 import { useShallow } from 'zustand/react/shallow'
-import type { DiffFile, SessionTab } from '@/types'
+import type { DiffFile, SessionTab } from '@/shared/types'
 import type { ClientMessage } from '@akari/shared-types'
 
 const EMPTY_DIFF_FILES: DiffFile[] = []

@@ -1,6 +1,6 @@
 import { useDroppable } from '@dnd-kit/core'
 import { KanbanCard } from './KanbanCard'
-import type { AgentSession, KanbanColumn as KanbanColumnType } from '@/types'
+import type { AgentSession, KanbanColumn as KanbanColumnType } from '@/shared/types'
 
 interface KanbanColumnProps {
   column: KanbanColumnType

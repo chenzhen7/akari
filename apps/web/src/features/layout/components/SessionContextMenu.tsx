@@ -3,7 +3,7 @@ import { GitCommit, GitMerge, GitBranch, Copy, Check, FolderOpen } from 'lucide-
 import { toast, toastError } from '@/shared/lib/toast'
 import { cn } from '@/shared/lib/utils'
 import { apiClient } from '@/shared/lib/api-client'
-import type { AgentSession } from '@/types'
+import type { AgentSession } from '@/shared/types'
 
 interface SessionContextMenuProps {
   session: AgentSession
