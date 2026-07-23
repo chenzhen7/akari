@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { TerminalPanel } from './TerminalPanel'
 import { DiffViewer } from '@/features/diff/components/DiffViewer'
 import { FileEditor } from '@/features/explorer/components/FileEditor'
@@ -50,6 +50,7 @@ const TabPane = memo(function TabPane({
           sessionId={sessionId}
           terminalId={terminalId}
           send={send}
+          isActive={isActive}
         />
       )}
       {type === 'diff' && filePath && (
@@ -59,6 +60,7 @@ const TabPane = memo(function TabPane({
           diffFiles={diffFiles ?? EMPTY_DIFF_FILES}
           workspaceId={workspaceId}
           worktreePath={worktreePath}
+          isActive={isActive}
         />
       )}
       {type === 'file' && filePath && (
@@ -67,6 +69,7 @@ const TabPane = memo(function TabPane({
           filePath={filePath}
           workspaceId={workspaceId}
           worktreePath={worktreePath}
+          isActive={isActive}
         />
       )}
     </div>
@@ -96,10 +99,37 @@ export const TabContent = memo(function TabContent({ sessionId, send }: TabConte
     }),
   )
 
-  const activeTab = useMemo(
-    () => tabs.find(tab => tab.id === activeTabId) ?? null,
-    [activeTabId, tabs],
+  // Keep-alive: once a tab has been rendered, keep its component mounted
+  // and hidden via CSS so switching back is instant (same approach VS Code
+  // uses for editor panes: editor instances stay alive and are shown/hidden).
+  const [mountedTabIds, setMountedTabIds] = useState<Set<string>>(
+    () => new Set(activeTabId ? [activeTabId] : []),
   )
+
+  useEffect(() => {
+    if (!activeTabId) return
+    setMountedTabIds(prev => {
+      if (prev.has(activeTabId)) return prev
+      return new Set([...prev, activeTabId])
+    })
+  }, [activeTabId])
+
+  // Remove unmounted tab ids when tabs are closed so memory can be reclaimed.
+  useEffect(() => {
+    const currentTabIds = new Set(tabs.map(t => t.id))
+    setMountedTabIds(prev => {
+      let changed = false
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (currentTabIds.has(id)) {
+          next.add(id)
+        } else {
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [tabs])
 
   if (tabs.length === 0) {
     return (
@@ -112,20 +142,23 @@ export const TabContent = memo(function TabContent({ sessionId, send }: TabConte
 
   return (
     <div className="relative h-full w-full">
-      {activeTab && (
-        <TabPane
-          key={activeTab.id}
-          sessionId={sessionId}
-          type={activeTab.type}
-          terminalId={activeTab.terminalId}
-          filePath={activeTab.filePath}
-          isActive
-          send={send}
-          diffFiles={activeTab.type === 'diff' ? diffFiles : undefined}
-          workspaceId={workspaceId}
-          worktreePath={worktreePath}
-        />
-      )}
+      {tabs.map(tab => {
+        if (!mountedTabIds.has(tab.id)) return null
+        return (
+          <TabPane
+            key={tab.id}
+            sessionId={sessionId}
+            type={tab.type}
+            terminalId={tab.terminalId}
+            filePath={tab.filePath}
+            isActive={tab.id === activeTabId}
+            send={send}
+            diffFiles={tab.type === 'diff' ? diffFiles : undefined}
+            workspaceId={workspaceId}
+            worktreePath={worktreePath}
+          />
+        )
+      })}
     </div>
   )
 })

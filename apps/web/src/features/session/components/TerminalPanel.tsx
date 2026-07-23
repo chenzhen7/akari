@@ -16,6 +16,7 @@ interface TerminalPanelProps {
   sessionId: string
   terminalId: string
   send: (msg: ClientMessage) => void
+  isActive?: boolean
 }
 
 const DARK_THEME = {
@@ -76,11 +77,25 @@ function updateTerminalTheme(terminalId: string, isDark: boolean) {
   } catch { /* ignore if disposed */ }
 }
 
-export function TerminalPanel({ sessionId, terminalId, send }: TerminalPanelProps) {
+export function TerminalPanel({ sessionId, terminalId, send, isActive }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalReadyTick = useConnectionStore(s => s.terminalReadyTick[terminalId] ?? 0)
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
+
+  /* ─── Focus / fit when this tab becomes active ────────────────────────── */
+
+  useEffect(() => {
+    if (!isActive) return
+    const entry = terminalInstances.get(terminalId)
+    if (!entry) return
+    requestAnimationFrame(() => {
+      try {
+        entry.fitAddon.fit()
+        entry.term.focus()
+      } catch { /* ignore if disposed */ }
+    })
+  }, [isActive, terminalId])
 
   /* ─── Mount / unmount ─────────────────────────────────────────────────── */
 

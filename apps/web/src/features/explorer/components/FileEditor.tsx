@@ -22,9 +22,10 @@ interface FileEditorProps {
   workspaceId: string
   worktreePath: string
   filePath: string
+  isActive?: boolean
 }
 
-export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, worktreePath, filePath }: FileEditorProps) {
+export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, worktreePath, filePath, isActive }: FileEditorProps) {
   const [content, setContent] = useState<string>('')
   const [originalContent, setOriginalContent] = useState<string>('')
   const [loading, setLoading] = useState(false)
@@ -39,9 +40,11 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   const contentRef = useRef(content)
   const isDirtyRef = useRef(isDirty)
   const originalContentRef = useRef(originalContent)
+  const isActiveRef = useRef(isActive)
   contentRef.current = content
   isDirtyRef.current = isDirty
   originalContentRef.current = originalContent
+  isActiveRef.current = isActive
   const { resolvedTheme } = useTheme()
   const monacoTheme = resolvedTheme === 'dark' ? 'vs-dark' : 'light'
 
@@ -191,6 +194,19 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     }
   }, [filePath, sessionId])
 
+  // Refocus and relayout the editor when this tab becomes active again.
+  // The component is kept alive while hidden, so the editor may have been
+  // sized to 0x0 and needs a layout refresh.
+  useEffect(() => {
+    if (!isActive) return
+    const editor = editorRef.current
+    if (!editor) return
+    try {
+      editor.focus()
+      editor.layout()
+    } catch { /* ignore */ }
+  }, [isActive])
+
   useEffect(() => {
     if (!isDirty || loading || error) return
 
@@ -220,6 +236,10 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     // Apply initial diff decorations if already loaded
     if (diffLines && diffLines.length > 0) {
       applyDiffDecorations(_editor, monaco, diffLines)
+    }
+    // Focus when the editor finishes mounting while this tab is already active
+    if (isActiveRef.current) {
+      _editor.focus()
     }
   }, [doSave, diffLines, applyDiffDecorations])
 

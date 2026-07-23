@@ -1,6 +1,7 @@
-import { useState, useEffect, lazy, Suspense, memo } from 'react'
+import { useState, useEffect, lazy, Suspense, memo, useRef, useCallback } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { DiffFile } from '@akari/shared-types'
+import type { editor } from 'monaco-editor'
 import { useTheme } from '@/shared/components/theme-provider'
 import { detectLanguage } from '@/shared/lib/language-utils'
 import { apiClient } from '@/shared/lib/api-client'
@@ -19,12 +20,14 @@ interface DiffViewerProps {
   diffFiles: DiffFile[]
   workspaceId: string
   worktreePath: string
+  isActive?: boolean
 }
 
-export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFiles, workspaceId, worktreePath }: DiffViewerProps) {
+export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFiles, workspaceId, worktreePath, isActive }: DiffViewerProps) {
   const [content, setContent] = useState<{ original: string; modified: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const { resolvedTheme } = useTheme()
   const monacoTheme = resolvedTheme === 'dark' ? 'vs-dark' : 'light'
 
@@ -66,6 +69,20 @@ export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFi
         .finally(() => setLoading(false))
     })
   }, [sessionId, filePath])
+
+  // Relayout the diff editor when this tab becomes active again.
+  useEffect(() => {
+    if (!isActive) return
+    const editor = diffEditorRef.current
+    if (!editor) return
+    try {
+      editor.layout()
+    } catch { /* ignore */ }
+  }, [isActive])
+
+  const handleEditorMount = useCallback((editor: editor.IStandaloneDiffEditor) => {
+    diffEditorRef.current = editor
+  }, [])
 
   const currentFile = diffFiles.find(f => f.path === filePath)
   const workspace = useWorkspaceStore(
@@ -114,6 +131,7 @@ export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFi
               original={content.original}
               modified={content.modified}
               theme={monacoTheme}
+              onMount={handleEditorMount}
               options={{
                 readOnly: true,
                 renderSideBySide: true,
