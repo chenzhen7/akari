@@ -9,6 +9,7 @@ import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
 import { useMonacoTheme } from '@/shared/hooks/useMonacoTheme'
 import { useAbsoluteFilePath } from '@/shared/hooks/useAbsoluteFilePath'
 import { EditorContainer } from '@/shared/components/EditorContainer'
+import { perfMark, perfMeasure } from '@/shared/lib/perf-log'
 
 const AUTO_SAVE_DELAY = 800
 
@@ -45,11 +46,13 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   // Fetch diff lines helper
   const fetchDiffLines = useCallback(async () => {
     if (!filePath || !sessionId) return
+    perfMark(`diff:${filePath}`, `发起 diff-lines 请求 ${filePath}`)
     try {
       const data = await apiClient.get<{ lines: FileDiffLine[] }>(`/sessions/${sessionId}/diff-lines`, {
         params: { path: filePath },
         toast: false,
       })
+      perfMeasure(`diff:${filePath}`, `diff-lines 响应返回（HTTP 耗时）`)
       setDiffLines(data.lines)
     } catch (err) {
       console.error('[FileEditor] fetch diff lines failed:', err)
@@ -92,6 +95,11 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     setDiffLines(null)
     decorationsRef.current?.clear()
 
+    const clickKey = `file:${filePath}`
+    const fetchKey = `fetch:${filePath}`
+    perfMeasure(clickKey, 'FileEditor 挂载并发起请求（点击 → fetch 开始）')
+    perfMark(fetchKey, `发起 file-content 请求 ${filePath}`)
+
     const controller = new AbortController()
     apiClient.get<{ content: string }>(`/sessions/${sessionId}/file-content`, {
       params: { path: filePath },
@@ -99,6 +107,7 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
       toast: false,
     })
       .then(data => {
+        perfMeasure(fetchKey, 'file-content 响应返回（HTTP 耗时）')
         setContent(data.content)
         setOriginalContent(data.content)
       })
@@ -221,6 +230,11 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   const handleEditorMount = useCallback((_editor: editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
     editorRef.current = _editor
     monacoRef.current = monaco
+    const clickKey = `file:${filePath}`
+    perfMeasure(clickKey, 'Monaco 挂载完成（onMount）')
+    requestAnimationFrame(() => {
+      perfMeasure(clickKey, '文本首帧渲染完成（点击 → 可见总耗时）')
+    })
     _editor.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
       () => {
@@ -235,7 +249,7 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     if (isActiveRef.current) {
       _editor.focus()
     }
-  }, [doSave, diffLines, applyDiffDecorations])
+  }, [doSave, diffLines, applyDiffDecorations, filePath])
 
   const absoluteFilePath = useAbsoluteFilePath(worktreePath, filePath, workspaceId)
 

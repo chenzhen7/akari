@@ -5,6 +5,7 @@ import { Folder, FolderOpen, File, RefreshCw, ChevronRight, ChevronDown } from '
 import { cn } from '@/shared/lib/utils'
 import type { FileNode } from '@akari/shared-types'
 import { getFileTreeChildren, fetchFileTreeChildren, useFileTreeChildren, useFileTreeTick } from '@/features/explorer/lib/file-tree-store'
+import { perfMark } from '@/shared/lib/perf-log'
 
 const ROOT_ID = '__root__'
 
@@ -90,6 +91,7 @@ function NodeRenderer({
   const handleClick = useCallback(() => {
     node.select()
     if (node.data.type === 'file') {
+      perfMark(`file:${node.data.path}`, `点击文件 ${node.data.path}`)
       onOpenFile(node.data.path)
     } else {
       node.toggle()

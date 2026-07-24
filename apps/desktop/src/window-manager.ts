@@ -188,6 +188,16 @@ export class WindowManager {
       }
     })
 
+    // 应用菜单已置空（Menu.setApplicationMenu(null)），默认的 Ctrl+Shift+I
+    // 快捷键不可用；这里手动注册 F12 / Ctrl+Shift+I 切换 DevTools，
+    // 打包后的程序同样生效，用于生产环境排查问题。
+    window.webContents.on('before-input-event', (_event, input) => {
+      if (input.type !== 'keyDown') return
+      if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+        window.webContents.toggleDevTools()
+      }
+    })
+
     return window
   }
 

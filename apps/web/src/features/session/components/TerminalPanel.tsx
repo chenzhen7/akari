@@ -11,6 +11,7 @@ import { resizeMutex } from '@/shared/lib/ptyResizeMutex'
 import { attachImeAnchor } from '@/shared/lib/xterm-ime-anchor'
 import { apiClient } from '@/shared/lib/api-client'
 import { terminalInstances } from '@/features/session/lib/terminal-instances'
+import { perfMark, perfMeasure } from '@/shared/lib/perf-log'
 
 interface TerminalPanelProps {
   sessionId: string
@@ -261,6 +262,9 @@ function createTerminal(
   send: (msg: ClientMessage) => void,
   isDark: boolean,
 ): void {
+  const perfKey = `terminal:${terminalId}`
+  perfMark(perfKey, `终端开始创建 ${terminalId}`)
+
   const term = new Terminal({
     cursorBlink: true,
     fontFamily: '"Cascadia Code", "Fira Code", Menlo, "Courier New", monospace',
@@ -301,9 +305,14 @@ function createTerminal(
 
   // ── Subscribe to terminal:data events (buffered during resize) ──────────
   let historyLoaded = false
+  let firstDataLogged = false
   const pendingChunks: string[] = []
 
   const unsubscribeData = terminalBus.on(terminalId, data => {
+    if (!firstDataLogged) {
+      firstDataLogged = true
+      perfMeasure(perfKey, '终端收到第一帧 PTY 数据（创建 → 首个 terminal:data）')
+    }
     if (resizeMutex.buffer(terminalId, data)) return  // buffered during resize
     if (historyLoaded) {
       term.write(data)
@@ -343,6 +352,7 @@ function createTerminal(
     toast: false,
   })
     .then(({ buffer }) => {
+      perfMeasure(perfKey, 'terminal-buffer 历史响应返回（HTTP 耗时）')
       // Skip TUI animation frames (\x1b[H = cursor home) that would push
       // duplicate history into scrollback on replay.
       buffer
