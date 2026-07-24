@@ -2,6 +2,7 @@ import { watch, type FSWatcher } from 'chokidar'
 import { dirname, join, relative, resolve } from 'node:path'
 import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileDiffLine } from '@akari/shared-types'
 import { GitCommandRunner } from './git-command-runner.js'
+import { perfLog, perfNow } from '../../perf-log.js'
 
 interface WatchDiffCallbacks {
   onDiff: (diff: GitDiff) => void
@@ -145,6 +146,7 @@ export class GitRepository {
 
   private async computeDiff(): Promise<GitDiff> {
     const emptyDiff: GitDiff = { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
+    const t0 = perfNow()
     try {
       const baseRef = 'HEAD'
 
@@ -161,6 +163,7 @@ export class GitRepository {
         .run(['ls-files', '--others', '--exclude-standard', '--full-name'], this.repoPath)
         .catch(() => '')
       const untrackedFiles = untrackedRaw.trim() ? untrackedRaw.trim().split('\n').filter(Boolean) : []
+      console.log(`[Perf] [computeDiff] untracked 文件数=${untrackedFiles.length}（每个都要单独跑 git diff --no-index）@ ${this.repoPath}`)
 
       let extraDiff = ''
       const extraFiles: DiffFile[] = []
@@ -192,6 +195,8 @@ export class GitRepository {
       }
     } catch {
       return emptyDiff
+    } finally {
+      perfLog(`[computeDiff] 总耗时 @ ${this.repoPath}`, t0)
     }
   }
 
@@ -201,28 +206,33 @@ export class GitRepository {
   }
 
   async getFileDiffLines(filePath: string): Promise<FileDiffLine[]> {
-    const headDiff = await this.runner
-      .run(['diff', '--unified=0', 'HEAD', '--', filePath], this.repoPath)
-      .catch(() => '')
+    const t0 = perfNow()
+    try {
+      const headDiff = await this.runner
+        .run(['diff', '--unified=0', 'HEAD', '--', filePath], this.repoPath)
+        .catch(() => '')
 
-    if (headDiff) return parseDiffLines(headDiff)
+      if (headDiff) return parseDiffLines(headDiff)
 
-    const existsInHead = await this.runner
-      .run(['cat-file', '-e', `HEAD:${filePath}`], this.repoPath)
-      .then(() => true)
-      .catch(() => false)
+      const existsInHead = await this.runner
+        .run(['cat-file', '-e', `HEAD:${filePath}`], this.repoPath)
+        .then(() => true)
+        .catch(() => false)
 
-    if (existsInHead) return []
+      if (existsInHead) return []
 
-    const untrackedDiff = await this.runner
-      .run(['diff', '--no-index', '--unified=0', '--', '/dev/null', filePath], this.repoPath)
-      .catch((e: unknown) => {
-        const err = e as { exitCode?: number; stdout?: string }
-        return err.exitCode === 1 ? (err.stdout ?? '') : ''
-      })
+      const untrackedDiff = await this.runner
+        .run(['diff', '--no-index', '--unified=0', '--', '/dev/null', filePath], this.repoPath)
+        .catch((e: unknown) => {
+          const err = e as { exitCode?: number; stdout?: string }
+          return err.exitCode === 1 ? (err.stdout ?? '') : ''
+        })
 
-    if (!untrackedDiff) return []
-    return parseDiffLines(untrackedDiff)
+      if (!untrackedDiff) return []
+      return parseDiffLines(untrackedDiff)
+    } finally {
+      perfLog(`[getFileDiffLines] ${filePath} @ ${this.repoPath}`, t0)
+    }
   }
 
   async commitAll(message: string): Promise<void> {
@@ -283,12 +293,17 @@ export class GitRepository {
   }
 
   watchDiff(callbacks: WatchDiffCallbacks): FSWatcher {
+    const tWatch = perfNow()
     const watcher = watch(this.repoPath, {
       ignored: /(node_modules|\.git)/,
       persistent: true,
       ignoreInitial: true,
     })
     this.diffWatcher = watcher
+
+    watcher.on('ready', () => {
+      perfLog(`[chokidar] 初始扫描完成（watch → ready）@ ${this.repoPath}`, tWatch)
+    })
 
     let debounce: ReturnType<typeof setTimeout> | null = null
     const scheduleDiff = () => {
@@ -311,7 +326,11 @@ export class GitRepository {
       .on('change', (path) => handleChange(path, 'change'))
       .on('unlink', (path) => handleChange(path, 'unlink'))
 
-    void this.getDiff().then(callbacks.onDiff)
+    const tDiff = perfNow()
+    void this.getDiff().then(diff => {
+      perfLog(`[watchDiff] 启动时首次 getDiff @ ${this.repoPath}`, tDiff)
+      callbacks.onDiff(diff)
+    })
 
     return watcher
   }

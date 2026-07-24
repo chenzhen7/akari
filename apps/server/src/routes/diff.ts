@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { perfLog, perfNow } from '../perf-log.js'
 
 export default async function diffRoutes(fastify: FastifyInstance) {
   fastify.post<{ Params: { id: string } }>(
@@ -37,7 +38,9 @@ export default async function diffRoutes(fastify: FastifyInstance) {
       if (!filePath) return reply.status(400).send({ error: 'path query param is required' })
       if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
+        const t0 = perfNow()
         const lines = await request.sessionManager.getFileDiffLines(id, filePath)
+        perfLog(`[route] diff-lines ${filePath}（handler 总耗时）`, t0)
         return { lines }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)

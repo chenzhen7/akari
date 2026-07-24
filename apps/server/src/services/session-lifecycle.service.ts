@@ -11,6 +11,7 @@ import { ITabService } from './tab.service.js'
 import { ITerminalService } from './terminal.service.js'
 import { IWorktreeService } from './worktree.service.js'
 import { isTerminalLikeTab } from './tab-utils.js'
+import { perfLog, perfNow } from '../perf-log.js'
 
 export interface CreateSessionParams {
   name: string
@@ -244,9 +245,12 @@ export class SessionLifecycleService implements ISessionLifecycleService {
   }
 
   async restoreSessions(): Promise<void> {
+    const tRestore = perfNow()
     const sessions = this.listSessions()
+    console.log(`[Perf] [restoreSessions] 开始恢复 ${sessions.length} 个会话`)
 
     for (const session of sessions) {
+      const tSession = perfNow()
       if (session.isMain) {
         if (session.worktreePath && this.isGitWorkspace) {
           this.worktreeService.watchDiff(
@@ -339,7 +343,11 @@ export class SessionLifecycleService implements ISessionLifecycleService {
       if (!session.isMain && session.worktreePath) {
         this.worktreeService.watchDiff(session.id, this.createDiffCallbacks(session.id))
       }
+
+      perfLog(`[restoreSessions] 会话 ${session.id}（isMain=${session.isMain}）恢复完成`, tSession)
     }
+
+    perfLog(`[restoreSessions] 全部 ${sessions.length} 个会话恢复完成（总耗时）`, tRestore)
   }
 
   refreshDiff(sessionId: string): void {

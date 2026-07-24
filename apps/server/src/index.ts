@@ -10,6 +10,7 @@ import { createSessionManager, type SessionManager } from './session-manager.js'
 import { WorkspaceService } from './services/workspace.service.js'
 import { CanvasEdgeStore } from './infrastructure/db/canvas-edge-store.js'
 import { WorkspaceSessionRegistryService } from './services/workspace-session-registry.service.js'
+import { perfLog, perfNow } from './perf-log.js'
 
 import websocketPlugin from './plugins/websocket.js'
 import staticPlugin from './plugins/static.js'
@@ -67,6 +68,7 @@ async function getOrCreateSessionManager(workspaceId: string): Promise<SessionMa
     throw new Error(`Workspace not found: ${workspaceId}`)
   }
 
+  const tCreate = perfNow()
   const manager = await createSessionManager({
     workspacePath: workspace.path,
     repoRoot: workspace.repoRoot,
@@ -75,8 +77,11 @@ async function getOrCreateSessionManager(workspaceId: string): Promise<SessionMa
     workspaceId: workspace.id,
     isGitWorkspace: workspace.isGit,
   })
+  perfLog(`[startup] createSessionManager（含 restoreSessions）`, tCreate)
 
+  const tMain = perfNow()
   await manager.ensureMainSession(workspace.path)
+  perfLog(`[startup] ensureMainSession`, tMain)
   workspaceSessionManagers.set(workspaceId, manager)
   return manager
 }
@@ -147,7 +152,9 @@ fastify.addHook('preHandler', async (request, reply) => {
   }
 
   request.workspaceId = workspaceId
+  const t0 = perfNow()
   request.sessionManager = await getOrCreateSessionManager(workspaceId)
+  perfLog(`[preHandler] getOrCreateSessionManager ${request.url.split('?')[0]}`, t0)
 })
 
 await fastify.register(healthRoutes)

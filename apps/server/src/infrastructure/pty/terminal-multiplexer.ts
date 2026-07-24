@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
+import { perfLog, perfNow } from '../../perf-log.js'
 
 interface TerminalEntry {
   terminalId: string
@@ -40,6 +41,7 @@ export class TerminalMultiplexer extends EventEmitter {
     const rows = pending?.rows ?? 24
     this.pendingResize.delete(terminalId)
 
+    const tSpawn = perfNow()
     const proc = pty.spawn(shell, args, {
       name: 'xterm-256color',
       cols,
@@ -57,7 +59,12 @@ export class TerminalMultiplexer extends EventEmitter {
 
     const entry: TerminalEntry = { terminalId, sessionId, pty: proc, buffer: [], status: 'running', resizeBuffer: [], resizing: false }
 
+    let firstDataLogged = false
     proc.onData((data: string) => {
+      if (!firstDataLogged) {
+        firstDataLogged = true
+        perfLog(`[pty] spawn → 首个输出（shell=${shell}）terminalId=${terminalId}`, tSpawn)
+      }
       this.appendBuffer(entry, data)
       if (entry.resizing) {
         entry.resizeBuffer.push(data)

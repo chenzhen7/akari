@@ -1,5 +1,6 @@
 import { execa } from 'execa'
 import { resolve } from 'node:path'
+import { perfLog, perfNow } from '../../perf-log.js'
 
 export type GitErrorCode =
   | 'NOT_A_GIT_REPO'
@@ -42,8 +43,18 @@ export class GitCommandRunner {
 
   async run(args: string[], cwd: string, options: GitRunOptions = {}): Promise<string> {
     const key = resolve(cwd)
+    const enqueueAt = perfNow()
     const previous = this.locks.get(key) ?? Promise.resolve()
-    const task = previous.then(() => this.exec(args, cwd, options))
+    const task = previous.then(() => {
+      const queueWait = perfNow() - enqueueAt
+      if (queueWait > 50) {
+        console.log(`[Perf] [git] 排队等待 ${queueWait.toFixed(1)}ms: git ${args.join(' ')} @ ${key}`)
+      }
+      const t0 = perfNow()
+      return this.exec(args, cwd, options).finally(() => {
+        perfLog(`[git] 执行 git ${args.join(' ')} @ ${key}`, t0)
+      })
+    })
     this.locks.set(key, task.catch(() => {}))
     return task
   }

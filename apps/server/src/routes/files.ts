@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { perfLog, perfNow } from '../perf-log.js'
 
 export default async function filesRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string }; Querystring: { path?: string } }>(
@@ -26,7 +27,9 @@ export default async function filesRoutes(fastify: FastifyInstance) {
       if (!filePath) return reply.status(400).send({ error: 'path query param is required' })
       if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
+        const t0 = perfNow()
         const content = await request.sessionManager.readFileContent(id, filePath)
+        perfLog(`[route] file-content ${filePath}（handler 总耗时）`, t0)
         return { content }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
