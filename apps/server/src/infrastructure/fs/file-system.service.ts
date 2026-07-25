@@ -1,6 +1,7 @@
 import { mkdir, access, constants, readFile, readdir, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import type { FileNode } from '@akari/shared-types'
+import { perfLog, perfNow } from '../../perf-log.js'
 
 export interface IFileSystemService {
   listFiles(cwd: string, relativePath: string): Promise<FileNode[]>
@@ -28,21 +29,26 @@ export class FileSystemService implements IFileSystemService {
   }
 
   async resolveFilePath(filePath: string, cwd: string): Promise<string> {
-    const normalized = filePath.replace(/\\/g, '/')
-    if (this.isAgentWorktree(cwd)) {
-      return join(cwd, normalized)
-    }
-    const offset = this.workspaceOffset
-    if (offset && (normalized === offset || normalized.startsWith(offset + '/'))) {
-      return join(this.repoRoot, normalized)
-    }
-    // Prefer workspace-relative if the file exists there.
-    const workspaceAbsolute = join(this.workspacePath, normalized)
+    const t0 = perfNow()
     try {
-      await access(workspaceAbsolute, constants.F_OK)
-      return workspaceAbsolute
-    } catch {
-      return join(this.repoRoot, normalized)
+      const normalized = filePath.replace(/\\/g, '/')
+      if (this.isAgentWorktree(cwd)) {
+        return join(cwd, normalized)
+      }
+      const offset = this.workspaceOffset
+      if (offset && (normalized === offset || normalized.startsWith(offset + '/'))) {
+        return join(this.repoRoot, normalized)
+      }
+      // Prefer workspace-relative if the file exists there.
+      const workspaceAbsolute = join(this.workspacePath, normalized)
+      try {
+        await access(workspaceAbsolute, constants.F_OK)
+        return workspaceAbsolute
+      } catch {
+        return join(this.repoRoot, normalized)
+      }
+    } finally {
+      perfLog(`[fs] resolveFilePath ${filePath} @ ${cwd}`, t0)
     }
   }
 
@@ -69,10 +75,14 @@ export class FileSystemService implements IFileSystemService {
   }
 
   async listFiles(cwd: string, relativePath: string): Promise<FileNode[]> {
+    const t0 = perfNow()
     const targetPath = join(cwd, relativePath)
 
     try {
+      const tRead = perfNow()
       const entries = await readdir(targetPath, { withFileTypes: true })
+      perfLog(`[fs] readdir ${relativePath || '(root)'} @ ${cwd}`, tRead)
+
       const filtered = entries.filter((entry) => {
         if (entry.name === 'node_modules') return false
         if (entry.name === '.git') return false
@@ -95,18 +105,31 @@ export class FileSystemService implements IFileSystemService {
     } catch {
       // Worktree not ready or directory doesn't exist — return empty list
       return []
+    } finally {
+      perfLog(`[fs] listFiles ${relativePath || '(root)'} @ ${cwd}`, t0)
     }
   }
 
   async readFileContent(cwd: string, filePath: string): Promise<string> {
-    const fullPath = await this.resolveFilePath(filePath, cwd)
+    const t0 = perfNow()
+    try {
+      const fullPath = await this.resolveFilePath(filePath, cwd)
 
-    const stats = await access(fullPath, constants.F_OK)
-      .then(() => true)
-      .catch(() => false)
-    if (!stats) throw new Error(`File not found: ${filePath}`)
+      const tAccess = perfNow()
+      const stats = await access(fullPath, constants.F_OK)
+        .then(() => true)
+        .catch(() => false)
+      perfLog(`[fs] access ${filePath}`, tAccess)
 
-    return readFile(fullPath, 'utf8')
+      if (!stats) throw new Error(`File not found: ${filePath}`)
+
+      const tRead = perfNow()
+      const content = await readFile(fullPath, 'utf8')
+      perfLog(`[fs] readFile ${filePath}`, tRead)
+      return content
+    } finally {
+      perfLog(`[fs] readFileContent ${filePath}（总耗时）`, t0)
+    }
   }
 
   async writeFileContent(cwd: string, filePath: string, content: string): Promise<void> {

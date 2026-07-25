@@ -7,6 +7,10 @@
 
 const marks = new Map<string, number>()
 
+export function perfNow(): number {
+  return performance.now()
+}
+
 export function perfMark(key: string, label?: string): void {
   marks.set(key, performance.now())
   console.info(`[Perf] ${label ?? key}`)

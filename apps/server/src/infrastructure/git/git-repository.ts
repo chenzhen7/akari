@@ -151,13 +151,16 @@ export class GitRepository {
     try {
       const baseRef = 'HEAD'
 
+      const tStat = perfNow()
       const [stat, full, nameStatus, numStat] = await Promise.all([
         this.runner.run(['diff', '--stat', baseRef], this.repoPath),
         this.runner.run(['diff', baseRef], this.repoPath),
         this.runner.run(['diff', '--name-status', baseRef], this.repoPath),
         this.runner.run(['diff', '--numstat', baseRef], this.repoPath),
       ])
+      perfLog(`[computeDiff] 并行 diff 统计/完整/name-status/numstat`, tStat)
 
+      const tUntracked = perfNow()
       const numStatMap = parseNumStat(numStat)
 
       const untrackedRaw = await this.runner
@@ -181,6 +184,7 @@ export class GitRepository {
           extraFiles.push({ path: file, status: 'A', additions: added, deletions: 0 })
         }
       }
+      perfLog(`[computeDiff] 未跟踪文件 diff`, tUntracked)
 
       const trackedFiles = parseFileStatus(nameStatus).map(f => ({
         ...f,
@@ -209,25 +213,31 @@ export class GitRepository {
   async getFileDiffLines(filePath: string): Promise<FileDiffLine[]> {
     const t0 = perfNow()
     try {
+      const tHead = perfNow()
       const headDiff = await this.runner
         .run(['diff', '--unified=0', 'HEAD', '--', filePath], this.repoPath)
         .catch(() => '')
+      perfLog(`[getFileDiffLines] HEAD diff ${filePath}`, tHead)
 
       if (headDiff) return parseDiffLines(headDiff)
 
+      const tCat = perfNow()
       const existsInHead = await this.runner
         .run(['cat-file', '-e', `HEAD:${filePath}`], this.repoPath)
         .then(() => true)
         .catch(() => false)
+      perfLog(`[getFileDiffLines] cat-file ${filePath}`, tCat)
 
       if (existsInHead) return []
 
+      const tUntracked = perfNow()
       const untrackedDiff = await this.runner
         .run(['diff', '--no-index', '--unified=0', '--', '/dev/null', filePath], this.repoPath)
         .catch((e: unknown) => {
           const err = e as { exitCode?: number; stdout?: string }
           return err.exitCode === 1 ? (err.stdout ?? '') : ''
         })
+      perfLog(`[getFileDiffLines] untracked diff ${filePath}`, tUntracked)
 
       if (!untrackedDiff) return []
       return parseDiffLines(untrackedDiff)
@@ -302,11 +312,22 @@ export class GitRepository {
     const defaultIgnored = /(^|[\\/])(node_modules|\.git|\.idea|\.vscode|\.cache|dist|build|out|target|coverage|\.next|\.nuxt|tmp|logs?|\.agent-worktrees)([\\/]|$)/i
     const gitignore = loadGitignoreFilter(this.repoPath)
 
+    let ignoredCount = 0
+    let checkedCount = 0
+
     const ignored = (filePath: string): boolean => {
-      if (defaultIgnored.test(filePath)) return true
+      checkedCount++
+      if (defaultIgnored.test(filePath)) {
+        ignoredCount++
+        return true
+      }
       const relativePath = relative(this.repoPath, filePath).replace(/\\/g, '/')
       if (!relativePath) return false
-      return gitignore.ignores(relativePath)
+      if (gitignore.ignores(relativePath)) {
+        ignoredCount++
+        return true
+      }
+      return false
     }
 
     const watcher = watch(this.repoPath, {
@@ -318,6 +339,7 @@ export class GitRepository {
 
     watcher.on('ready', () => {
       perfLog(`[chokidar] 初始扫描完成（watch → ready）@ ${this.repoPath}`, tWatch)
+      console.log(`[Perf] [chokidar] 扫描统计: checked=${checkedCount}, ignored=${ignoredCount}, watched=${checkedCount - ignoredCount} @ ${this.repoPath}`)
     })
 
     let debounce: ReturnType<typeof setTimeout> | null = null
