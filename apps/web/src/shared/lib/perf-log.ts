@@ -11,6 +11,11 @@ export function perfNow(): number {
   return performance.now()
 }
 
+export function perfLog(label: string, start?: number): void {
+  const elapsed = start !== undefined ? performance.now() - start : 0
+  console.info(`[Perf] ${label}${start !== undefined ? `: ${elapsed.toFixed(1)}ms` : ''}`)
+}
+
 export function perfMark(key: string, label?: string): void {
   marks.set(key, performance.now())
   console.info(`[Perf] ${label ?? key}`)
