@@ -2,6 +2,7 @@ import { watch, type FSWatcher } from 'chokidar'
 import { dirname, join, relative, resolve } from 'node:path'
 import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileDiffLine } from '@akari/shared-types'
 import { GitCommandRunner } from './git-command-runner.js'
+import { loadGitignoreFilter } from '../fs/gitignore-loader.js'
 import { perfLog, perfNow } from '../../perf-log.js'
 
 interface WatchDiffCallbacks {
@@ -294,8 +295,22 @@ export class GitRepository {
 
   watchDiff(callbacks: WatchDiffCallbacks): FSWatcher {
     const tWatch = perfNow()
+
+    // Hard-coded exclusions for common large/generated directories that are
+    // almost never relevant for diff updates. These are checked first (fast
+    // regex) before falling back to the repository's .gitignore rules.
+    const defaultIgnored = /(^|[\\/])(node_modules|\.git|\.idea|\.vscode|\.cache|dist|build|out|target|coverage|\.next|\.nuxt|tmp|logs?|\.agent-worktrees)([\\/]|$)/i
+    const gitignore = loadGitignoreFilter(this.repoPath)
+
+    const ignored = (filePath: string): boolean => {
+      if (defaultIgnored.test(filePath)) return true
+      const relativePath = relative(this.repoPath, filePath).replace(/\\/g, '/')
+      if (!relativePath) return false
+      return gitignore.ignores(relativePath)
+    }
+
     const watcher = watch(this.repoPath, {
-      ignored: /(node_modules|\.git)/,
+      ignored,
       persistent: true,
       ignoreInitial: true,
     })
