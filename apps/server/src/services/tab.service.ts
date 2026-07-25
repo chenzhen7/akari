@@ -121,6 +121,19 @@ export class TabService implements ITabService {
     const session = this.getSession(sessionId)
     if (!session || !session.tabs.find(t => t.id === tabId)) return
 
+    const tab = session.tabs.find(t => t.id === tabId)!
+    // 懒恢复：未恢复 PTY 的终端标签在首次激活时才创建终端
+    if (isTerminalLikeTab(tab) && !tab.terminalId && session.worktreePath) {
+      const terminalId = nanoid(8)
+      this.terminalService.createTerminal(terminalId, sessionId, session.worktreePath)
+      const updatedTab = { ...tab, terminalId }
+      const updatedTabs = session.tabs.map(t => (t.id === tabId ? updatedTab : t))
+      this.sessionRepository.updateTerminalIdAndTabs(sessionId, updatedTabs, tabId, terminalId)
+      this.broadcast({ event: 'tabs:sync', payload: { sessionId, tabs: updatedTabs, activeTabId: tabId } })
+      this.broadcast({ event: 'tab:activated', payload: { sessionId, tabId } })
+      return
+    }
+
     this.sessionRepository.updateActiveTab(sessionId, tabId)
     this.broadcast({ event: 'tab:activated', payload: { sessionId, tabId } })
   }

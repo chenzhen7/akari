@@ -58,32 +58,45 @@ function broadcast(message: ServerMessage, workspaceId?: string): void {
 }
 
 const workspaceSessionManagers = new Map<string, SessionManager>()
+const pendingSessionManagers = new Map<string, Promise<SessionManager>>()
 
 async function getOrCreateSessionManager(workspaceId: string): Promise<SessionManager> {
   const existing = workspaceSessionManagers.get(workspaceId)
   if (existing) return existing
 
-  const workspace = workspaceManager.getWorkspaceById(workspaceId)
-  if (!workspace) {
-    throw new Error(`Workspace not found: ${workspaceId}`)
-  }
+  const inFlight = pendingSessionManagers.get(workspaceId)
+  if (inFlight) return inFlight
 
-  const tCreate = perfNow()
-  const manager = await createSessionManager({
-    workspacePath: workspace.path,
-    repoRoot: workspace.repoRoot,
-    db,
-    broadcast: (msg) => broadcast(msg, workspaceId),
-    workspaceId: workspace.id,
-    isGitWorkspace: workspace.isGit,
-  })
-  perfLog(`[startup] createSessionManager（含 restoreSessions）`, tCreate)
+  const promise = (async (): Promise<SessionManager> => {
+    try {
+      const workspace = workspaceManager.getWorkspaceById(workspaceId)
+      if (!workspace) {
+        throw new Error(`Workspace not found: ${workspaceId}`)
+      }
 
-  const tMain = perfNow()
-  await manager.ensureMainSession(workspace.path)
-  perfLog(`[startup] ensureMainSession`, tMain)
-  workspaceSessionManagers.set(workspaceId, manager)
-  return manager
+      const tCreate = perfNow()
+      const manager = await createSessionManager({
+        workspacePath: workspace.path,
+        repoRoot: workspace.repoRoot,
+        db,
+        broadcast: (msg) => broadcast(msg, workspaceId),
+        workspaceId: workspace.id,
+        isGitWorkspace: workspace.isGit,
+      })
+      perfLog(`[startup] createSessionManager（含 restoreSessions）`, tCreate)
+
+      const tMain = perfNow()
+      await manager.ensureMainSession(workspace.path)
+      perfLog(`[startup] ensureMainSession`, tMain)
+      workspaceSessionManagers.set(workspaceId, manager)
+      return manager
+    } finally {
+      pendingSessionManagers.delete(workspaceId)
+    }
+  })()
+
+  pendingSessionManagers.set(workspaceId, promise)
+  return promise
 }
 
 const workspaceSessionRegistry = new WorkspaceSessionRegistryService({

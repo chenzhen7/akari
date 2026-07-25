@@ -318,9 +318,16 @@ export class SessionLifecycleService implements ISessionLifecycleService {
         const restoredTabs: SessionTab[] = []
         for (const tab of tabs) {
           if (isTerminalLikeTab(tab)) {
-            const terminalId = nanoid(8)
-            this.terminalService.createTerminal(terminalId, session.id, session.worktreePath)
-            restoredTabs.push({ ...tab, terminalId })
+            // 只有当前激活的终端标签才在启动时恢复 PTY；
+            // 其余终端标签保持 terminalId 为空，等用户点击 tab 时再懒恢复。
+            const isActive = tab.id === activeTabId
+            if (isActive && session.worktreePath) {
+              const terminalId = nanoid(8)
+              this.terminalService.createTerminal(terminalId, session.id, session.worktreePath)
+              restoredTabs.push({ ...tab, terminalId })
+            } else {
+              restoredTabs.push({ ...tab, terminalId: undefined })
+            }
           } else {
             restoredTabs.push(tab)
           }
