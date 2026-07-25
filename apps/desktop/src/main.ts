@@ -115,10 +115,12 @@ async function startServer(): Promise<number> {
     }, 30000)
 
     const onData = (data: Buffer): void => {
-      if (settled) return
       const chunk = data.toString()
-      stdout += chunk
+      // stdout 日志转发不能受 settled 影响，否则 server 启动成功后的
+      // 所有 console.log（如 [Perf] 打点）都会被静默丢弃。
       log.info('[server]', chunk.trim())
+      if (settled) return
+      stdout += chunk
       const match = /AKARI_PORT=(\d+)/.exec(stdout)
       if (match) {
         clearTimeout(timeout)
