@@ -1,7 +1,6 @@
 import { API_BASE, parseOkResponse } from './api'
 import { toastError } from './toast'
 import { useWindowStore } from '@/shared/stores/window-store'
-import { perfLog, perfNow } from './perf-log'
 
 export interface ApiRequestOptions {
   /** URL query params，自动编码 */
@@ -37,7 +36,6 @@ async function request<T>(
   body?: unknown,
   opts: ApiRequestOptions = {},
 ): Promise<T> {
-  const t0 = perfNow()
   const workspaceId = useWindowStore.getState().workspaceId
   const headers: Record<string, string> = {
     ...opts.headers,
@@ -53,19 +51,15 @@ async function request<T>(
   await parseOkResponse(res)
 
   if (res.status === 204) {
-    perfLog(`[api] ${method} ${path}（HTTP 总耗时）`, t0)
     return undefined as T
   }
 
   const contentType = res.headers.get('content-type')
   if (!contentType || !contentType.includes('application/json')) {
-    perfLog(`[api] ${method} ${path}（HTTP 总耗时）`, t0)
     return undefined as T
   }
 
-  const data = await res.json() as T
-  perfLog(`[api] ${method} ${path}（HTTP 总耗时）`, t0)
-  return data
+  return res.json() as Promise<T>
 }
 
 function handleError(err: unknown, opts: ApiRequestOptions): never {

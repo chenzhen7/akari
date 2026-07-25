@@ -20,14 +20,6 @@ function findGitRoot(startPath: string): string | null {
   return null
 }
 
-function countPatterns(content: string): number {
-  return content
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => line && !line.startsWith('#'))
-    .length
-}
-
 /**
  * Load `.gitignore` files for a repository path.
  *
@@ -45,13 +37,10 @@ export function loadGitignoreFilter(repoPath: string): GitignoreFilter {
   const resolvedRepo = resolve(repoPath)
 
   let current = resolvedRepo
-  const loaded: string[] = []
   while (true) {
     try {
-      const file = join(current, '.gitignore')
-      const content = readFileSync(file, 'utf8')
+      const content = readFileSync(join(current, '.gitignore'), 'utf8')
       ig.add(content)
-      loaded.push(`${file} (${countPatterns(content)} patterns)`)
     } catch {
       // .gitignore may not exist at this level — that's fine.
     }
@@ -62,12 +51,6 @@ export function loadGitignoreFilter(repoPath: string): GitignoreFilter {
     const parent = dirname(current)
     if (parent === current) break
     current = parent
-  }
-
-  if (loaded.length > 0) {
-    console.log(`[Perf] [gitignore] loaded from: ${loaded.join(', ')}`)
-  } else {
-    console.log(`[Perf] [gitignore] no .gitignore found up to ${gitRoot ?? resolvedRepo}`)
   }
 
   return {

@@ -14,7 +14,6 @@ import { TerminalService } from './services/terminal.service.js'
 import { WorktreeService } from './services/worktree.service.js'
 import { isTerminalLikeTab } from './services/tab-utils.js'
 import { validateTransition } from './core/session-state-machine.js'
-import { perfLog, perfNow } from './perf-log.js'
 
 export { validateTransition, CreateSessionParams }
 
@@ -324,19 +323,13 @@ export class SessionManager {
   async listFiles(sessionId: string, relativePath: string): Promise<FileNode[]> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    const t0 = perfNow()
-    const result = await this.fileService.listFiles(session.worktreePath, relativePath)
-    perfLog(`[session] listFiles ${relativePath || '(root)'} for ${sessionId}`, t0)
-    return result
+    return this.fileService.listFiles(session.worktreePath, relativePath)
   }
 
   async readFileContent(sessionId: string, filePath: string): Promise<string> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    const t0 = perfNow()
-    const content = await this.fileService.readFileContent(session.worktreePath, filePath)
-    perfLog(`[session] readFileContent ${filePath} for ${sessionId}`, t0)
-    return content
+    return this.fileService.readFileContent(session.worktreePath, filePath)
   }
 
   async writeFileContent(sessionId: string, filePath: string, content: string): Promise<void> {
