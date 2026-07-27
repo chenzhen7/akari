@@ -75,12 +75,6 @@ export function AppShell() {
     maxRightWidth: 30,
   })
 
-  // 初始加载时展开右侧
-  useEffect(() => {
-    expandRight()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   const toggleLeft = () => (leftCollapsed ? expandLeft() : collapseLeft())
   const toggleRight = () => (rightCollapsed ? expandRight() : collapseRight())
 
