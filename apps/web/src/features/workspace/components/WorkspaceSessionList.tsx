@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { cn } from '@/shared/lib/utils'
 import { toastError } from '@/shared/lib/toast'
 import { apiClient } from '@/shared/lib/api-client'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
@@ -95,7 +96,6 @@ export function WorkspaceSessionList() {
   }, [expandedIds])
 
   const toggleExpand = useCallback((workspaceId: string) => {
-    if (workspaceId === currentWorkspace?.id) return
     setExpandedIds(prev => {
       const next = new Set(prev)
       if (next.has(workspaceId)) {
@@ -105,7 +105,7 @@ export function WorkspaceSessionList() {
       }
       return next
     })
-  }, [currentWorkspace?.id])
+  }, [])
 
   const handleSelectSession = useCallback((session: AgentSession) => {
     if (session.workspaceId === currentWorkspace?.id) {
@@ -223,56 +223,69 @@ export function WorkspaceSessionList() {
                   </button>
                 </ContextMenuTrigger>
 
-                {isExpanded && (
-                  <div className="mt-0.5 space-y-0.5 pl-2" onClick={(e) => e.stopPropagation()}>
-                    {mainSession && (
-                      <MainSessionItem
-                        session={mainSession}
-                        isActive={mainSession.id === activeSessionId}
-                        onContextMenu={handleContextMenu}
-                        onClick={() => handleSelectSession(mainSession)}
-                      />
+                <div
+                  className={cn(
+                    'grid transition-[grid-template-rows] duration-200 ease-out',
+                    isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'min-h-0 transition-opacity duration-200',
+                      isExpanded ? 'overflow-visible opacity-100' : 'overflow-hidden opacity-0',
                     )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="mt-0.5 space-y-0.5 pl-2">
+                      {mainSession && (
+                        <MainSessionItem
+                          session={mainSession}
+                          isActive={mainSession.id === activeSessionId}
+                          onContextMenu={handleContextMenu}
+                          onClick={() => handleSelectSession(mainSession)}
+                        />
+                      )}
 
-                    {activeSessions.map(session => (
-                      <SessionItem
-                        key={session.id}
-                        session={session}
-                        isActive={session.id === activeSessionId}
-                        onContextMenu={handleContextMenu}
-                        onClick={() => handleSelectSession(session)}
-                      />
-                    ))}
+                      {activeSessions.map(session => (
+                        <SessionItem
+                          key={session.id}
+                          session={session}
+                          isActive={session.id === activeSessionId}
+                          onContextMenu={handleContextMenu}
+                          onClick={() => handleSelectSession(session)}
+                        />
+                      ))}
 
-                    {archivedSessions.length > 0 && (
-                      <>
-                        <div className="flex h-7 items-center px-2">
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            归档
-                          </span>
-                          <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
-                            {archivedSessions.length}
-                          </span>
+                      {archivedSessions.length > 0 && (
+                        <>
+                          <div className="flex h-7 items-center px-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              归档
+                            </span>
+                            <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
+                              {archivedSessions.length}
+                            </span>
+                          </div>
+                          {archivedSessions.map(session => (
+                            <SessionItem
+                              key={session.id}
+                              session={session}
+                              isActive={session.id === activeSessionId}
+                              onContextMenu={handleContextMenu}
+                              onClick={() => handleSelectSession(session)}
+                            />
+                          ))}
+                        </>
+                      )}
+
+                      {!isLoading && !mainSession && activeSessions.length === 0 && archivedSessions.length === 0 && (
+                        <div className="px-2 py-2 text-xs text-muted-foreground">
+                          暂无会话
                         </div>
-                        {archivedSessions.map(session => (
-                          <SessionItem
-                            key={session.id}
-                            session={session}
-                            isActive={session.id === activeSessionId}
-                            onContextMenu={handleContextMenu}
-                            onClick={() => handleSelectSession(session)}
-                          />
-                        ))}
-                      </>
-                    )}
-
-                    {!isLoading && !mainSession && activeSessions.length === 0 && archivedSessions.length === 0 && (
-                      <div className="px-2 py-2 text-xs text-muted-foreground">
-                        暂无会话
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                )}
+                </div>
 
                 <ContextMenuContent className="w-44">
                   <ContextMenuLabel className="text-[11px]">{workspace.name}</ContextMenuLabel>
