@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, Plus, X, Terminal, GitCompare } from 'lucide-react'
 import { CreateTerminalDialog } from './CreateTerminalDialog'
 import { TabContextMenu } from './TabContextMenu'
@@ -63,6 +63,7 @@ const SortableTab = memo(function SortableTab({
   displayLabel,
   tooltipContent,
   onContextMenu,
+  setTabRef,
 }: {
   sessionId: string
   tab: AgentSession['tabs'][number]
@@ -70,6 +71,7 @@ const SortableTab = memo(function SortableTab({
   displayLabel: string
   tooltipContent: string
   onContextMenu?: (e: React.MouseEvent) => void
+  setTabRef?: (id: string, el: HTMLButtonElement | null) => void
 }) {
   const activateTab = useTabStore(s => s.activateTab)
   const closeTab = useTabStore(s => s.closeTab)
@@ -82,6 +84,11 @@ const SortableTab = memo(function SortableTab({
     transition,
     isDragging,
   } = useSortable({ id: tab.id })
+
+  const handleRef = useCallback((node: HTMLButtonElement | null) => {
+    setNodeRef(node)
+    setTabRef?.(tab.id, node)
+  }, [setNodeRef, setTabRef, tab.id])
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -123,7 +130,7 @@ const SortableTab = memo(function SortableTab({
     <Tooltip delayDuration={500}>
       <TooltipTrigger asChild>
         <button
-          ref={setNodeRef}
+          ref={handleRef}
           style={style}
           {...attributes}
           {...listeners}
@@ -163,6 +170,10 @@ export function MiddleTabBar({ sessionId }: MiddleTabBarProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ tab: SessionTab; x: number; y: number } | null>(null)
   const reorderTabs = useTabStore(s => s.reorderTabs)
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const setTabRef = useCallback((id: string, el: HTMLButtonElement | null) => {
+    tabRefs.current[id] = el
+  }, [])
   const { tabs, activeTabId, worktreePath, workspaceId } = useSessionStore(
     useShallow(s => {
       const session = s.sessions.find(ses => ses.id === sessionId)
@@ -201,6 +212,13 @@ export function MiddleTabBar({ sessionId }: MiddleTabBarProps) {
       },
     })
   )
+
+  useEffect(() => {
+    if (!activeTabId) return
+    const el = tabRefs.current[activeTabId]
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+  }, [activeTabId])
 
   const handleContextMenu = useCallback((tab: SessionTab, e: React.MouseEvent) => {
     e.preventDefault()
@@ -250,6 +268,7 @@ export function MiddleTabBar({ sessionId }: MiddleTabBarProps) {
                 displayLabel={displayLabel}
                 tooltipContent={tooltipContent}
                 onContextMenu={contextMenuHandlers[tab.id]}
+                setTabRef={setTabRef}
               />
             ))}
           </div>
