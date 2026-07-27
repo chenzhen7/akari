@@ -133,11 +133,11 @@ export function handleServerMessage(msg: ServerMessage): void {
       break
     case 'workspace:list': {
       const merged = mergeWorkspaces(useWorkspaceStore.getState().workspaces, msg.payload)
+      const current = useWorkspaceStore.getState().currentWorkspace
+      const updatedCurrent = current ? merged.find(w => w.id === current.id) ?? null : null
       useWorkspaceStore.setState(state => ({
         workspaces: merged,
-        currentWorkspace: state.currentWorkspace && merged.some(w => w.id === state.currentWorkspace?.id)
-          ? state.currentWorkspace
-          : null,
+        currentWorkspace: updatedCurrent ?? (state.currentWorkspace ? merged[0] ?? null : null),
       }))
       break
     }

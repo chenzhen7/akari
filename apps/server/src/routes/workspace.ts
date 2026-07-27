@@ -42,4 +42,13 @@ export default async function workspaceRoutes(fastify: FastifyInstance) {
     fastify.broadcast({ event: 'workspace:list', payload: fastify.workspaceManager.listWorkspaces() })
     return { ok: true }
   })
+
+  fastify.patch<{ Params: { id: string }; Body: { pinned?: boolean } }>('/workspaces/:id/pin', async (request, reply) => {
+    const { id } = request.params
+    const pinned = request.body.pinned ?? true
+    const workspace = fastify.workspaceManager.pinWorkspace(id, pinned)
+    if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
+    fastify.broadcast({ event: 'workspace:list', payload: fastify.workspaceManager.listWorkspaces() })
+    return workspace
+  })
 }

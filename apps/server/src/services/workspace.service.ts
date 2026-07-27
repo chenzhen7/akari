@@ -45,6 +45,14 @@ export class WorkspaceService {
     return { ...target, lastOpenedAt: new Date() }
   }
 
+  pinWorkspace(id: string, pinned: boolean): Workspace | null {
+    const target = this.repository.getById(id)
+    if (!target) return null
+    const ok = this.repository.pin(id, pinned)
+    if (!ok) return null
+    return { ...target, pinned }
+  }
+
   deleteWorkspace(id: string): boolean {
     return this.repository.delete(id)
   }

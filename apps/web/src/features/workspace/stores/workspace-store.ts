@@ -13,6 +13,7 @@ interface WorkspaceStore {
   addWorkspace: (name: string, path: string) => Promise<Workspace | undefined>
   activateWorkspace: (id: string, sessionId?: string) => Promise<void>
   deleteWorkspace: (id: string) => Promise<void>
+  pinWorkspace: (id: string) => Promise<void>
   setCurrentWorkspace: (workspace: Workspace) => void
 }
 
@@ -48,10 +49,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       .then((workspaces) => {
         const merged = mergeWorkspaces(get().workspaces, workspaces)
         const nextCurrent = get().currentWorkspace
-        const stillExists = nextCurrent && merged.some(w => w.id === nextCurrent.id)
+        const updatedCurrent = nextCurrent ? merged.find(w => w.id === nextCurrent.id) ?? null : null
         set({
           workspaces: merged,
-          currentWorkspace: stillExists ? nextCurrent : (merged[0] ?? null),
+          currentWorkspace: updatedCurrent ?? (merged[0] ?? null),
         })
       })
       .catch(err => {
@@ -129,6 +130,29 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       }
     } catch (err) {
       console.error('[deleteWorkspace] failed:', err)
+    }
+  },
+
+  pinWorkspace: async (id) => {
+    const workspace = get().workspaces.find(w => w.id === id)
+    if (!workspace) return
+
+    const nextPinned = !workspace.pinned
+    try {
+      await apiClient.patch(`/workspaces/${id}/pin`, { pinned: nextPinned }, { toast: nextPinned ? '置顶失败' : '取消置顶失败' })
+      const reordered = [...get().workspaces]
+        .map(w => w.id === id ? { ...w, pinned: nextPinned } : w)
+        .sort((a, b) => {
+          if (a.pinned !== b.pinned) return Number(b.pinned) - Number(a.pinned)
+          return b.lastOpenedAt.getTime() - a.lastOpenedAt.getTime()
+        })
+      const nextCurrent = get().currentWorkspace
+      set({
+        workspaces: reordered,
+        currentWorkspace: nextCurrent && nextCurrent.id === id ? { ...nextCurrent, pinned: nextPinned } : nextCurrent,
+      })
+    } catch (err) {
+      console.error('[pinWorkspace] failed:', err)
     }
   },
 

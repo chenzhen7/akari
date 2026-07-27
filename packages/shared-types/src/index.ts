@@ -137,6 +137,7 @@ export interface Workspace {
   path: string
   repoRoot: string
   isGit: boolean
+  pinned: boolean
   createdAt: Date
   lastOpenedAt: Date
 }

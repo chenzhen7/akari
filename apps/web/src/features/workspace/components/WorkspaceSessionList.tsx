@@ -3,10 +3,10 @@ import { toastError } from '@/shared/lib/toast'
 import { apiClient } from '@/shared/lib/api-client'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { useSessionStore } from '@/features/session/stores/session-store'
+import { useUIStore } from '@/shared/stores/ui-store'
 import { SessionItem, MainSessionItem } from '@/features/session/components/SessionListItems'
 import { SessionContextMenu } from '@/features/layout/components/SessionContextMenu'
 import { SwitchBranchDialog } from '@/features/session/components/SwitchBranchDialog'
-import { selectFolder } from '@/shared/lib/native-file-picker'
 import {
   Dialog,
   DialogContent,
@@ -15,8 +15,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/shared/components/ui/context-menu'
 import { Button } from '@/shared/components/ui/button'
-import { ChevronDown, ChevronRight, Folder, Plus, Trash2 } from 'lucide-react'
+import { Folder, FolderOpen, Plus, Pin, Trash2 } from 'lucide-react'
 import type { AgentSession } from '@akari/shared-types'
 
 export function WorkspaceSessionList() {
@@ -24,9 +32,10 @@ export function WorkspaceSessionList() {
   const currentWorkspace = useWorkspaceStore(s => s.currentWorkspace)
   const activateWorkspace = useWorkspaceStore(s => s.activateWorkspace)
   const deleteWorkspace = useWorkspaceStore(s => s.deleteWorkspace)
-  const addWorkspace = useWorkspaceStore(s => s.addWorkspace)
+  const pinWorkspace = useWorkspaceStore(s => s.pinWorkspace)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
   const selectSession = useSessionStore(s => s.selectSession)
+  const openCreateDialog = useUIStore(s => s.openCreateDialog)
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     () => new Set(currentWorkspace?.id ? [currentWorkspace.id] : []),
@@ -86,6 +95,7 @@ export function WorkspaceSessionList() {
   }, [expandedIds])
 
   const toggleExpand = useCallback((workspaceId: string) => {
+    if (workspaceId === currentWorkspace?.id) return
     setExpandedIds(prev => {
       const next = new Set(prev)
       if (next.has(workspaceId)) {
@@ -95,7 +105,7 @@ export function WorkspaceSessionList() {
       }
       return next
     })
-  }, [])
+  }, [currentWorkspace?.id])
 
   const handleSelectSession = useCallback((session: AgentSession) => {
     if (session.workspaceId === currentWorkspace?.id) {
@@ -105,20 +115,26 @@ export function WorkspaceSessionList() {
     void activateWorkspace(session.workspaceId, session.id)
   }, [currentWorkspace?.id, selectSession, activateWorkspace])
 
-  const handleOpenFolder = useCallback(async () => {
-    try {
-      const path = await selectFolder()
-      if (!path) return
-      const parts = path.replace(/\\/g, '/').split('/').filter(Boolean)
-      const name = parts[parts.length - 1] || 'workspace'
-      const workspace = await addWorkspace(name, path)
-      if (workspace) {
-        await activateWorkspace(workspace.id)
-      }
-    } catch (err) {
-      toastError(`打开文件夹失败：${err instanceof Error ? err.message : String(err)}`)
+  const handleNewSession = useCallback(async (workspaceId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (workspaceId !== currentWorkspace?.id) {
+      await activateWorkspace(workspaceId)
     }
-  }, [addWorkspace, activateWorkspace])
+    openCreateDialog()
+  }, [currentWorkspace?.id, activateWorkspace, openCreateDialog])
+
+  const handleOpenExplorer = useCallback(async (path: string) => {
+    const openPath = window.electron?.shell?.openPath
+    if (!openPath) return
+    const error = await openPath(path)
+    if (error) {
+      toastError(`打开资源管理器失败：${error}`)
+    }
+  }, [])
+
+  const handlePin = useCallback(async (workspaceId: string) => {
+    await pinWorkspace(workspaceId)
+  }, [pinWorkspace])
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deletingWorkspaceId) return
@@ -151,7 +167,7 @@ export function WorkspaceSessionList() {
     ? workspaces.find(w => w.id === deletingWorkspaceId) ?? null
     : null
 
-  const hasNativeDialog = typeof window !== 'undefined' && !!window.electron?.dialog?.showOpenDialog
+  const canOpenExplorer = typeof window !== 'undefined' && !!window.electron?.shell?.openPath
 
   return (
     <>
@@ -167,7 +183,6 @@ export function WorkspaceSessionList() {
 
         <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-0.5">
           {workspaces.map((workspace) => {
-            const isActive = workspace.id === currentWorkspace?.id
             const isExpanded = expandedIds.has(workspace.id)
             const sessions = workspaceSessions[workspace.id] ?? []
             const isLoading = loadingIds.has(workspace.id)
@@ -178,45 +193,38 @@ export function WorkspaceSessionList() {
             const archivedSessions = regularSessions.filter(s => s.status === 'archived')
 
             return (
-              <div key={workspace.id} className="rounded-lg border border-transparent">
-                <button
-                  onClick={() => toggleExpand(workspace.id)}
-                  className="group flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm font-normal text-foreground transition-none hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
-                  title={`${workspace.name}\n${workspace.path}`}
-                >
-                  <Folder className="h-4 w-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
+              <ContextMenu key={workspace.id}>
+                <ContextMenuTrigger asChild>
+                  <button
+                    onClick={() => toggleExpand(workspace.id)}
+                    className="group flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm font-normal text-foreground transition-none hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+                    title={`${workspace.name}\n${workspace.path}`}
+                  >
+                    <Folder className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    {isLoading && (
-                      <span className="text-[10px] text-muted-foreground">加载中...</span>
-                    )}
-                    {!isActive && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      {workspace.pinned && (
+                        <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      )}
+                      {isLoading && (
+                        <span className="text-[10px] text-muted-foreground">加载中...</span>
+                      )}
                       <Button
                         variant="ghost"
                         size="xs"
-                        className="h-6 w-6 shrink-0 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDeletingWorkspaceId(workspace.id)
-                        }}
-                        title="删除项目"
+                        className="h-6 w-6 shrink-0 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground"
+                        onClick={(e) => handleNewSession(workspace.id, e)}
+                        title="新建会话"
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Plus className="h-3.5 w-3.5" />
                       </Button>
-                    )}
-                    {isExpanded ? (
-                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    )}
-                  </div>
-                </button>
+                    </div>
+                  </button>
+                </ContextMenuTrigger>
 
                 {isExpanded && (
-                  <div className="mt-0.5 space-y-0.5 pl-2"
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <div className="mt-0.5 space-y-0.5 pl-2" onClick={(e) => e.stopPropagation()}>
                     {mainSession && (
                       <MainSessionItem
                         session={mainSession}
@@ -265,7 +273,30 @@ export function WorkspaceSessionList() {
                     )}
                   </div>
                 )}
-              </div>
+
+                <ContextMenuContent className="w-44">
+                  <ContextMenuLabel className="text-[11px]">{workspace.name}</ContextMenuLabel>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onClick={() => handlePin(workspace.id)}>
+                    <Pin className="mr-2 h-3.5 w-3.5" />
+                    {workspace.pinned ? '取消置顶' : '置顶'}
+                  </ContextMenuItem>
+                  {canOpenExplorer && (
+                    <ContextMenuItem onClick={() => handleOpenExplorer(workspace.path)}>
+                      <FolderOpen className="mr-2 h-3.5 w-3.5" />
+                      打开资源管理器
+                    </ContextMenuItem>
+                  )}
+                  <ContextMenuSeparator />
+                  <ContextMenuItem
+                    variant="destructive"
+                    onClick={() => setDeletingWorkspaceId(workspace.id)}
+                  >
+                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                    移除
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             )
           })}
 
@@ -275,20 +306,6 @@ export function WorkspaceSessionList() {
             </div>
           )}
         </div>
-
-        {hasNativeDialog && (
-          <div className="shrink-0 border-t border-border/50 p-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-full justify-start gap-2 rounded-lg px-2.5 text-sm font-normal text-foreground hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
-              onClick={handleOpenFolder}
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              <span>打开文件夹...</span>
-            </Button>
-          </div>
-        )}
       </div>
 
       {contextMenu && ctxSession && (

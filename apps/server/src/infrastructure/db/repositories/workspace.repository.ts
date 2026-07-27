@@ -11,6 +11,7 @@ interface WorkspaceRow {
   path: string
   repo_root: string
   is_git: number
+  pinned: number
   created_at: string
   last_opened_at: string
 }
@@ -26,6 +27,7 @@ function rowToWorkspace(r: WorkspaceRow): Workspace {
     path: r.path,
     repoRoot: r.repo_root,
     isGit: r.is_git === 1,
+    pinned: r.pinned === 1,
     createdAt: new Date(r.created_at),
     lastOpenedAt: new Date(r.last_opened_at),
   }
@@ -47,6 +49,7 @@ export class WorkspaceRepository {
         path TEXT NOT NULL UNIQUE,
         repo_root TEXT,
         is_git INTEGER NOT NULL DEFAULT 0,
+        pinned INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         last_opened_at TEXT NOT NULL
       )
@@ -67,6 +70,11 @@ export class WorkspaceRepository {
     const addedIsGit = !cols.includes('is_git')
     if (addedIsGit) {
       this.db.exec('ALTER TABLE workspaces ADD COLUMN is_git INTEGER NOT NULL DEFAULT 0')
+    }
+
+    const addedPinned = !cols.includes('pinned')
+    if (addedPinned) {
+      this.db.exec('ALTER TABLE workspaces ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0')
     }
 
     const rows = this.db
@@ -99,7 +107,7 @@ export class WorkspaceRepository {
   }
 
   list(): Workspace[] {
-    const rows = this.db.prepare('SELECT * FROM workspaces ORDER BY last_opened_at DESC').all() as WorkspaceRow[]
+    const rows = this.db.prepare('SELECT * FROM workspaces ORDER BY pinned DESC, last_opened_at DESC').all() as WorkspaceRow[]
     return rows.map(rowToWorkspace)
   }
 
@@ -127,6 +135,7 @@ export class WorkspaceRepository {
       path: resolvedPath,
       repoRoot,
       isGit,
+      pinned: false,
       createdAt: new Date(now),
       lastOpenedAt: new Date(now),
     }
@@ -156,6 +165,11 @@ export class WorkspaceRepository {
 
   delete(id: string): boolean {
     const info = this.db.prepare('DELETE FROM workspaces WHERE id = ?').run(id)
+    return info.changes > 0
+  }
+
+  pin(id: string, pinned: boolean): boolean {
+    const info = this.db.prepare('UPDATE workspaces SET pinned = ? WHERE id = ?').run(pinned ? 1 : 0, id)
     return info.changes > 0
   }
 }

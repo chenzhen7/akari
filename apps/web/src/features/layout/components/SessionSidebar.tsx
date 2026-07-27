@@ -1,10 +1,14 @@
+import { useCallback } from 'react'
 import { cn } from '@/shared/lib/utils'
 import { useSessionStore } from '@/features/session/stores/session-store'
 import { useUIStore } from '@/shared/stores/ui-store'
+import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
+import { selectFolder } from '@/shared/lib/native-file-picker'
+import { toastError } from '@/shared/lib/toast'
 import { CANVAS_ENABLED } from '@/shared/lib/feature-flags'
 import { Button } from '@/shared/components/ui/button'
 import {
-  Plus,
+  FolderOpen,
   LayoutGrid,
   Columns3,
   Radio,
@@ -14,8 +18,6 @@ import {
 import { SettingsDialog } from '@/features/settings/components/SettingsDialog'
 import { WorkspaceSessionList } from '@/features/workspace/components/WorkspaceSessionList'
 import { shortcutLabel } from '@/shared/lib/shortcuts'
-
-import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 
 interface SidebarActionButtonProps {
   icon: LucideIcon
@@ -59,21 +61,36 @@ function SidebarActionButton({ icon: Icon, label, active, shortcut, disabled, ti
 function SidebarActions() {
   const globalViewMode = useSessionStore(s => s.globalViewMode)
   const setGlobalViewMode = useSessionStore(s => s.setGlobalViewMode)
-  const openCreateDialog = useUIStore(s => s.openCreateDialog)
   const toggleCommandCenter = useUIStore(s => s.toggleCommandCenter)
-  const currentWorkspace = useWorkspaceStore(s => s.currentWorkspace)
-  const canCreateSession = currentWorkspace?.isGit !== false
+  const addWorkspace = useWorkspaceStore(s => s.addWorkspace)
+  const activateWorkspace = useWorkspaceStore(s => s.activateWorkspace)
+
+  const handleOpenFolder = useCallback(async () => {
+    try {
+      const path = await selectFolder()
+      if (!path) return
+      const parts = path.replace(/\\/g, '/').split('/').filter(Boolean)
+      const name = parts[parts.length - 1] || 'workspace'
+      const workspace = await addWorkspace(name, path)
+      if (workspace) {
+        await activateWorkspace(workspace.id)
+      }
+    } catch (err) {
+      toastError(`打开文件夹失败：${err instanceof Error ? err.message : String(err)}`)
+    }
+  }, [addWorkspace, activateWorkspace])
+
+  const canOpenFolder = typeof window !== 'undefined' && !!window.electron?.dialog?.showOpenDialog
 
   return (
     <div className="space-y-0.5 border-b border-border/50 p-2">
-      <SidebarActionButton
-        icon={Plus}
-        label="新建会话"
-        shortcut={shortcutLabel('new-session')}
-        onClick={() => openCreateDialog()}
-        disabled={!canCreateSession}
-        title={canCreateSession ? undefined : '当前项目不是 Git 仓库'}
-      />
+      {canOpenFolder && (
+        <SidebarActionButton
+          icon={FolderOpen}
+          label="打开文件夹"
+          onClick={() => void handleOpenFolder()}
+        />
+      )}
       {CANVAS_ENABLED && (
         <SidebarActionButton
           icon={LayoutGrid}
