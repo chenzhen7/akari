@@ -128,7 +128,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Agent 会话的独立工作区将创建在此目录下。修改后仅对新会话生效。
+              Agent 会话的独立工作目录将创建在此目录下。修改后仅对新会话生效。
             </p>
           </div>
         </div>

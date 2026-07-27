@@ -175,7 +175,7 @@ export function CreateSessionDialog() {
           {/* Footer */}
           <div className="flex items-center justify-between gap-2 px-5 py-3">
             {!isGitWorkspace && (
-              <span className="text-xs text-destructive">当前工作区不是 Git 仓库，无法创建会话</span>
+              <span className="text-xs text-destructive">当前项目不是 Git 仓库，无法创建会话</span>
             )}
             <div className="ml-auto flex items-center gap-2">
               <Button type="button" variant="ghost" className="h-8 text-xs" onClick={toggleCreateDialog}>

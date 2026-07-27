@@ -29,7 +29,7 @@ export function mergeWorkspaces(prev: Workspace[], next: Workspace[]): Workspace
     }
   }
 
-  // 新工作区追加到末尾
+  // 新项目追加到末尾
   for (const w of next) {
     if (nextById.has(w.id)) {
       merged.push(w)
@@ -56,17 +56,17 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       })
       .catch(err => {
         console.error('[fetchWorkspaces] failed:', err)
-        toastError(`加载工作区失败：${err instanceof Error ? err.message : String(err)}`)
+        toastError(`加载项目失败：${err instanceof Error ? err.message : String(err)}`)
       })
   },
 
   addWorkspace: async (name, path) => {
     try {
       const workspace = await apiClient.post<Workspace | null>('/workspaces', { name, path }, { toast: false })
-      toast.success(`已添加工作区：${workspace?.name ?? name}`)
+      toast.success(`已添加项目：${workspace?.name ?? name}`)
       return workspace ?? undefined
     } catch (err) {
-      toastError(`添加工作区失败：${err instanceof Error ? err.message : String(err)}`)
+      toastError(`添加项目失败：${err instanceof Error ? err.message : String(err)}`)
       return undefined
     }
   },
@@ -98,7 +98,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     try {
       const [sessions] = await Promise.all([
         apiClient.get<AgentSession[]>('/sessions', { workspaceId: id, toast: false }),
-        apiClient.post(`/workspaces/${id}/activate`, undefined, { toast: '切换工作区失败' }),
+        apiClient.post(`/workspaces/${id}/activate`, undefined, { toast: '切换项目失败' }),
       ])
       useSessionStore.getState().setSessions(sessions)
       if (sessionId) {
@@ -111,7 +111,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   deleteWorkspace: async (id) => {
     try {
-      await apiClient.delete(`/workspaces/${id}`, { toast: '删除工作区失败' })
+      await apiClient.delete(`/workspaces/${id}`, { toast: '删除项目失败' })
       if (window.electron?.workspace?.notifyDeleted) {
         void window.electron.workspace.notifyDeleted(id)
       }

@@ -72,7 +72,7 @@ function SidebarActions() {
         shortcut={shortcutLabel('new-session')}
         onClick={() => openCreateDialog()}
         disabled={!canCreateSession}
-        title={canCreateSession ? undefined : '当前工作区不是 Git 仓库'}
+        title={canCreateSession ? undefined : '当前项目不是 Git 仓库'}
       />
       {CANVAS_ENABLED && (
         <SidebarActionButton

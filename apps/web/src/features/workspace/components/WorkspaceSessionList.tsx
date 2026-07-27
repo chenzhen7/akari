@@ -158,7 +158,7 @@ export function WorkspaceSessionList() {
       <div className="flex h-full flex-col overflow-hidden">
         <div className="flex h-9 shrink-0 items-center gap-2 px-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            工作区
+            项目
           </span>
           <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
             {workspaces.length}
@@ -200,7 +200,7 @@ export function WorkspaceSessionList() {
                           e.stopPropagation()
                           setDeletingWorkspaceId(workspace.id)
                         }}
-                        title="删除工作区"
+                        title="删除项目"
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -271,7 +271,7 @@ export function WorkspaceSessionList() {
 
           {workspaces.length === 0 && (
             <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-              暂无工作区
+              暂无项目
             </div>
           )}
         </div>
@@ -311,9 +311,9 @@ export function WorkspaceSessionList() {
       <Dialog open={!!deletingWorkspace} onOpenChange={open => !open && setDeletingWorkspaceId(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">删除工作区</DialogTitle>
+            <DialogTitle className="text-sm">删除项目</DialogTitle>
             <DialogDescription className="text-[11px]">
-              确定要删除工作区「{deletingWorkspace?.name}」吗？该操作不会删除磁盘上的文件夹，仅移除 Akari 中的记录。
+              确定要删除项目「{deletingWorkspace?.name}」吗？该操作不会删除磁盘上的文件夹，仅移除 Akari 中的记录。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

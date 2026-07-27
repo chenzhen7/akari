@@ -42,7 +42,7 @@ export function useGlobalShortcuts({ toggleLeft, toggleRight }: ShortcutHandlers
         case 'new-session': {
           const ws = useWorkspaceStore.getState().currentWorkspace
           if (ws?.isGit === false) {
-            toastError('当前工作区不是 Git 仓库，无法创建会话')
+            toastError('当前项目不是 Git 仓库，无法创建会话')
             break
           }
           uiStore.openCreateDialog()

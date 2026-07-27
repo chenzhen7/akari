@@ -342,11 +342,6 @@ export class SessionLifecycleService implements ISessionLifecycleService {
       this.sessionRepository.updateTerminalIdAndTabs(session.id, tabs, activeTabId, terminalId ?? '')
       this.broadcast({ event: 'tabs:sync', payload: { sessionId: session.id, tabs, activeTabId } })
 
-      const displayTerminalId = terminalId
-      if (displayTerminalId) {
-        this.terminalService.sendToTerminal(displayTerminalId, `\r\n\x1b[33m> [Server restarted — terminal restored]\x1b[0m\r\n`)
-      }
-
       if (!session.isMain && session.worktreePath) {
         this.worktreeService.watchDiff(session.id, this.createDiffCallbacks(session.id))
       }
