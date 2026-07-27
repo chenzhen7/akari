@@ -252,23 +252,13 @@ async function main(): Promise<void> {
     return
   }
 
-  if (workspaces.length === 0) {
-    dialog.showErrorBox('启动失败', '没有可用工作区')
-    app.quit()
-    return
-  }
-
-  await windowManager.restoreWindows(workspaces)
+  await windowManager.restoreWindow(workspaces)
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       try {
         const allWorkspaces = await fetchWorkspaces()
-        const lastActiveId = windowStateStore?.getLastActiveWorkspaceId()
-        const workspaceToOpen = allWorkspaces.find(w => w.id === lastActiveId) ?? allWorkspaces[0]
-        if (workspaceToOpen) {
-          await windowManager?.openWorkspaceWindow(workspaceToOpen.id, workspaceToOpen.name)
-        }
+        await windowManager?.restoreWindow(allWorkspaces)
       } catch (err) {
         dialog.showErrorBox('恢复窗口失败', err instanceof Error ? err.message : String(err))
       }

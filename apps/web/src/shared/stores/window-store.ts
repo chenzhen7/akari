@@ -1,10 +1,8 @@
 import { create } from 'zustand'
 
 interface WindowState {
-  windowId: number | null
   workspaceId: string | null
-  setWindowId: (id: number) => void
-  setWorkspaceId: (id: string) => void
+  setWorkspaceId: (id: string | null) => void
 }
 
 function getInitialWorkspaceId(): string | null {
@@ -14,8 +12,6 @@ function getInitialWorkspaceId(): string | null {
 }
 
 export const useWindowStore = create<WindowState>((set) => ({
-  windowId: null,
   workspaceId: getInitialWorkspaceId(),
-  setWindowId: (id) => set({ windowId: id }),
   setWorkspaceId: (id) => set({ workspaceId: id }),
 }))

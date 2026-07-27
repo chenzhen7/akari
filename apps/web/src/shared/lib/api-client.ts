@@ -16,6 +16,8 @@ export interface ApiRequestOptions {
    * - string：自定义 toast 前缀，如 '提交失败'
    */
   toast?: boolean | string
+  /** 指定工作区 ID；未指定时从 window-store 读取当前工作区 */
+  workspaceId?: string
 }
 
 function buildUrl(path: string, params?: ApiRequestOptions['params']): string {
@@ -36,7 +38,7 @@ async function request<T>(
   body?: unknown,
   opts: ApiRequestOptions = {},
 ): Promise<T> {
-  const workspaceId = useWindowStore.getState().workspaceId
+  const workspaceId = opts.workspaceId ?? useWindowStore.getState().workspaceId
   const headers: Record<string, string> = {
     ...opts.headers,
     ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),

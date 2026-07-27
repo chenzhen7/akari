@@ -13,15 +13,17 @@ export interface WindowState {
 
 interface StoredState {
   version: number
-  windowStates: Record<string, WindowState>
-  openWorkspaceIds: string[]
+  windowState?: WindowState
   lastActiveWorkspaceId?: string
 }
 
-const STATE_VERSION = 2
+const STATE_VERSION = 1
 const STATE_FILE_NAME = 'window-state.json'
 const SAVE_DEBOUNCE_MS = 500
 const MIN_VISIBLE_OVERLAP = 100
+
+const DEFAULT_WIDTH = 1400
+const DEFAULT_HEIGHT = 900
 
 function getStatePath(): string {
   return path.join(app.getPath('userData'), STATE_FILE_NAME)
@@ -38,31 +40,12 @@ export class WindowStateStore {
     this.state = this.load()
   }
 
-  getAll(): Record<string, WindowState> {
-    return { ...this.state.windowStates }
+  getWindowState(): WindowState | undefined {
+    return this.state.windowState ? this.validateBounds(this.state.windowState) : undefined
   }
 
-  get(workspaceId: string): WindowState | undefined {
-    const raw = this.state.windowStates[workspaceId]
-    return raw ? this.validateBounds(raw) : undefined
-  }
-
-  set(workspaceId: string, state: WindowState): void {
-    this.state.windowStates[workspaceId] = state
-    this.scheduleSave()
-  }
-
-  delete(workspaceId: string): void {
-    delete this.state.windowStates[workspaceId]
-    this.scheduleSave()
-  }
-
-  getOpenWorkspaceIds(): string[] {
-    return [...this.state.openWorkspaceIds]
-  }
-
-  setOpenWorkspaceIds(ids: string[]): void {
-    this.state.openWorkspaceIds = [...ids]
+  setWindowState(windowState: WindowState): void {
+    this.state.windowState = windowState
     this.scheduleSave()
   }
 
@@ -75,7 +58,6 @@ export class WindowStateStore {
     this.scheduleSave()
   }
 
-  /** Flush any pending write synchronously. Call before app quit. */
   flush(): void {
     if (this.saveTimer) {
       clearTimeout(this.saveTimer)
@@ -110,30 +92,15 @@ export class WindowStateStore {
     try {
       const raw = fs.readFileSync(this.statePath, 'utf-8')
       const parsed: unknown = JSON.parse(raw)
-      const validated = isStoredState(parsed) ? parsed : undefined
-      if (validated) {
-        // Migrate v1 -> v2: in v1 having window state implied the window was open.
-        if (validated.version === 1) {
-          return {
-            version: STATE_VERSION,
-            windowStates: validated.windowStates,
-            openWorkspaceIds: Object.keys(validated.windowStates),
-            lastActiveWorkspaceId: validated.lastActiveWorkspaceId,
-          }
-        }
-        return validated
+      if (isStoredState(parsed)) {
+        return parsed
       }
     } catch {
       // ignore missing or invalid state
     }
-    return { version: STATE_VERSION, windowStates: {}, openWorkspaceIds: [] }
+    return { version: STATE_VERSION }
   }
 
-  /**
-   * Ensure the window would be visible on at least one current display.
-   * If it would be entirely off-screen, center it on the primary display
-   * with a clamped size.
-   */
   private validateBounds(state: WindowState): WindowState {
     const displays = screen.getAllDisplays()
     if (displays.length === 0) {
@@ -173,9 +140,29 @@ function isStoredState(obj: unknown): obj is StoredState {
     return false
   }
   const s = obj as Record<string, unknown>
-  const hasValidVersion = typeof s.version === 'number' && s.version >= 1 && s.version <= STATE_VERSION
-  const hasValidWindowStates =
-    typeof s.windowStates === 'object' && s.windowStates !== null && !Array.isArray(s.windowStates)
-  const hasValidOpenIds = s.version === 1 || Array.isArray(s.openWorkspaceIds)
-  return hasValidVersion && hasValidWindowStates && hasValidOpenIds
+  if (s.version !== STATE_VERSION) {
+    return false
+  }
+  if (s.windowState !== undefined && !isWindowState(s.windowState)) {
+    return false
+  }
+  if (s.lastActiveWorkspaceId !== undefined && typeof s.lastActiveWorkspaceId !== 'string') {
+    return false
+  }
+  return true
+}
+
+function isWindowState(obj: unknown): obj is WindowState {
+  if (typeof obj !== 'object' || obj === null) {
+    return false
+  }
+  const s = obj as Record<string, unknown>
+  return (
+    typeof s.x === 'number' &&
+    typeof s.y === 'number' &&
+    typeof s.width === 'number' &&
+    typeof s.height === 'number' &&
+    typeof s.maximized === 'boolean' &&
+    typeof s.fullscreen === 'boolean'
+  )
 }

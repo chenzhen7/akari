@@ -3,7 +3,7 @@ import { terminalBus } from '@/features/terminal/lib/terminalBus'
 import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
 import { useSessionStore } from '@/features/session/stores/session-store'
 import { useConnectionStore } from '@/features/terminal/stores/connection-store'
-import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
+import { useWorkspaceStore, mergeWorkspaces } from '@/features/workspace/stores/workspace-store'
 
 export function handleServerMessage(msg: ServerMessage): void {
   switch (msg.event) {
@@ -131,8 +131,15 @@ export function handleServerMessage(msg: ServerMessage): void {
       useWorkspaceStore.getState().setCurrentWorkspace(msg.payload)
       useSessionStore.getState().resetForWorkspace()
       break
-    case 'workspace:list':
-      useWorkspaceStore.setState({ workspaces: msg.payload })
+    case 'workspace:list': {
+      const merged = mergeWorkspaces(useWorkspaceStore.getState().workspaces, msg.payload)
+      useWorkspaceStore.setState(state => ({
+        workspaces: merged,
+        currentWorkspace: state.currentWorkspace && merged.some(w => w.id === state.currentWorkspace?.id)
+          ? state.currentWorkspace
+          : null,
+      }))
       break
+    }
   }
 }

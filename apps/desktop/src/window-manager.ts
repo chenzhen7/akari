@@ -9,11 +9,6 @@ export interface WindowManagerOptions {
   isDev: boolean
 }
 
-export interface AkariWindow {
-  window: BrowserWindow
-  workspaceId: string
-}
-
 interface WorkspaceSummary {
   id: string
   name: string
@@ -30,8 +25,7 @@ const MIN_WIDTH = 900
 const MIN_HEIGHT = 600
 
 export class WindowManager {
-  private readonly windows = new Map<number, AkariWindow>()
-  private readonly workspaceToWindow = new Map<string, number>()
+  private window: BrowserWindow | null = null
   private readonly stateStore: WindowStateStore
   private readonly loadUrl: string
   private readonly preloadPath: string
@@ -45,100 +39,52 @@ export class WindowManager {
   }
 
   registerIpcHandlers(): void {
-    ipcMain.handle('workspace:open-window', (_event: IpcMainInvokeEvent, workspaceId: string, workspaceName?: string) => {
-      void this.openWorkspaceWindow(workspaceId, workspaceName)
+    ipcMain.handle('workspace:set-active-workspace-id', (_event: IpcMainInvokeEvent, workspaceId: string) => {
+      this.stateStore.setLastActiveWorkspaceId(workspaceId)
     })
 
     ipcMain.handle('workspace:notify-deleted', (_event: IpcMainInvokeEvent, workspaceId: string) => {
-      this.onWorkspaceDeleted(workspaceId)
-    })
-
-    ipcMain.handle('workspace:get-window-id', (event: IpcMainInvokeEvent) => {
-      const win = BrowserWindow.fromWebContents(event.sender)
-      return win?.id ?? null
-    })
-
-    ipcMain.handle('workspace:get-workspace-id', (event: IpcMainInvokeEvent) => {
-      const win = BrowserWindow.fromWebContents(event.sender)
-      if (!win) return null
-      return this.windows.get(win.id)?.workspaceId ?? null
-    })
-  }
-
-  onWorkspaceDeleted(workspaceId: string): void {
-    if (this.stateStore.getLastActiveWorkspaceId() === workspaceId) {
-      this.stateStore.setLastActiveWorkspaceId(undefined)
-    }
-    this.stateStore.delete(workspaceId)
-    this.closeWorkspaceWindow(workspaceId)
-    this.stateStore.setOpenWorkspaceIds(this.getOpenWorkspaceIds())
-  }
-
-  closeWorkspaceWindow(workspaceId: string): boolean {
-    const windowId = this.workspaceToWindow.get(workspaceId)
-    const akariWindow = windowId ? this.windows.get(windowId) : undefined
-    if (!akariWindow) return false
-    akariWindow.window.close()
-    return true
-  }
-
-  async restoreWindows(workspaces: WorkspaceSummary[]): Promise<void> {
-    const openIds = this.stateStore.getOpenWorkspaceIds()
-    const validWorkspaceIds = new Set(workspaces.map(w => w.id))
-
-    // Only restore workspaces that were explicitly open when the app last quit.
-    const workspacesToRestore = workspaces.filter(w => openIds.includes(w.id) && validWorkspaceIds.has(w.id))
-
-    if (workspacesToRestore.length === 0) {
-      // No open windows to restore: fall back to the most recently active workspace.
-      const lastActiveId = this.stateStore.getLastActiveWorkspaceId()
-      const fallbackWorkspace = workspaces.find(w => w.id === lastActiveId) ?? workspaces[0]
-      if (fallbackWorkspace) {
-        await this.openWorkspaceWindow(fallbackWorkspace.id, fallbackWorkspace.name)
+      if (this.stateStore.getLastActiveWorkspaceId() === workspaceId) {
+        this.stateStore.setLastActiveWorkspaceId(undefined)
       }
+    })
+  }
+
+  async restoreWindow(workspaces: WorkspaceSummary[]): Promise<void> {
+    if (this.window) {
+      if (this.window.isMinimized()) {
+        this.window.restore()
+      }
+      this.window.focus()
       return
     }
 
-    for (const workspace of workspacesToRestore) {
-      await this.openWorkspaceWindow(workspace.id, workspace.name)
-    }
-
     const lastActiveId = this.stateStore.getLastActiveWorkspaceId()
-    if (lastActiveId) {
-      const windowId = this.workspaceToWindow.get(lastActiveId)
-      if (windowId) {
-        this.windows.get(windowId)?.window.focus()
-      }
-    }
+    const workspace = workspaces.find(w => w.id === lastActiveId) ?? workspaces[0]
+    await this.openWindow(workspace?.id)
   }
 
-  async openWorkspaceWindow(workspaceId: string, workspaceName?: string): Promise<BrowserWindow> {
-    const existingWindowId = this.workspaceToWindow.get(workspaceId)
-    const existing = existingWindowId ? this.windows.get(existingWindowId)?.window : undefined
-    if (existing) {
-      if (existing.isMinimized()) {
-        existing.restore()
+  async openWindow(workspaceId?: string): Promise<BrowserWindow> {
+    if (this.window) {
+      if (this.window.isMinimized()) {
+        this.window.restore()
       }
-      existing.focus()
-      return existing
+      this.window.focus()
+      return this.window
     }
 
-    const state = this.stateStore.get(workspaceId)
-    const window = this.createBrowserWindow(workspaceId, state, workspaceName)
+    const state = this.stateStore.getWindowState()
+    const window = this.createBrowserWindow(state)
     const url = this.buildLoadUrl(workspaceId)
     await window.loadURL(url)
 
-    const akariWindow: AkariWindow = { window, workspaceId }
-    this.windows.set(window.id, akariWindow)
-    this.workspaceToWindow.set(workspaceId, window.id)
-
-    this.attachWindowListeners(window, workspaceId)
-    this.stateStore.setOpenWorkspaceIds(this.getOpenWorkspaceIds())
+    this.window = window
+    this.attachWindowListeners(window)
 
     return window
   }
 
-  private createBrowserWindow(workspaceId: string, state?: WindowState, workspaceName?: string): BrowserWindow {
+  private createBrowserWindow(state?: WindowState): BrowserWindow {
     const options: Electron.BrowserWindowConstructorOptions = {
       width: state?.width ?? DEFAULT_WIDTH,
       height: state?.height ?? DEFAULT_HEIGHT,
@@ -154,7 +100,6 @@ export class WindowManager {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
-        additionalArguments: [`--workspace-id=${workspaceId}`],
       },
     }
 
@@ -183,14 +128,8 @@ export class WindowManager {
       if (!window.isVisible()) {
         window.show()
       }
-      if (workspaceName) {
-        window.setTitle(`${workspaceName} - Akari`)
-      }
     })
 
-    // 应用菜单已置空（Menu.setApplicationMenu(null)），默认的 Ctrl+Shift+I
-    // 快捷键不可用；这里手动注册 F12 / Ctrl+Shift+I 切换 DevTools，
-    // 打包后的程序同样生效，用于生产环境排查问题。
     window.webContents.on('before-input-event', (_event, input) => {
       if (input.type !== 'keyDown') return
       if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
@@ -201,13 +140,15 @@ export class WindowManager {
     return window
   }
 
-  private buildLoadUrl(workspaceId: string): string {
+  private buildLoadUrl(workspaceId?: string): string {
     const url = new URL(this.loadUrl)
-    url.searchParams.set('workspaceId', workspaceId)
+    if (workspaceId) {
+      url.searchParams.set('workspaceId', workspaceId)
+    }
     return url.toString()
   }
 
-  private attachWindowListeners(window: BrowserWindow, workspaceId: string): void {
+  private attachWindowListeners(window: BrowserWindow): void {
     window.once('ready-to-show', () => {
       window.show()
       if (this.isDev) {
@@ -215,12 +156,8 @@ export class WindowManager {
       }
     })
 
-    window.on('focus', () => {
-      this.stateStore.setLastActiveWorkspaceId(workspaceId)
-    })
-
     const debouncedSave = debounce(() => {
-      this.saveWindowState(window, workspaceId)
+      this.saveWindowState(window)
     }, 500)
 
     window.on('move', debouncedSave)
@@ -228,17 +165,15 @@ export class WindowManager {
 
     window.on('close', () => {
       debouncedSave.flush()
-      this.saveWindowState(window, workspaceId)
+      this.saveWindowState(window)
     })
 
     window.on('closed', () => {
-      this.windows.delete(window.id)
-      this.workspaceToWindow.delete(workspaceId)
-      this.stateStore.setOpenWorkspaceIds(this.getOpenWorkspaceIds())
+      this.window = null
     })
   }
 
-  private saveWindowState(window: BrowserWindow, workspaceId: string): void {
+  private saveWindowState(window: BrowserWindow): void {
     try {
       const bounds = window.getNormalBounds()
       const state: WindowState = {
@@ -249,31 +184,14 @@ export class WindowManager {
         maximized: window.isMaximized(),
         fullscreen: window.isFullScreen(),
       }
-      this.stateStore.set(workspaceId, state)
+      this.stateStore.setWindowState(state)
     } catch (err) {
       console.error('[window-manager] failed to save window state:', err)
     }
   }
 
-  getWindowById(id: number): AkariWindow | undefined {
-    return this.windows.get(id)
-  }
-
-  getWorkspaceIdForWindow(windowId: number): string | null {
-    return this.windows.get(windowId)?.workspaceId ?? null
-  }
-
-  getAllWindows(): AkariWindow[] {
-    return Array.from(this.windows.values())
-  }
-
   flushState(): void {
-    this.stateStore.setOpenWorkspaceIds(this.getOpenWorkspaceIds())
     this.stateStore.flush()
-  }
-
-  private getOpenWorkspaceIds(): string[] {
-    return Array.from(this.workspaceToWindow.keys())
   }
 }
 

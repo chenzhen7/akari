@@ -2,34 +2,13 @@ import { useEffect } from 'react'
 import { apiClient } from '@/shared/lib/api-client'
 import { useWindowStore } from '@/shared/stores/window-store'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
-import { useSessionStore } from '@/features/session/stores/session-store'
-import type { Workspace, AgentSession } from '@akari/shared-types'
-
-async function resolveWindowId(): Promise<number | null> {
-  if (typeof window === 'undefined' || !window.electron?.workspace?.getWindowId) {
-    return null
-  }
-  try {
-    return await window.electron.workspace.getWindowId()
-  } catch {
-    return null
-  }
-}
+import type { Workspace } from '@akari/shared-types'
 
 export function useWindowInit() {
   const workspaceId = useWindowStore(s => s.workspaceId)
-  const setWindowId = useWindowStore(s => s.setWindowId)
   const setCurrentWorkspace = useWorkspaceStore(s => s.setCurrentWorkspace)
-  const setSessions = useSessionStore(s => s.setSessions)
 
-  // Resolve window ID once on mount
-  useEffect(() => {
-    void resolveWindowId().then((id) => {
-      if (id !== null) setWindowId(id)
-    })
-  }, [setWindowId])
-
-  // Load workspace and sessions when the window's workspaceId is known
+  // Load workspace metadata when the active workspaceId is known
   useEffect(() => {
     if (!workspaceId) return
 
@@ -37,13 +16,10 @@ export function useWindowInit() {
 
     async function init() {
       try {
-        const [workspace, sessions] = await Promise.all([
-          apiClient.get<Workspace>(`/workspaces/${workspaceId}`, { toast: false }),
-          apiClient.get<AgentSession[]>('/sessions', { toast: false }),
-        ])
+        const workspace = await apiClient.get<Workspace>(`/workspaces/${workspaceId}`, { toast: false })
         if (cancelled) return
         setCurrentWorkspace(workspace)
-        setSessions(sessions)
+        document.title = `${workspace.name} - Akari`
       } catch (err) {
         console.error('[useWindowInit] failed:', err)
       }
@@ -54,11 +30,11 @@ export function useWindowInit() {
     return () => {
       cancelled = true
     }
-  }, [workspaceId, setCurrentWorkspace, setSessions])
+  }, [workspaceId, setCurrentWorkspace])
 
   // Non-desktop web mode: if no workspaceId is in URL, redirect to the most recently active workspace
   useEffect(() => {
-    if (workspaceId || typeof window === 'undefined' || window.electron?.workspace?.getWindowId) {
+    if (workspaceId || typeof window === 'undefined' || window.electron) {
       return
     }
 

@@ -27,9 +27,9 @@ contextBridge.exposeInMainWorld('electron', {
     getLogPath: () => ipcRenderer.invoke('app:get-log-path'),
   },
   workspace: {
-    openWindow: (workspaceId: string, workspaceName?: string) => ipcRenderer.invoke('workspace:open-window', workspaceId, workspaceName),
-    getWindowId: () => ipcRenderer.invoke('workspace:get-window-id'),
-    getWorkspaceId: () => ipcRenderer.invoke('workspace:get-workspace-id'),
-    notifyDeleted: (workspaceId: string) => ipcRenderer.invoke('workspace:notify-deleted', workspaceId),
+    setActiveWorkspaceId: (workspaceId: string) =>
+      ipcRenderer.invoke('workspace:set-active-workspace-id', workspaceId),
+    notifyDeleted: (workspaceId: string) =>
+      ipcRenderer.invoke('workspace:notify-deleted', workspaceId),
   },
 })
