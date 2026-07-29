@@ -8,7 +8,6 @@ import { GitGraphPanel } from '@/features/git/components/GitGraphPanel'
 import { DiffFileList } from '@/features/diff/components/DiffFileList'
 import { SessionInfoPanel } from '@/features/session/components/SessionInfoPanel'
 import { ExplorerPanel } from '@/features/explorer/components/ExplorerPanel'
-import { Button } from '@/shared/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -81,28 +80,28 @@ export function RightSidebar({ sessionId }: RightSidebarProps) {
 
   return (
     <div className="flex h-full w-full flex-col border-t border-border bg-[var(--terminal-background)]">
-      {/* Tab bar */}
-      <div className="flex h-9 shrink-0 items-center border-b border-border/50 px-1 gap-0.5">
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <Tooltip key={id}>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setActiveRightTab(id)}
-                className={cn(
-                  'hover:bg-zinc-200 dark:hover:bg-zinc-800',
-                  activeRightTab === id
-                    ? 'bg-zinc-200 text-foreground dark:bg-zinc-700'
-                    : 'text-muted-foreground',
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{label}</TooltipContent>
-          </Tooltip>
-        ))}
+      {/* Tab bar：分段控件样式 */}
+      <div className="flex h-10 shrink-0 items-center border-b border-border/50 px-2">
+        <div className="flex gap-0.5 rounded-lg bg-zinc-500/10 p-0.5 dark:bg-zinc-400/10">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <Tooltip key={id}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setActiveRightTab(id)}
+                  className={cn(
+                    'flex h-6 w-8 items-center justify-center rounded-md transition-colors',
+                    activeRightTab === id
+                      ? 'bg-white text-foreground shadow-sm dark:bg-zinc-700'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{label}</TooltipContent>
+            </Tooltip>
+          ))}
+        </div>
       </div>
 
       {/* Content: keep-alive with display:none so panels don't remount on tab switch */}
