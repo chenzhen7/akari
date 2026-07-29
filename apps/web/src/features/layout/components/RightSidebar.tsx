@@ -80,7 +80,7 @@ export function RightSidebar({ sessionId }: RightSidebarProps) {
   }
 
   return (
-    <div className="flex h-full w-full flex-col bg-panel">
+    <div className="flex h-full w-full flex-col border-t border-border bg-[var(--terminal-background)]">
       {/* Tab bar */}
       <div className="flex h-9 shrink-0 items-center border-b border-border/50 px-1 gap-0.5">
         {TABS.map(({ id, label, icon: Icon }) => (

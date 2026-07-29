@@ -122,8 +122,16 @@ export function SessionSidebar() {
 
   return (
     <>
-      <aside className="flex h-full w-full flex-col bg-panel">
-        <div className="flex h-full w-full flex-col">
+      <aside className="relative flex h-full w-full flex-col overflow-hidden bg-panel">
+        {/* 装饰背景：柔和的渐变光斑 + 高斯模糊，营造渐变模糊质感 */}
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-16 -left-16 h-56 w-56 rounded-full bg-violet-300/25 blur-3xl dark:bg-violet-500/10" />
+          <div className="absolute top-1/3 -right-20 h-64 w-64 rounded-full bg-sky-300/20 blur-3xl dark:bg-sky-500/10" />
+          <div className="absolute -bottom-20 left-1/4 h-52 w-52 rounded-full bg-rose-300/15 blur-3xl dark:bg-rose-500/10" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-panel/80" />
+        </div>
+
+        <div className="relative z-10 flex h-full w-full flex-col">
           <SidebarActions />
 
           <div className="flex-1 min-h-0 overflow-hidden">
