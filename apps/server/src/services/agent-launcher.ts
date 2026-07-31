@@ -19,8 +19,6 @@ export async function launchAgentInTerminal(
   const adapter = createAgentAdapter(agentType)
   if (!adapter.isAutomated) return
 
-  terminalService.sendToTerminal(terminalId, `# Launching ${agentType}...\r\n`)
-
   const commands = await adapter.prepare(worktreePath, task, sessionId, launchOptions)
   let cumulativeDelay = SHELL_STARTUP_DELAY_MS
   for (const { cmd, delayMs = 0 } of commands) {
