@@ -230,13 +230,19 @@ export function WorkspaceSessionList() {
                         <span className="text-[10px] text-muted-foreground">加载中...</span>
                       )}
                       <Button
+                        asChild
                         variant="ghost"
                         size="xs"
                         className="h-6 w-6 shrink-0 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground"
-                        onClick={(e) => handleNewSession(workspace.id, e)}
                         title="新建会话"
                       >
-                        <Plus className="h-3.5 w-3.5" />
+                        <span
+                          onClick={(e) => handleNewSession(workspace.id, e)}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </span>
                       </Button>
                     </div>
                   </button>
