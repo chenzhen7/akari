@@ -94,6 +94,13 @@ export class WorktreeService implements IWorktreeService {
       this.watchers.delete(`${sessionId}:branch`)
     }
     this.runners.registry.delete(worktreePath)
+    // git worktree remove --force 会把 junction 当普通目录递归删除，
+    // 连带清空主仓库的 node_modules（已实测复现）。先显式解除 worktree 内的
+    // node_modules junction——Node 的 rm 只删除链接本身，不跟随目标。
+    await rm(join(worktreePath, 'node_modules'), { force: true }).catch(() => {
+      // node_modules 若不是 junction 而是真实目录（用户在 worktree 内独立装过依赖），
+      // rm 非递归会失败，留由下面的 git worktree remove 正常递归删除
+    })
     try {
       await this.runners.runner.run(['worktree', 'remove', '--force', worktreePath], this.repoRoot)
     } catch {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { cn } from '@/shared/lib/utils'
 import { toastError } from '@/shared/lib/toast'
 import { apiClient } from '@/shared/lib/api-client'
@@ -36,15 +36,14 @@ export function WorkspaceSessionList() {
   const pinWorkspace = useWorkspaceStore(s => s.pinWorkspace)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
   const selectSession = useSessionStore(s => s.selectSession)
+  const storeSessions = useSessionStore(s => s.sessions)
   const openCreateDialog = useUIStore(s => s.openCreateDialog)
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     () => new Set(currentWorkspace?.id ? [currentWorkspace.id] : []),
   )
   const [workspaceSessions, setWorkspaceSessions] = useState<Record<string, AgentSession[]>>({})
-  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
-  const inFlightRef = useRef<Set<string>>(new Set())
-  const mountedRef = useRef(true)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)
   const [switchBranchDialog, setSwitchBranchDialog] = useState<{ open: boolean; sessionId: string | null }>({
@@ -61,39 +60,59 @@ export function WorkspaceSessionList() {
     }
   }, [currentWorkspace?.id])
 
+  // 一次性并行拉取所有工作区的会话（会话是轻量元数据，无需按展开状态懒加载）
   useEffect(() => {
-    mountedRef.current = true
+    let cancelled = false
+    setInitialLoading(true)
+    Promise.all(
+      workspaces.map(async w => {
+        try {
+          const sessions = await apiClient.get<AgentSession[]>('/sessions', { workspaceId: w.id, toast: false })
+          return [w.id, sessions] as const
+        } catch (err) {
+          // 单个工作区加载失败降级为空列表，不阻断其他工作区渲染
+          console.error(`[WorkspaceSessionList] load sessions for ${w.id} failed:`, err)
+          return [w.id, []] as const
+        }
+      }),
+    ).then(entries => {
+      if (cancelled) return
+      setWorkspaceSessions(Object.fromEntries(entries))
+      setInitialLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [workspaces])
 
-    async function loadSessions(workspaceId: string) {
-      if (workspaceSessions[workspaceId] || inFlightRef.current.has(workspaceId)) return
-      inFlightRef.current.add(workspaceId)
-      setLoadingIds(prev => new Set(prev).add(workspaceId))
-      try {
-        const sessions = await apiClient.get<AgentSession[]>('/sessions', { workspaceId, toast: false })
-        if (!mountedRef.current) return
-        setWorkspaceSessions(prev => ({ ...prev, [workspaceId]: sessions }))
-      } catch (err) {
-        console.error(`[WorkspaceSessionList] load sessions for ${workspaceId} failed:`, err)
-      } finally {
-        inFlightRef.current.delete(workspaceId)
-        if (mountedRef.current) {
-          setLoadingIds(prev => {
-            const next = new Set(prev)
-            next.delete(workspaceId)
-            return next
-          })
+  // store.sessions 是当前工作区的权威会话列表（激活时加载 + WebSocket 实时更新）。
+  // 本地 workspaceSessions 只在展开时拉取一次，必须把 store 的变更（归档/恢复/删除/新建）
+  // 同步过来，否则归档后列表不刷新，看起来"没有反应"。
+  useEffect(() => {
+    setWorkspaceSessions(prev => {
+      let changed = false
+      const next: Record<string, AgentSession[]> = {}
+      for (const [wsId, sessions] of Object.entries(prev)) {
+        if (wsId === currentWorkspace?.id) {
+          // 当前工作区：store 是权威源，整体替换（可覆盖删除/新建场景）
+          if (sessions !== storeSessions) {
+            next[wsId] = storeSessions
+            changed = true
+          } else {
+            next[wsId] = sessions
+          }
+        } else {
+          // 其他工作区：仅合并 store 中存在的会话更新
+          const merged = sessions.map(s => storeSessions.find(ss => ss.id === s.id) ?? s)
+          if (merged.some((m, i) => m !== sessions[i])) {
+            next[wsId] = merged
+            changed = true
+          } else {
+            next[wsId] = sessions
+          }
         }
       }
-    }
-
-    for (const id of expandedIds) {
-      void loadSessions(id)
-    }
-
-    return () => {
-      mountedRef.current = false
-    }
-  }, [expandedIds])
+      return changed ? next : prev
+    })
+  }, [storeSessions, currentWorkspace?.id])
 
   const toggleExpand = useCallback((workspaceId: string) => {
     setExpandedIds(prev => {
@@ -185,7 +204,7 @@ export function WorkspaceSessionList() {
           {workspaces.map((workspace) => {
             const isExpanded = expandedIds.has(workspace.id)
             const sessions = workspaceSessions[workspace.id] ?? []
-            const isLoading = loadingIds.has(workspace.id)
+            const isLoading = initialLoading && !(workspace.id in workspaceSessions)
 
             const mainSession = sessions.find(s => s.isMain)
             const regularSessions = sessions.filter(s => !s.isMain)
