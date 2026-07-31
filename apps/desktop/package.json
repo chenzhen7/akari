@@ -1,7 +1,7 @@
 {
   "name": "@akari/desktop",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.4.3",
   "description": "Akari desktop application",
   "author": "Akari Team",
   "main": "dist/main.js",
