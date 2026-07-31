@@ -163,6 +163,7 @@ export function WorkspaceSessionList() {
   }, [deletingWorkspaceId, deleteWorkspace])
 
   const allSessions = Object.values(workspaceSessions).flat()
+  const allArchivedSessions = allSessions.filter(s => !s.isMain && s.status === 'archived')
 
   const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string) => {
     const session = allSessions.find(s => s.id === sessionId)
@@ -209,7 +210,6 @@ export function WorkspaceSessionList() {
             const mainSession = sessions.find(s => s.isMain)
             const regularSessions = sessions.filter(s => !s.isMain)
             const activeSessions = regularSessions.filter(s => s.status !== 'archived')
-            const archivedSessions = regularSessions.filter(s => s.status === 'archived')
 
             return (
               <ContextMenu key={workspace.id}>
@@ -275,29 +275,7 @@ export function WorkspaceSessionList() {
                         />
                       ))}
 
-                      {archivedSessions.length > 0 && (
-                        <>
-                          <div className="flex h-7 items-center px-2">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                              归档
-                            </span>
-                            <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
-                              {archivedSessions.length}
-                            </span>
-                          </div>
-                          {archivedSessions.map(session => (
-                            <SessionItem
-                              key={session.id}
-                              session={session}
-                              isActive={session.id === activeSessionId}
-                              onContextMenu={handleContextMenu}
-                              onClick={() => handleSelectSession(session)}
-                            />
-                          ))}
-                        </>
-                      )}
-
-                      {!isLoading && !mainSession && activeSessions.length === 0 && archivedSessions.length === 0 && (
+                      {!isLoading && !mainSession && activeSessions.length === 0 && (
                         <div className="px-2 py-2 text-xs text-muted-foreground">
                           暂无会话
                         </div>
@@ -331,6 +309,28 @@ export function WorkspaceSessionList() {
               </ContextMenu>
             )
           })}
+
+          {allArchivedSessions.length > 0 && (
+            <>
+              <div className="mt-2 flex h-7 items-center px-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  归档
+                </span>
+                <span className="ml-auto rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
+                  {allArchivedSessions.length}
+                </span>
+              </div>
+              {allArchivedSessions.map(session => (
+                <SessionItem
+                  key={session.id}
+                  session={session}
+                  isActive={session.id === activeSessionId}
+                  onContextMenu={handleContextMenu}
+                  onClick={() => handleSelectSession(session)}
+                />
+              ))}
+            </>
+          )}
 
           {workspaces.length === 0 && (
             <div className="px-2 py-4 text-center text-xs text-muted-foreground">
