@@ -7,7 +7,8 @@ import { useWorkspaceStore, mergeWorkspaces } from '@/features/workspace/stores/
 
 export function handleServerMessage(msg: ServerMessage): void {
   switch (msg.event) {
-    case 'sessions:list':
+    case 'sessions:list': {
+      const currentWorkspaceId = useWorkspaceStore.getState().currentWorkspace?.id
       useSessionStore.setState(state => {
         let nextActiveSessionId = state.activeSessionId
         // 如果当前没有选中会话或选中的已不存在，自动选中第一个
@@ -16,16 +17,24 @@ export function handleServerMessage(msg: ServerMessage): void {
         }
         return { sessions: msg.payload, activeSessionId: nextActiveSessionId }
       })
+      if (currentWorkspaceId) {
+        useWorkspaceStore.setState(state => ({
+          workspaceSessions: { ...state.workspaceSessions, [currentWorkspaceId]: msg.payload },
+        }))
+      }
       break
+    }
     case 'session:created':
       useSessionStore.setState(state => ({
         sessions: [...state.sessions.filter(s => s.id !== msg.payload.id), msg.payload],
       }))
+      useWorkspaceStore.getState().addSession(msg.payload)
       break
     case 'session:updated':
       useSessionStore.setState(state => ({
         sessions: state.sessions.map(s => s.id === msg.payload.id ? msg.payload : s),
       }))
+      useWorkspaceStore.getState().updateSession(msg.payload.id, msg.payload)
       break
     case 'session:status':
       useSessionStore.setState(state => ({
@@ -35,6 +44,10 @@ export function handleServerMessage(msg: ServerMessage): void {
             : s
         ),
       }))
+      useWorkspaceStore.getState().updateSession(msg.payload.id, {
+        status: msg.payload.status,
+        progress: msg.payload.progress,
+      })
       break
     case 'terminal:data':
       terminalBus.emit(msg.payload.terminalId, msg.payload.data)
@@ -63,6 +76,11 @@ export function handleServerMessage(msg: ServerMessage): void {
             : s
         ),
       }))
+      useWorkspaceStore.getState().updateSession(msg.payload.sessionId, {
+        diffSummary: msg.payload.diff.summary,
+        diffFull: msg.payload.diff.fullDiff,
+        diffFiles: msg.payload.diff.files,
+      })
       break
     case 'file:update': {
       const { sessionId } = msg.payload
@@ -85,6 +103,9 @@ export function handleServerMessage(msg: ServerMessage): void {
           s.id === msg.payload.id ? { ...s, lastAiMessage: msg.payload.lastAiMessage } : s
         ),
       }))
+      useWorkspaceStore.getState().updateSession(msg.payload.id, {
+        lastAiMessage: msg.payload.lastAiMessage,
+      })
       break
     case 'tab:created':
       useSessionStore.setState(state => ({

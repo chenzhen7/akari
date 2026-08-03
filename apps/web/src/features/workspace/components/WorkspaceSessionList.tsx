@@ -36,13 +36,13 @@ export function WorkspaceSessionList() {
   const pinWorkspace = useWorkspaceStore(s => s.pinWorkspace)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
   const selectSession = useSessionStore(s => s.selectSession)
-  const storeSessions = useSessionStore(s => s.sessions)
+  const workspaceSessions = useWorkspaceStore(s => s.workspaceSessions)
+  const setWorkspaceSessions = useWorkspaceStore(s => s.setWorkspaceSessions)
   const openCreateDialog = useUIStore(s => s.openCreateDialog)
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     () => new Set(currentWorkspace?.id ? [currentWorkspace.id] : []),
   )
-  const [workspaceSessions, setWorkspaceSessions] = useState<Record<string, AgentSession[]>>({})
   const [initialLoading, setInitialLoading] = useState(true)
   const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)
@@ -60,7 +60,7 @@ export function WorkspaceSessionList() {
     }
   }, [currentWorkspace?.id])
 
-  // 一次性并行拉取所有工作区的会话（会话是轻量元数据，无需按展开状态懒加载）
+  // 一次性并行拉取所有工作区的会话（会话是轻量元数据，无需按展开状态懒加载），写入 workspace-store
   useEffect(() => {
     let cancelled = false
     setInitialLoading(true)
@@ -81,38 +81,7 @@ export function WorkspaceSessionList() {
       setInitialLoading(false)
     })
     return () => { cancelled = true }
-  }, [workspaces])
-
-  // store.sessions 是当前工作区的权威会话列表（激活时加载 + WebSocket 实时更新）。
-  // 本地 workspaceSessions 只在展开时拉取一次，必须把 store 的变更（归档/恢复/删除/新建）
-  // 同步过来，否则归档后列表不刷新，看起来"没有反应"。
-  useEffect(() => {
-    setWorkspaceSessions(prev => {
-      let changed = false
-      const next: Record<string, AgentSession[]> = {}
-      for (const [wsId, sessions] of Object.entries(prev)) {
-        if (wsId === currentWorkspace?.id) {
-          // 当前工作区：store 是权威源，整体替换（可覆盖删除/新建场景）
-          if (sessions !== storeSessions) {
-            next[wsId] = storeSessions
-            changed = true
-          } else {
-            next[wsId] = sessions
-          }
-        } else {
-          // 其他工作区：仅合并 store 中存在的会话更新
-          const merged = sessions.map(s => storeSessions.find(ss => ss.id === s.id) ?? s)
-          if (merged.some((m, i) => m !== sessions[i])) {
-            next[wsId] = merged
-            changed = true
-          } else {
-            next[wsId] = sessions
-          }
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [storeSessions, currentWorkspace?.id])
+  }, [workspaces, setWorkspaceSessions])
 
   const toggleExpand = useCallback((workspaceId: string) => {
     setExpandedIds(prev => {
