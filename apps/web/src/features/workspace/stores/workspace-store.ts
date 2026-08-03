@@ -120,6 +120,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => {
       // 直接从全量缓存初始化当前项目的会话，避免切换时请求 API 并导致 sidebar 闪烁
       const cachedSessions = get().workspaceSessions[id] ?? []
       useSessionStore.getState().setSessions(cachedSessions)
+      // 同步选中目标会话：高亮是纯前端状态，若等 activate API 返回再选中，
+      // 期间 setSessions 的兜底逻辑会把 sessions[0] 短暂置为 active，导致其闪烁高亮
+      if (sessionId) {
+        useSessionStore.getState().selectSession(sessionId)
+      }
 
       const params = new URLSearchParams(window.location.search)
       params.set('workspaceId', id)
@@ -131,9 +136,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => {
 
       try {
         await apiClient.post(`/workspaces/${id}/activate`, undefined, { toast: '切换项目失败' })
-        if (sessionId) {
-          useSessionStore.getState().selectSession(sessionId)
-        }
       } catch (err) {
         console.error('[activateWorkspace] failed:', err)
       }

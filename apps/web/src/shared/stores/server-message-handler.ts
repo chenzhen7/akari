@@ -156,8 +156,10 @@ export function handleServerMessage(msg: ServerMessage): void {
       break
     case 'workspace:activated':
       // 仅代表「某项目被显式激活/切换」。桌面端每个窗口只会收到自己 workspace 的事件。
+      // 注意：不能在这里 resetForWorkspace()——服务端随后会推送 sessions:list 全量替换会话列表，
+      // 而客户端自己发起的切换已在 activateWorkspace 里做过 reset 并选中目标会话；
+      // 若此处再 reset，activeSessionId 被清空后 sessions:list 会兜底选中第一个会话，覆盖用户的选择。
       useWorkspaceStore.getState().setCurrentWorkspace(msg.payload)
-      useSessionStore.getState().resetForWorkspace()
       break
     case 'workspace:list': {
       const merged = mergeWorkspaces(useWorkspaceStore.getState().workspaces, msg.payload)
