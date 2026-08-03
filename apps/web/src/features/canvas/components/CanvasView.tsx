@@ -14,7 +14,8 @@ import {
   type Viewport,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useSessionStore, useCurrentSessions } from '@/features/session/stores/session-store'
+import { useNavigationStore } from '@/shared/stores/navigation-store'
 import { useConnectionStore } from '@/features/terminal/stores/connection-store'
 import { SessionNode } from './SessionNode'
 import FlowEdge from './FlowEdge'
@@ -36,10 +37,10 @@ const edgeTypes = {
 
 /** 内部组件：包含 ReactFlow，需要在 ReactFlowProvider 内部使用 */
 function CanvasViewContent() {
-  const sessions = useSessionStore(s => s.sessions)
+  const sessions = useCurrentSessions()
   const canvasEdges = useSessionStore(s => s.canvasEdges)
   const connectionStatus = useConnectionStore(s => s.connectionStatus)
-  const openTab = useSessionStore(s => s.openTab)
+  const selectSession = useNavigationStore(s => s.selectSession)
   const updateCanvasPosition = useSessionStore(s => s.updateCanvasPosition)
   const { screenToFlowPosition } = useReactFlow()
 
@@ -171,9 +172,9 @@ function CanvasViewContent() {
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      openTab(node.id)
+      selectSession(node.id)
     },
-    [openTab]
+    [selectSession]
   )
 
   const onNodeDragStop = useCallback(

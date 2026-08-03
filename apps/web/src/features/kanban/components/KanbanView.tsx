@@ -1,5 +1,5 @@
 import { DndContext, type DragEndEvent, rectIntersection } from '@dnd-kit/core'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useSessionStore, useCurrentSessions } from '@/features/session/stores/session-store'
 import { KanbanColumn } from './KanbanColumn'
 import type { KanbanColumn as KanbanColumnType } from '@/shared/types'
 
@@ -11,7 +11,7 @@ const COLUMNS: { id: KanbanColumnType; label: string }[] = [
 ]
 
 export function KanbanView() {
-  const sessions = useSessionStore(s => s.sessions)
+  const sessions = useCurrentSessions()
   const moveToColumn = useSessionStore(s => s.moveToColumn)
 
   function onDragEnd(event: DragEndEvent) {

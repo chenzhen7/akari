@@ -6,7 +6,7 @@ import { cn } from '@/shared/lib/utils'
 import type { AgentSession, SessionTab } from '@/shared/types'
 import { useTabStore } from '@/features/session/stores/tab-store'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { findSession } from '@/features/session/stores/session-store'
 import { resolveAbsoluteFilePath } from '@/shared/lib/path-utils'
 import { destroyTerminalInstance } from '@/features/session/lib/terminal-instances'
 import { Button } from '@/shared/components/ui/button'
@@ -174,9 +174,9 @@ export function MiddleTabBar({ sessionId }: MiddleTabBarProps) {
   const setTabRef = useCallback((id: string, el: HTMLButtonElement | null) => {
     tabRefs.current[id] = el
   }, [])
-  const { tabs, activeTabId, worktreePath, workspaceId } = useSessionStore(
+  const { tabs, activeTabId, worktreePath, workspaceId } = useWorkspaceStore(
     useShallow(s => {
-      const session = s.sessions.find(ses => ses.id === sessionId)
+      const session = findSession(s.workspaceSessions, sessionId)
       if (!session) {
         return { tabs: [] as SessionTab[], activeTabId: null as string | null, worktreePath: '', workspaceId: '' }
       }

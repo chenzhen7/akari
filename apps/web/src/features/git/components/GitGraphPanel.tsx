@@ -12,7 +12,8 @@ import {
   DialogTitle,
 } from '@/shared/components/ui/dialog'
 import type { GitCommit, GitLogResponse } from '@akari/shared-types'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useSessionStore, findSession } from '@/features/session/stores/session-store'
+import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { useShallow } from 'zustand/react/shallow'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
 import { computeIdeaGraphLayout } from '@/features/git/lib/git-graph-utils'
@@ -139,9 +140,9 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   const setGitLog = useSessionStore(s => s.setGitLog)
   const selectedHash = useSessionStore(s => s.selectedGitCommits[sessionId] ?? null)
   const setSelectedHash = useSessionStore(s => s.setSelectedGitCommit)
-  const { branchName, baseBranch } = useSessionStore(
+  const { branchName, baseBranch } = useWorkspaceStore(
     useShallow(s => {
-      const session = s.sessions.find(sess => sess.id === sessionId)
+      const session = findSession(s.workspaceSessions, sessionId)
       return {
         branchName: session?.branchName,
         baseBranch: session?.baseBranch,

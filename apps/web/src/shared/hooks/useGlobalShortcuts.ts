@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { findSession } from '@/features/session/stores/session-store'
+import { useNavigationStore } from '@/shared/stores/navigation-store'
 import { useUIStore } from '@/shared/stores/ui-store'
 import { useConnectionStore } from '@/features/terminal/stores/connection-store'
 import { useTabStore } from '@/features/session/stores/tab-store'
@@ -26,11 +27,15 @@ export function useGlobalShortcuts({ toggleLeft, toggleRight }: ShortcutHandlers
 
   useEffect(() => {
     function dispatch(id: ShortcutId): void {
-      const sessionStore = useSessionStore.getState()
+      const navStore = useNavigationStore.getState()
+      const wsStore = useWorkspaceStore.getState()
       const uiStore = useUIStore.getState()
       const connectionStore = useConnectionStore.getState()
-      const activeSessionId = sessionStore.activeSessionId
-      const session = activeSessionId ? sessionStore.sessions.find(s => s.id === activeSessionId) : undefined
+      const activeSessionId = navStore.sessionId
+      const wsId = wsStore.currentWorkspace?.id
+      const session = activeSessionId && wsId
+        ? (wsStore.workspaceSessions[wsId] ?? []).find(s => s.id === activeSessionId)
+        : undefined
 
       switch (id) {
         case 'toggle-left':
@@ -64,7 +69,7 @@ export function useGlobalShortcuts({ toggleLeft, toggleRight }: ShortcutHandlers
           uiStore.toggleCommandCenter()
           break
         case 'kanban':
-          sessionStore.setGlobalViewMode(sessionStore.globalViewMode === 'kanban' ? null : 'kanban')
+          navStore.setViewMode(navStore.viewMode === 'kanban' ? null : 'kanban')
           break
         case 'settings':
           uiStore.setSettingsOpen(true)
@@ -76,7 +81,7 @@ export function useGlobalShortcuts({ toggleLeft, toggleRight }: ShortcutHandlers
     }
 
     function closeActiveTab(sessionId: string, tabId: string): void {
-      const session = useSessionStore.getState().sessions.find(s => s.id === sessionId)
+      const session = findSession(useWorkspaceStore.getState().workspaceSessions, sessionId)
       const tab = session?.tabs.find(t => t.id === tabId)
       if (tab && (tab.type === 'terminal' || tab.type === 'agent') && tab.terminalId) {
         destroyTerminalInstance(tab.terminalId)
@@ -98,16 +103,18 @@ export function useGlobalShortcuts({ toggleLeft, toggleRight }: ShortcutHandlers
     }
 
     function gotoSession(n: number): boolean {
-      const store = useSessionStore.getState()
+      const ws = useWorkspaceStore.getState()
+      const wsId = ws.currentWorkspace?.id
+      const sessions = wsId ? (ws.workspaceSessions[wsId] ?? []) : []
       // 按侧边栏渲染顺序排列：主会话 → 活动会话 → 归档会话
-      const regular = store.sessions.filter(s => !s.isMain)
+      const regular = sessions.filter(s => !s.isMain)
       const ordered = [
-        ...store.sessions.filter(s => s.isMain),
+        ...sessions.filter(s => s.isMain),
         ...regular.filter(s => s.status !== 'archived'),
         ...regular.filter(s => s.status === 'archived'),
       ]
       if (n < 1 || n > ordered.length) return false
-      store.selectSession(ordered[n - 1].id)
+      useNavigationStore.getState().selectSession(ordered[n - 1].id)
       return true
     }
 

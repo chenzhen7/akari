@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { cn } from '@/shared/lib/utils'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useNavigationStore } from '@/shared/stores/navigation-store'
 import { useUIStore } from '@/shared/stores/ui-store'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { selectFolder } from '@/shared/lib/native-file-picker'
@@ -59,8 +59,8 @@ function SidebarActionButton({ icon: Icon, label, active, shortcut, disabled, ti
 }
 
 function SidebarActions() {
-  const globalViewMode = useSessionStore(s => s.globalViewMode)
-  const setGlobalViewMode = useSessionStore(s => s.setGlobalViewMode)
+  const viewMode = useNavigationStore(s => s.viewMode)
+  const setViewMode = useNavigationStore(s => s.setViewMode)
   const toggleCommandCenter = useUIStore(s => s.toggleCommandCenter)
   const addWorkspace = useWorkspaceStore(s => s.addWorkspace)
   const activateWorkspace = useWorkspaceStore(s => s.activateWorkspace)
@@ -95,16 +95,16 @@ function SidebarActions() {
         <SidebarActionButton
           icon={LayoutGrid}
           label="画布"
-          active={globalViewMode === 'canvas'}
-          onClick={() => setGlobalViewMode('canvas')}
+          active={viewMode === 'canvas'}
+          onClick={() => setViewMode('canvas')}
         />
       )}
       <SidebarActionButton
         icon={Columns3}
         label="看板"
-        active={globalViewMode === 'kanban'}
+        active={viewMode === 'kanban'}
         shortcut={shortcutLabel('kanban')}
-        onClick={() => setGlobalViewMode('kanban')}
+        onClick={() => setViewMode('kanban')}
       />
       <SidebarActionButton
         icon={Radio}

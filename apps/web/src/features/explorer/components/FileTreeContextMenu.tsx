@@ -2,7 +2,8 @@ import { useEffect, useRef, useCallback } from 'react'
 import { FolderOpen, Copy, Check, Terminal } from 'lucide-react'
 import { toast, toastError } from '@/shared/lib/toast'
 import { cn } from '@/shared/lib/utils'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { findSession } from '@/features/session/stores/session-store'
+import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { useConnectionStore } from '@/features/terminal/stores/connection-store'
 import type { FileNode } from '@akari/shared-types'
 
@@ -64,10 +65,10 @@ export function FileTreeContextMenu({
 }: FileTreeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const sendTerminalInput = useConnectionStore(s => s.sendTerminalInput)
-  const activeTab = useSessionStore(
+  const activeTab = useWorkspaceStore(
     useCallback(
       (s) => {
-        const session = s.sessions.find(sess => sess.id === sessionId)
+        const session = findSession(s.workspaceSessions, sessionId)
         if (!session) return null
         return session.tabs.find(t => t.id === session.activeTabId) ?? null
       },

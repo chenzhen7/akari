@@ -19,7 +19,7 @@ import {
 } from '@/shared/components/ui/select'
 import { Plus, Sparkles, Loader2 } from 'lucide-react'
 import { AgentTypeSelect } from '@/features/session/components/AgentTypeSelect'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useSessionStore, useCurrentSessions } from '@/features/session/stores/session-store'
 import { useUIStore } from '@/shared/stores/ui-store'
 import { apiClient } from '@/shared/lib/api-client'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
@@ -34,7 +34,7 @@ export function CreateSessionDialog() {
   const closeCreateDialog = useUIStore(s => s.closeCreateDialog)
   const toggleCreateDialog = useUIStore(s => s.toggleCreateDialog)
   const addSession = useSessionStore(s => s.addSession)
-  const mainSession = useSessionStore(s => s.sessions.find(s => s.isMain) ?? null)
+  const mainSession = useCurrentSessions().find(s => s.isMain) ?? null
   const currentWorkspace = useWorkspaceStore(s => s.currentWorkspace)
   const isGitWorkspace = currentWorkspace?.isGit !== false
   const [name, setName] = useState('')

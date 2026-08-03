@@ -9,10 +9,9 @@ import { Button } from '@/shared/components/ui/button'
 import { Badge } from '@/shared/components/ui/badge'
 import { Textarea } from '@/shared/components/ui/textarea'
 import { Separator } from '@/shared/components/ui/separator'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useCurrentSessions } from '@/features/session/stores/session-store'
 import { useUIStore } from '@/shared/stores/ui-store'
 import { useConnectionStore } from '@/features/terminal/stores/connection-store'
-import { useShallow } from 'zustand/react/shallow'
 import { API_BASE } from '@/shared/lib/api'
 import {
   Radio,
@@ -146,7 +145,7 @@ export function CommandCenter() {
   const commandCenterOpen = useUIStore(s => s.commandCenterOpen)
   const toggleCommandCenter = useUIStore(s => s.toggleCommandCenter)
   const addTerminalLine = useConnectionStore(s => s.addTerminalLine)
-  const sessions = useSessionStore(useShallow(s => s.sessions))
+  const sessions = useCurrentSessions()
 
   const [broadcastMsg, setBroadcastMsg] = useState('')
   const [selectedTargets, setSelectedTargets] = useState<Set<string>>(

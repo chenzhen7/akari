@@ -3,7 +3,8 @@ import { TerminalPanel } from './TerminalPanel'
 import { DiffViewer } from '@/features/diff/components/DiffViewer'
 import { FileEditor } from '@/features/explorer/components/FileEditor'
 import { cn } from '@/shared/lib/utils'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
+import { findSession } from '@/features/session/stores/session-store'
 import { useShallow } from 'zustand/react/shallow'
 import type { DiffFile, SessionTab } from '@/shared/types'
 import type { ClientMessage } from '@akari/shared-types'
@@ -77,9 +78,9 @@ const TabPane = memo(function TabPane({
 })
 
 export const TabContent = memo(function TabContent({ sessionId, send }: TabContentProps) {
-  const { tabs, activeTabId, workspaceId, worktreePath, diffFiles } = useSessionStore(
+  const { tabs, activeTabId, workspaceId, worktreePath, diffFiles } = useWorkspaceStore(
     useShallow(s => {
-      const session = s.sessions.find(ses => ses.id === sessionId)
+      const session = findSession(s.workspaceSessions, sessionId)
       if (!session) {
         return {
           tabs: [] as SessionTab[],

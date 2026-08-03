@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { toast, toastError } from '@/shared/lib/toast'
 import { apiClient } from '@/shared/lib/api-client'
 import { useWindowStore } from '@/shared/stores/window-store'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useNavigationStore } from '@/shared/stores/navigation-store'
 import type { Workspace, AgentSession } from '@akari/shared-types'
 
 interface WorkspaceStore {
@@ -46,28 +46,6 @@ export function mergeWorkspaces(prev: Workspace[], next: Workspace[]): Workspace
 }
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => {
-  // 监听 session-store 的删除操作：后端 deleteSession 不广播事件，前端删除后需要同步移除当前项目 sidebar 中的会话。
-  // 注意：session-store.sessions 只保存当前项目，切换项目时会发生整体替换，因此只应移除当前项目缓存中的会话。
-  useSessionStore.subscribe((state, prevState) => {
-    if (state.sessions === prevState.sessions) return
-    const currentWorkspaceId = get().currentWorkspace?.id
-    if (!currentWorkspaceId) return
-    const currentIds = new Set(state.sessions.map(s => s.id))
-    const removedIds = prevState.sessions.filter(s => !currentIds.has(s.id)).map(s => s.id)
-    if (removedIds.length === 0) return
-    set(wsState => {
-      const sessions = wsState.workspaceSessions[currentWorkspaceId] ?? []
-      const filtered = sessions.filter(s => !removedIds.includes(s.id))
-      if (filtered.length === sessions.length) return wsState
-      return {
-        workspaceSessions: {
-          ...wsState.workspaceSessions,
-          [currentWorkspaceId]: filtered,
-        },
-      }
-    })
-  })
-
   return {
     workspaces: [],
     currentWorkspace: null,
@@ -114,17 +92,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => {
       }
 
       set({ currentWorkspace: workspace })
-      useSessionStore.getState().resetForWorkspace()
       useWindowStore.getState().setWorkspaceId(id)
 
-      // 直接从全量缓存初始化当前项目的会话，避免切换时请求 API 并导致 sidebar 闪烁
-      const cachedSessions = get().workspaceSessions[id] ?? []
-      useSessionStore.getState().setSessions(cachedSessions)
-      // 同步选中目标会话：高亮是纯前端状态，若等 activate API 返回再选中，
-      // 期间 setSessions 的兜底逻辑会把 sessions[0] 短暂置为 active，导致其闪烁高亮
-      if (sessionId) {
-        useSessionStore.getState().selectSession(sessionId)
-      }
+      // 一次性设置导航选中态（目标会话优先，否则回退第一个），数据来自已就绪的全量缓存，
+      // 无 setSessions 兜底、无中间态，切换项目时 sidebar 不闪烁、选中不被 sessions:list 覆盖
+      const cachedIds = (get().workspaceSessions[id] ?? []).map(s => s.id)
+      useNavigationStore.getState().selectWorkspaceSession(sessionId ?? null, cachedIds)
 
       const params = new URLSearchParams(window.location.search)
       params.set('workspaceId', id)
@@ -156,11 +129,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => {
           ),
         }))
         if (get().currentWorkspace?.id === id) {
-          useSessionStore.getState().resetForWorkspace()
           if (remaining.length > 0) {
             await get().activateWorkspace(remaining[0].id)
           } else {
             set({ currentWorkspace: null })
+            useNavigationStore.getState().setViewMode(null)
             useWindowStore.getState().setWorkspaceId(null)
             history.replaceState(null, '', window.location.pathname)
           }
@@ -206,12 +179,15 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => {
         const next: Record<string, AgentSession[]> = {}
         let changed = false
         for (const [wsId, sessions] of Object.entries(state.workspaceSessions)) {
+          let listChanged = false
           const updated = sessions.map(s => {
             if (s.id !== sessionId) return s
+            listChanged = true
             changed = true
             return { ...s, ...patch }
           })
-          next[wsId] = updated
+          // 未变化的工作区复用原数组引用，避免订阅了当前工作区列表的组件被无关更新触发重渲染
+          next[wsId] = listChanged ? updated : sessions
         }
         return changed ? { workspaceSessions: next } : state
       })
@@ -225,8 +201,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => {
           const filtered = sessions.filter(s => s.id !== sessionId)
           if (filtered.length !== sessions.length) {
             changed = true
+            next[wsId] = filtered
+          } else {
+            // 未变化的工作区复用原数组引用
+            next[wsId] = sessions
           }
-          next[wsId] = filtered
         }
         return changed ? { workspaceSessions: next } : state
       })

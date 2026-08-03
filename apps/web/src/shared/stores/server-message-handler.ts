@@ -1,7 +1,8 @@
 import type { AgentSession, ServerMessage } from '@akari/shared-types'
 import { terminalBus } from '@/features/terminal/lib/terminalBus'
 import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useSessionStore, findSession } from '@/features/session/stores/session-store'
+import { useNavigationStore } from '@/shared/stores/navigation-store'
 import { useConnectionStore } from '@/features/terminal/stores/connection-store'
 import { useWorkspaceStore, mergeWorkspaces } from '@/features/workspace/stores/workspace-store'
 
@@ -9,53 +10,37 @@ export function handleServerMessage(msg: ServerMessage): void {
   switch (msg.event) {
     case 'sessions:list': {
       const currentWorkspaceId = useWorkspaceStore.getState().currentWorkspace?.id
-      useSessionStore.setState(state => {
-        let nextActiveSessionId = state.activeSessionId
-        // 如果当前没有选中会话或选中的已不存在，自动选中第一个
-        if (!nextActiveSessionId || !msg.payload.some((s: AgentSession) => s.id === nextActiveSessionId)) {
-          nextActiveSessionId = msg.payload.length > 0 ? msg.payload[0].id : null
-        }
-        return { sessions: msg.payload, activeSessionId: nextActiveSessionId }
-      })
       if (currentWorkspaceId) {
         useWorkspaceStore.setState(state => ({
           workspaceSessions: { ...state.workspaceSessions, [currentWorkspaceId]: msg.payload },
         }))
       }
+      // 数据更新不改变用户选中；仅当选中项在列表中已失效时修正（见 navigation-store.reconcile）
+      useNavigationStore.getState().reconcile(msg.payload.map((s: AgentSession) => s.id))
       break
     }
     case 'session:created':
-      useSessionStore.setState(state => ({
-        sessions: [...state.sessions.filter(s => s.id !== msg.payload.id), msg.payload],
-      }))
       useWorkspaceStore.getState().addSession(msg.payload)
       break
     case 'session:updated':
-      useSessionStore.setState(state => ({
-        sessions: state.sessions.map(s => s.id === msg.payload.id ? msg.payload : s),
-      }))
       useWorkspaceStore.getState().updateSession(msg.payload.id, msg.payload)
       break
     case 'session:status':
-      useSessionStore.setState(state => ({
-        sessions: state.sessions.map(s =>
-          s.id === msg.payload.id
-            ? { ...s, status: msg.payload.status, progress: msg.payload.progress, kanbanColumn: msg.payload.kanbanColumn }
-            : s
-        ),
-      }))
       useWorkspaceStore.getState().updateSession(msg.payload.id, {
         status: msg.payload.status,
         progress: msg.payload.progress,
         kanbanColumn: msg.payload.kanbanColumn,
       })
       break
-    case 'session:deleted':
-      useSessionStore.setState(state => ({
-        sessions: state.sessions.filter(s => s.id !== msg.payload.id),
-      }))
+    case 'session:deleted': {
       useWorkspaceStore.getState().removeSession(msg.payload.id)
+      // 若被删的恰是当前选中会话，重选当前工作区第一个会话
+      const ws = useWorkspaceStore.getState()
+      const wsId = ws.currentWorkspace?.id
+      const ids = wsId ? (ws.workspaceSessions[wsId] ?? []).map(s => s.id) : []
+      useNavigationStore.getState().reconcile(ids)
       break
+    }
     case 'terminal:data':
       terminalBus.emit(msg.payload.terminalId, msg.payload.data)
       break
@@ -71,18 +56,6 @@ export function handleServerMessage(msg: ServerMessage): void {
       terminalBus.resized(msg.payload.terminalId)
       break
     case 'diff:update':
-      useSessionStore.setState(state => ({
-        sessions: state.sessions.map(s =>
-          s.id === msg.payload.sessionId
-            ? {
-              ...s,
-              diffSummary: msg.payload.diff.summary,
-              diffFull: msg.payload.diff.fullDiff,
-              diffFiles: msg.payload.diff.files,
-            }
-            : s
-        ),
-      }))
       useWorkspaceStore.getState().updateSession(msg.payload.sessionId, {
         diffSummary: msg.payload.diff.summary,
         diffFull: msg.payload.diff.fullDiff,
@@ -105,60 +78,44 @@ export function handleServerMessage(msg: ServerMessage): void {
       useSessionStore.setState({ canvasEdges: msg.payload })
       break
     case 'session:lastMessage':
-      useSessionStore.setState(state => ({
-        sessions: state.sessions.map(s =>
-          s.id === msg.payload.id ? { ...s, lastAiMessage: msg.payload.lastAiMessage } : s
-        ),
-      }))
       useWorkspaceStore.getState().updateSession(msg.payload.id, {
         lastAiMessage: msg.payload.lastAiMessage,
       })
       break
-    case 'tab:created':
-      useSessionStore.setState(state => ({
-        sessions: state.sessions.map(s =>
-          s.id === msg.payload.sessionId
-            ? { ...s, tabs: [...s.tabs, msg.payload.tab] }
-            : s
-        ),
-      }))
+    case 'tab:created': {
+      const ws = useWorkspaceStore.getState()
+      const session = findSession(ws.workspaceSessions, msg.payload.sessionId)
+      if (session) {
+        ws.updateSession(msg.payload.sessionId, { tabs: [...session.tabs, msg.payload.tab] })
+      }
       break
-    case 'tab:closed':
-      useSessionStore.setState(state => ({
-        sessions: state.sessions.map(s => {
-          if (s.id !== msg.payload.sessionId) return s
-          const updatedTabs = s.tabs.filter(t => t.id !== msg.payload.tabId)
-          let activeTabId = s.activeTabId
-          if (activeTabId === msg.payload.tabId) {
-            activeTabId = updatedTabs.length > 0 ? updatedTabs[updatedTabs.length - 1].id : null
-          }
-          return { ...s, tabs: updatedTabs, activeTabId }
-        }),
-      }))
+    }
+    case 'tab:closed': {
+      const ws = useWorkspaceStore.getState()
+      const session = findSession(ws.workspaceSessions, msg.payload.sessionId)
+      if (!session) break
+      const updatedTabs = session.tabs.filter(t => t.id !== msg.payload.tabId)
+      let activeTabId = session.activeTabId
+      if (activeTabId === msg.payload.tabId) {
+        activeTabId = updatedTabs.length > 0 ? updatedTabs[updatedTabs.length - 1].id : null
+      }
+      ws.updateSession(msg.payload.sessionId, { tabs: updatedTabs, activeTabId })
       break
+    }
     case 'tab:activated':
-      useSessionStore.setState(state => ({
-        sessions: state.sessions.map(s =>
-          s.id === msg.payload.sessionId
-            ? { ...s, activeTabId: msg.payload.tabId }
-            : s
-        ),
-      }))
+      useWorkspaceStore.getState().updateSession(msg.payload.sessionId, { activeTabId: msg.payload.tabId })
       break
     case 'tabs:sync':
-      useSessionStore.setState(state => ({
-        sessions: state.sessions.map(s =>
-          s.id === msg.payload.sessionId
-            ? { ...s, tabs: msg.payload.tabs, activeTabId: msg.payload.activeTabId }
-            : s
-        ),
-      }))
+      useWorkspaceStore.getState().updateSession(msg.payload.sessionId, {
+        tabs: msg.payload.tabs,
+        activeTabId: msg.payload.activeTabId,
+      })
       break
     case 'workspace:activated':
       // 仅代表「某项目被显式激活/切换」。桌面端每个窗口只会收到自己 workspace 的事件。
-      // 注意：不能在这里 resetForWorkspace()——服务端随后会推送 sessions:list 全量替换会话列表，
-      // 而客户端自己发起的切换已在 activateWorkspace 里做过 reset 并选中目标会话；
-      // 若此处再 reset，activeSessionId 被清空后 sessions:list 会兜底选中第一个会话，覆盖用户的选择。
+      // 客户端自己发起的切换已在 activateWorkspace 里设置好导航选中态，这里无需重置——
+      // 数据/选中分离后，workspace:activated 只更新 currentWorkspace，sessions:list 也只写缓存，
+      // 两者都不会覆盖用户的选中。
       useWorkspaceStore.getState().setCurrentWorkspace(msg.payload)
       break
     case 'workspace:list': {

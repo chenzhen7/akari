@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/shared/components/ui/card'
 import { Circle } from 'lucide-react'
 import { Badge } from '@/shared/components/ui/badge'
 import type { AgentSession } from '@/shared/types'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useNavigationStore } from '@/shared/stores/navigation-store'
 
 interface KanbanCardProps {
   session: AgentSession
@@ -30,7 +30,7 @@ const statusLabelMap: Record<string, string> = {
 }
 
 export function KanbanCard({ session }: KanbanCardProps) {
-  const openTab = useSessionStore(s => s.openTab)
+  const selectSession = useNavigationStore(s => s.selectSession)
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: session.id,
@@ -52,7 +52,7 @@ export function KanbanCard({ session }: KanbanCardProps) {
       {...attributes}
       style={style}
       className="cursor-grab active:cursor-grabbing"
-      onClick={() => openTab(session.id)}
+      onClick={() => selectSession(session.id)}
     >
       <CardContent className="space-y-2 p-3">
         <div className="flex items-center gap-2">

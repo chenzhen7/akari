@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { TopNav } from './TopNav'
 import { SessionSidebar } from './SessionSidebar'
 import { RightSidebar } from './RightSidebar'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useNavigationStore } from '@/shared/stores/navigation-store'
 import { CANVAS_ENABLED } from '@/shared/lib/feature-flags'
 import { MiddleTabBar } from '@/features/session/components/MiddleTabBar'
 import { TabContent } from '@/features/session/components/TabContent'
@@ -48,8 +48,8 @@ function ResizeHandle({
 }
 
 export function AppShell() {
-  const activeSessionId = useSessionStore(s => s.activeSessionId)
-  const globalViewMode = useSessionStore(s => s.globalViewMode)
+  const activeSessionId = useNavigationStore(s => s.sessionId)
+  const globalViewMode = useNavigationStore(s => s.viewMode)
   const { send } = useWebSocket()
 
   const {
@@ -85,7 +85,7 @@ export function AppShell() {
   // 画布功能临时关闭：若当前处于画布模式则自动切回默认视图
   useEffect(() => {
     if (!CANVAS_ENABLED && globalViewMode === 'canvas') {
-      useSessionStore.getState().setGlobalViewMode(null)
+      useNavigationStore.getState().setViewMode(null)
     }
   }, [globalViewMode])
 

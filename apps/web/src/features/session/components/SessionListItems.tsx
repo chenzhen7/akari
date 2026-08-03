@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from 'react'
 import { cn } from '@/shared/lib/utils'
 import { useSessionStore } from '@/features/session/stores/session-store'
+import { useNavigationStore } from '@/shared/stores/navigation-store'
 import { Button } from '@/shared/components/ui/button'
 import {
   GitBranch,
@@ -63,7 +64,7 @@ export const SessionItem = memo(function SessionItem({
   onContextMenu,
   onClick,
 }: SessionItemProps) {
-  const selectSession = useSessionStore(s => s.selectSession)
+  const selectSession = useNavigationStore(s => s.selectSession)
   const archiveSession = useSessionStore(s => s.archiveSession)
   const deleteSession = useSessionStore(s => s.deleteSession)
   const restoreSession = useSessionStore(s => s.restoreSession)
@@ -186,7 +187,7 @@ export const MainSessionItem = memo(function MainSessionItem({
   onContextMenu,
   onClick,
 }: MainSessionItemProps) {
-  const selectSession = useSessionStore(s => s.selectSession)
+  const selectSession = useNavigationStore(s => s.selectSession)
   const additions = session.diffSummary?.additions ?? 0
   const deletions = session.diffSummary?.deletions ?? 0
 

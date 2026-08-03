@@ -3,7 +3,7 @@ import { cn } from '@/shared/lib/utils'
 import { toastError } from '@/shared/lib/toast'
 import { apiClient } from '@/shared/lib/api-client'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useNavigationStore } from '@/shared/stores/navigation-store'
 import { useUIStore } from '@/shared/stores/ui-store'
 import { SessionItem, MainSessionItem } from '@/features/session/components/SessionListItems'
 import { SessionContextMenu } from '@/features/layout/components/SessionContextMenu'
@@ -34,8 +34,8 @@ export function WorkspaceSessionList() {
   const activateWorkspace = useWorkspaceStore(s => s.activateWorkspace)
   const deleteWorkspace = useWorkspaceStore(s => s.deleteWorkspace)
   const pinWorkspace = useWorkspaceStore(s => s.pinWorkspace)
-  const activeSessionId = useSessionStore(s => s.activeSessionId)
-  const selectSession = useSessionStore(s => s.selectSession)
+  const activeSessionId = useNavigationStore(s => s.sessionId)
+  const selectSession = useNavigationStore(s => s.selectSession)
   const workspaceSessions = useWorkspaceStore(s => s.workspaceSessions)
   const setWorkspaceSessions = useWorkspaceStore(s => s.setWorkspaceSessions)
   const openCreateDialog = useUIStore(s => s.openCreateDialog)

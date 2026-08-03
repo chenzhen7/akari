@@ -1,7 +1,8 @@
 import { GitBranch, FileCode, Info, FolderTree } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/shared/lib/utils'
-import { useSessionStore } from '@/features/session/stores/session-store'
+import { useSessionById } from '@/features/session/stores/session-store'
+import { useNavigationStore } from '@/shared/stores/navigation-store'
 import { useUIStore } from '@/shared/stores/ui-store'
 import { useTabStore } from '@/features/session/stores/tab-store'
 import { GitGraphPanel } from '@/features/git/components/GitGraphPanel'
@@ -9,7 +10,6 @@ import { DiffFileList } from '@/features/diff/components/DiffFileList'
 import { SessionInfoPanel } from '@/features/session/components/SessionInfoPanel'
 import { ExplorerPanel } from '@/features/explorer/components/ExplorerPanel'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
-import { useShallow } from 'zustand/react/shallow'
 
 type RightTabId = 'git-graph' | 'diff' | 'info' | 'explorer'
 
@@ -27,12 +27,10 @@ interface RightSidebarProps {
 export function RightSidebar({ sessionId }: RightSidebarProps) {
   const activeRightTab = useUIStore(s => s.activeRightTab)
   const setActiveRightTab = useUIStore(s => s.setActiveRightTab)
-  const selectSession = useSessionStore(s => s.selectSession)
+  const selectSession = useNavigationStore(s => s.selectSession)
   const createTab = useTabStore(s => s.createTab)
   const activateTab = useTabStore(s => s.activateTab)
-  const session = useSessionStore(
-    useShallow(s => sessionId ? s.sessions.find(ses => ses.id === sessionId) : undefined),
-  )
+  const session = useSessionById(sessionId)
   const sessionKey = session?.id ?? '__empty__'
   const sessionKeyRef = useRef(sessionKey)
   const [mountedPanels, setMountedPanels] = useState<Set<RightTabId>>(() => new Set([activeRightTab]))
