@@ -40,14 +40,21 @@ export function handleServerMessage(msg: ServerMessage): void {
       useSessionStore.setState(state => ({
         sessions: state.sessions.map(s =>
           s.id === msg.payload.id
-            ? { ...s, status: msg.payload.status, progress: msg.payload.progress }
+            ? { ...s, status: msg.payload.status, progress: msg.payload.progress, kanbanColumn: msg.payload.kanbanColumn }
             : s
         ),
       }))
       useWorkspaceStore.getState().updateSession(msg.payload.id, {
         status: msg.payload.status,
         progress: msg.payload.progress,
+        kanbanColumn: msg.payload.kanbanColumn,
       })
+      break
+    case 'session:deleted':
+      useSessionStore.setState(state => ({
+        sessions: state.sessions.filter(s => s.id !== msg.payload.id),
+      }))
+      useWorkspaceStore.getState().removeSession(msg.payload.id)
       break
     case 'terminal:data':
       terminalBus.emit(msg.payload.terminalId, msg.payload.data)

@@ -148,7 +148,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
     this.sessionRepository.updateStatus(sessionId, status, kanbanColumn)
     this.broadcast({
       event: 'session:status',
-      payload: { id: sessionId, status, progress: session.progress },
+      payload: { id: sessionId, status, progress: session.progress, kanbanColumn },
     })
   }
 
@@ -242,6 +242,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
       console.warn(`[SessionLifecycleService] removeWorktree failed for ${sessionId} during delete (non-fatal):`, err)
     })
     this.sessionRepository.delete(sessionId)
+    this.broadcast({ event: 'session:deleted', payload: { id: sessionId } })
   }
 
   async restoreSessions(): Promise<void> {
@@ -268,7 +269,12 @@ export class SessionLifecycleService implements ISessionLifecycleService {
           } else {
             this.broadcast({
               event: 'session:status',
-              payload: { id: session.id, status: session.status, progress: session.progress },
+              payload: {
+                id: session.id,
+                status: session.status,
+                progress: session.progress,
+                kanbanColumn: STATUS_TO_KANBAN[session.status] ?? session.kanbanColumn,
+              },
             })
           }
           this.clearSessionTerminalIds(session.id)

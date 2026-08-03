@@ -145,7 +145,8 @@ export interface Workspace {
 export type ServerMessage =
   | { event: 'session:created'; payload: AgentSession }
   | { event: 'session:updated'; payload: AgentSession }
-  | { event: 'session:status'; payload: { id: string; status: SessionStatus; progress: number } }
+  | { event: 'session:status'; payload: { id: string; status: SessionStatus; progress: number; kanbanColumn: KanbanColumn } }
+  | { event: 'session:deleted'; payload: { id: string } }
   | { event: 'terminal:data'; payload: { sessionId: string; terminalId: string; data: string } }
   | { event: 'terminal:ready'; payload: { sessionId: string; terminalId: string } }
   | { event: 'terminal:resized'; payload: { sessionId: string; terminalId: string } }
