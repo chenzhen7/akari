@@ -3,8 +3,9 @@ import type { ClientMessage } from '@akari/shared-types'
 
 export default async function websocketPlugin(fastify: FastifyInstance) {
   fastify.get('/ws', { websocket: true }, (socket) => {
-    fastify.clients.add(socket)
-    fastify.log.info(`WebSocket client connected (total: ${fastify.clients.size})`)
+    const wsState = fastify.wsState
+    wsState.socket = socket
+    fastify.log.info('WebSocket client connected')
 
     // 连接建立时只发送全局工作区列表，具体工作区的初始化等客户端订阅后再发送
     if (socket.readyState === WebSocket.OPEN) {
@@ -21,28 +22,26 @@ export default async function websocketPlugin(fastify: FastifyInstance) {
     })
 
     socket.on('close', () => {
-      const workspaceId = fastify.workspaceClients.get(socket)
-      if (workspaceId) {
-        fastify.workspaceSessionRegistry.unsubscribeClient(socket, workspaceId)
+      // 单窗口模型：当前连接关闭时清空状态，但不 dispose SessionManager。
+      // 终端进程保持运行，等待客户端重连或下次启动。
+      if (wsState.socket === socket) {
+        wsState.socket = null
+        wsState.workspaceId = null
       }
-      fastify.clients.delete(socket)
-      fastify.workspaceClients.delete(socket)
-      fastify.log.info(`WebSocket client disconnected (total: ${fastify.clients.size})`)
+      fastify.log.info('WebSocket client disconnected')
     })
   })
 }
 
 async function handleClientMessage(msg: ClientMessage, socket: WebSocket, fastify: FastifyInstance): Promise<void> {
+  const wsState = fastify.wsState
+
   if (msg.event === 'subscribe:workspace') {
     const { workspaceId } = msg.payload
-    const previousWorkspaceId = fastify.workspaceClients.get(socket)
-    if (previousWorkspaceId && previousWorkspaceId !== workspaceId) {
-      fastify.workspaceSessionRegistry.unsubscribeClient(socket, previousWorkspaceId)
-    }
-    fastify.workspaceClients.set(socket, workspaceId)
+    wsState.workspaceId = workspaceId
     fastify.log.info(`WebSocket client subscribed to workspace ${workspaceId}`)
 
-    const sessionManager = await fastify.workspaceSessionRegistry.subscribeClient(socket, workspaceId)
+    const sessionManager = await fastify.getOrCreateSessionManager(workspaceId)
     const workspace = fastify.workspaceManager.getWorkspaceById(workspaceId)
 
     // Push initial workspace-specific state
@@ -57,7 +56,7 @@ async function handleClientMessage(msg: ClientMessage, socket: WebSocket, fastif
     return
   }
 
-  const workspaceId = fastify.workspaceClients.get(socket)
+  const workspaceId = wsState.workspaceId
   if (!workspaceId) {
     fastify.log.warn('WebSocket message received before workspace subscription')
     return

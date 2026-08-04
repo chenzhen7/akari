@@ -11,8 +11,11 @@ declare module 'fastify' {
     db: Database.Database
     workspaceManager: WorkspaceService
     canvasEdgeStore: CanvasEdgeStore
-    clients: Set<WebSocket>
-    workspaceClients: Map<WebSocket, string>
+    /** 单窗口 WS 状态：当前唯一连接及其订阅的工作区。 */
+    wsState: {
+      socket: WebSocket | null
+      workspaceId: string | null
+    }
     broadcast: (msg: ServerMessage, workspaceId?: string) => void
     getOrCreateSessionManager: (workspaceId: string) => Promise<SessionManager>
     workspaceSessionRegistry: WorkspaceSessionRegistryService
