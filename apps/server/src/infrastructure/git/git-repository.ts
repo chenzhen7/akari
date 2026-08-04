@@ -1,5 +1,5 @@
 import { watch, type FSWatcher } from 'chokidar'
-import { dirname, join, relative, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileDiffLine } from '@akari/shared-types'
 import { GitCommandRunner } from './git-command-runner.js'
 import { loadGitignoreFilter } from '../fs/gitignore-loader.js'
@@ -350,10 +350,23 @@ export class GitRepository {
     return watcher
   }
 
-  watchGitMetadata(callback: () => void): FSWatcher | null {
-    const gitDir = join(this.repoPath, '.git')
-    const paths = [join(gitDir, 'HEAD'), join(gitDir, 'index'), join(gitDir, 'refs', 'heads')]
+  /**
+   * Watch git metadata (HEAD / index / refs) so that git operations performed
+   * OUTSIDE the app (external commit / push / checkout) also invalidate caches.
+   *
+   * 通过 `git rev-parse --git-dir` / `--git-common-dir` 解析真实 gitdir，
+   * 兼容 worktree（其 `.git` 是指针文件，真实 gitdir 在主仓库 `.git/worktrees/` 下，
+   * 而 refs 位于 commonDir）。
+   */
+  async watchGitMetadata(callback: () => void): Promise<FSWatcher | null> {
     try {
+      const { gitDir, commonDir } = await this.resolveGitDirs()
+      const paths = [
+        join(gitDir, 'HEAD'),
+        join(gitDir, 'index'),
+        join(commonDir, 'refs'),
+        join(commonDir, 'packed-refs'),
+      ]
       const watcher = watch(paths, { persistent: true, ignoreInitial: true })
       this.metadataWatcher = watcher
       let debounce: ReturnType<typeof setTimeout> | null = null
@@ -364,12 +377,26 @@ export class GitRepository {
           callback()
         }, 300)
       }
-      watcher.on('change', scheduleCallback).on('add', scheduleCallback)
+      watcher
+        .on('change', scheduleCallback)
+        .on('add', scheduleCallback)
+        .on('unlink', scheduleCallback)
       return watcher
     } catch (err) {
       console.warn(`[GitRepository] failed to watch git metadata for ${this.repoPath}:`, err)
       return null
     }
+  }
+
+  private async resolveGitDirs(): Promise<{ gitDir: string; commonDir: string }> {
+    const gitDirRaw = (await this.runner.run(['rev-parse', '--git-dir'], this.repoPath)).trim()
+    const gitDir = resolve(this.repoPath, gitDirRaw)
+    const commonRaw = await this.runner
+      .run(['rev-parse', '--git-common-dir'], this.repoPath)
+      .then(r => r.trim())
+      .catch(() => null)
+    const commonDir = commonRaw ? resolve(this.repoPath, commonRaw) : gitDir
+    return { gitDir, commonDir }
   }
 
   invalidateDiffCache(): void {

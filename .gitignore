@@ -29,3 +29,4 @@ apps/*/dist/
 
 settings.local.json
 akari.db
+*.tsbuildinfo
