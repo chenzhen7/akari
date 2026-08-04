@@ -19,9 +19,11 @@ interface RefBadgeProps {
   isHead: boolean
   nodeColor?: string
   localBranchNames: Set<string>
+  /** 展示完整分支名（tooltip 内使用），默认截断到 14 字符 */
+  fullName?: boolean
 }
 
-function RefBadge({ ref, isHead, nodeColor, localBranchNames }: RefBadgeProps) {
+function RefBadge({ ref, isHead, nodeColor, localBranchNames, fullName }: RefBadgeProps) {
   const isRemote = ref.includes('/') && !localBranchNames.has(ref)
   const isTag = ref.startsWith('tag:')
   const label = isTag ? ref.replace('tag: ', '') : ref
@@ -38,7 +40,7 @@ function RefBadge({ ref, isHead, nodeColor, localBranchNames }: RefBadgeProps) {
       }
     >
       <Icon className="h-3 w-3 shrink-0" />
-      {truncate(label, 14)}
+      {fullName ? label : truncate(label, 14)}
     </Badge>
   )
 }
@@ -118,35 +120,40 @@ export function GitGraphRow({
               )}
 
               {hasRefs && firstRef && (
-                <div className="ml-auto flex shrink-0 items-center gap-1">
-                  <RefBadge
-                    ref={firstRef}
-                    isHead={isHead}
-                    nodeColor={node?.color}
-                    localBranchNames={localBranchNames}
-                  />
+                <Tooltip delayDuration={400}>
+                  <TooltipTrigger asChild>
+                    <div className="ml-auto flex shrink-0 items-center gap-1">
+                      <RefBadge
+                        ref={firstRef}
+                        isHead={isHead}
+                        nodeColor={node?.color}
+                        localBranchNames={localBranchNames}
+                      />
 
-                  {extraCount > 0 && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
+                      {extraCount > 0 && (
                         <Badge variant="outline" className="h-5 px-1.5 text-[11px]">
                           +{extraCount}
                         </Badge>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="flex max-w-xs flex-wrap gap-1 p-1.5 text-[11px]">
-                        {branchRefs.map((ref, ri) => (
-                          <RefBadge
-                            key={ri}
-                            ref={ref}
-                            isHead={isHead && ri === 0}
-                            nodeColor={node?.color}
-                            localBranchNames={localBranchNames}
-                          />
-                        ))}
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
+                      )}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="top"
+                    className="flex max-w-sm flex-wrap gap-1 border bg-popover p-1.5 text-[11px] text-popover-foreground shadow-md"
+                    arrowClassName="bg-popover fill-popover"
+                  >
+                    {branchRefs.map((ref, ri) => (
+                      <RefBadge
+                        key={ri}
+                        ref={ref}
+                        isHead={isHead && ri === 0}
+                        nodeColor={node?.color}
+                        localBranchNames={localBranchNames}
+                        fullName
+                      />
+                    ))}
+                  </TooltipContent>
+                </Tooltip>
               )}
             </div>
           </div>
