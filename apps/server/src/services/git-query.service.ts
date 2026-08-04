@@ -12,7 +12,8 @@ export interface IGitQueryService {
     onDiff: (diff: GitDiff) => void
     onFileChange?: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void
   }): FSWatcher | null
-  watchGitMetadata(repoRoot: string, callback: () => void): FSWatcher | null
+  watchGitMetadata(repoPath: string, callback: () => void): Promise<FSWatcher | null>
+  invalidateDiffCache(cwd: string): void
   getCurrentBranch(cwd?: string): Promise<string>
 }
 
@@ -49,10 +50,14 @@ export class GitQueryService implements IGitQueryService {
     return repo.watchDiff(callbacks)
   }
 
-  watchGitMetadata(repoRoot: string, callback: () => void): FSWatcher | null {
-    const repo = this.registry.get(repoRoot)
-    if (!repo) return null
+  watchGitMetadata(repoPath: string, callback: () => void): Promise<FSWatcher | null> {
+    const repo = this.registry.get(repoPath)
+    if (!repo) return Promise.resolve(null)
     return repo.watchGitMetadata(callback)
+  }
+
+  invalidateDiffCache(cwd: string): void {
+    this.registry.get(cwd)?.invalidateDiffCache()
   }
 
   async getCurrentBranch(cwd?: string): Promise<string> {

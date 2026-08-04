@@ -27,7 +27,8 @@ export interface IWorktreeService {
     onDiff: (diff: GitDiff) => void
     onFileChange?: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void
   }, cwd?: string): FSWatcher
-  watchGitMetadata(sessionId: string, repoRoot: string, callback: () => void): FSWatcher | null
+  watchGitMetadata(sessionId: string, repoPath: string, callback: () => void): Promise<FSWatcher | null>
+  invalidateDiffCache(cwd: string): void
   getCurrentBranch(cwd?: string): Promise<string>
   getWorktreePath(sessionId: string): string
   dispose(): Promise<void>
@@ -212,11 +213,15 @@ export class WorktreeService implements IWorktreeService {
     return watcher
   }
 
-  watchGitMetadata(sessionId: string, repoRoot: string, callback: () => void): FSWatcher | null {
-    const watcher = this.gitQuery.watchGitMetadata(repoRoot, callback)
+  async watchGitMetadata(sessionId: string, repoPath: string, callback: () => void): Promise<FSWatcher | null> {
+    const watcher = await this.gitQuery.watchGitMetadata(repoPath, callback)
     if (!watcher) return null
     this.watchers.set(`${sessionId}:branch`, watcher)
     return watcher
+  }
+
+  invalidateDiffCache(cwd: string): void {
+    this.gitQuery.invalidateDiffCache(cwd)
   }
 
   async getCurrentBranch(cwd?: string): Promise<string> {

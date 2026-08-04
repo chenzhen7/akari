@@ -350,6 +350,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
 
       if (!session.isMain && session.worktreePath) {
         this.worktreeService.watchDiff(session.id, this.createDiffCallbacks(session.id))
+        this.watchSessionGitMetadata(session.id)
       }
 
       perfLog(`[restoreSessions] 会话 ${session.id}（isMain=${session.isMain}）恢复完成`, tSession)
@@ -359,6 +360,12 @@ export class SessionLifecycleService implements ISessionLifecycleService {
   }
 
   refreshDiff(sessionId: string): void {
+    const session = this.getSession(sessionId)
+    if (session?.worktreePath) {
+      // 外部 git 操作（commit/push）不会触发内存 diff 缓存失效，
+      // 手动刷新必须先清缓存，否则只是把缓存里的旧 diff 再广播一遍。
+      this.worktreeService.invalidateDiffCache(session.worktreePath)
+    }
     this.broadcastDiffUpdate(sessionId)
   }
 
@@ -432,6 +439,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
       await launchAgentInTerminal(this.terminalService, terminalId, worktreePath, session.agentType, session.task, id)
 
       this.worktreeService.watchDiff(id, this.createDiffCallbacks(id))
+      this.watchSessionGitMetadata(id)
       this.updateStatus(id, 'idle')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -487,7 +495,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
   }
 
   private watchMainBranch(sessionId: string, repoRoot: string): void {
-    this.worktreeService.watchGitMetadata(sessionId, repoRoot, () => {
+    void this.worktreeService.watchGitMetadata(sessionId, repoRoot, () => {
       void (async () => {
         const session = this.getSession(sessionId)
         if (!session || !session.isMain) return
@@ -501,6 +509,31 @@ export class SessionLifecycleService implements ISessionLifecycleService {
         }
         this.refreshDiff(sessionId)
       })()
+    }).catch((err: unknown) => {
+      console.warn(`[SessionLifecycleService] failed to watch git metadata for main session ${sessionId}:`, err)
     })
+  }
+
+  /**
+   * 为非主会话（worktree）挂 git 元数据监听：外部 commit/push/checkout 只改
+   * gitdir 内的 HEAD/index/refs，工作树 watcher 看不到，需要靠它失效缓存并刷新 diff/git log。
+   */
+  private watchSessionGitMetadata(sessionId: string): void {
+    const session = this.getSession(sessionId)
+    if (!session?.worktreePath) return
+    const worktreePath = session.worktreePath
+    const callbacks = this.createDiffCallbacks(sessionId)
+    void this.worktreeService
+      .watchGitMetadata(sessionId, worktreePath, () => {
+        void this.worktreeService
+          .getCurrentDiff(worktreePath)
+          .then(callbacks.onDiff)
+          .catch((err: unknown) => {
+            console.warn(`[SessionLifecycleService] failed to refresh diff after git metadata change for ${sessionId}:`, err)
+          })
+      })
+      .catch((err: unknown) => {
+        console.warn(`[SessionLifecycleService] failed to watch git metadata for ${sessionId}:`, err)
+      })
   }
 }
