@@ -45,20 +45,33 @@ const workspaceManager = new WorkspaceService(db)
 await workspaceManager.migrate()
 await workspaceManager.ensureDefaultWorkspace(REPO_ROOT)
 
-const clients = new Set<WebSocket>()
-const workspaceClients = new Map<WebSocket, string>()
-
-function broadcast(message: ServerMessage, workspaceId?: string): void {
-  const data = JSON.stringify(message)
-  for (const ws of clients) {
-    if (ws.readyState !== WebSocket.OPEN) continue
-    if (workspaceId && workspaceClients.get(ws) !== workspaceId) continue
-    ws.send(data)
-  }
-}
-
 const workspaceSessionManagers = new Map<string, SessionManager>()
 const pendingSessionManagers = new Map<string, Promise<SessionManager>>()
+
+let currentSocket: WebSocket | null = null
+let currentWorkspaceId: string | null = null
+
+const wsState = {
+  get socket() {
+    return currentSocket
+  },
+  set socket(value: WebSocket | null) {
+    currentSocket = value
+  },
+  get workspaceId() {
+    return currentWorkspaceId
+  },
+  set workspaceId(value: string | null) {
+    currentWorkspaceId = value
+  },
+}
+
+function broadcast(message: ServerMessage, workspaceId?: string): void {
+  const ws = currentSocket
+  if (!ws || ws.readyState !== WebSocket.OPEN) return
+  if (workspaceId && currentWorkspaceId !== workspaceId) return
+  ws.send(JSON.stringify(message))
+}
 
 async function getOrCreateSessionManager(workspaceId: string): Promise<SessionManager> {
   const existing = workspaceSessionManagers.get(workspaceId)
@@ -102,9 +115,8 @@ async function getOrCreateSessionManager(workspaceId: string): Promise<SessionMa
 const workspaceSessionRegistry = new WorkspaceSessionRegistryService({
   getOrCreateSessionManager,
   sessionManagers: workspaceSessionManagers,
-  ttlMs: 30000,
   onDispose: (workspaceId) => {
-    fastify.log.info(`SessionManager for workspace ${workspaceId} disposed after inactivity`)
+    fastify.log.info(`SessionManager for workspace ${workspaceId} disposed`)
   },
 })
 
@@ -119,8 +131,7 @@ const canvasEdgeStore = new CanvasEdgeStore(db)
 fastify.decorate('db', db)
 fastify.decorate('workspaceManager', workspaceManager)
 fastify.decorate('canvasEdgeStore', canvasEdgeStore)
-fastify.decorate('clients', clients)
-fastify.decorate('workspaceClients', workspaceClients)
+fastify.decorate('wsState', wsState)
 fastify.decorate('broadcast', broadcast)
 fastify.decorate('getOrCreateSessionManager', getOrCreateSessionManager)
 fastify.decorate('workspaceSessionRegistry', workspaceSessionRegistry)
