@@ -142,7 +142,8 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   const totalDeletions = diffFiles.reduce((s, f) => s + f.deletions, 0)
 
   const activeTab = session.tabs.find((t) => t.id === session.activeTabId)
-  const selectedPath = activeTab?.type === 'review' ? (activeTab.filePath ?? null) : null
+  const scrollTarget = useDiffReviewStore((s) => s.scrollTargets[session.id])
+  const selectedPath = activeTab?.filePath ?? scrollTarget?.filePath ?? null
 
   useEffect(() => {
     if (session.diffFiles !== undefined) return
@@ -161,14 +162,14 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   return (
     <div className="flex h-full w-full flex-col">
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-2 py-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">变更文件</span>
-        <span className="rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/30 px-2.5">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">变更文件</span>
+        <span className="rounded-full bg-background px-1.5 py-px text-[11px] font-medium text-muted-foreground shadow-sm">
           {diffFiles.length}
         </span>
 
         <div className="ml-auto flex items-center gap-1.5">
-          <div className="flex items-center gap-0.5 font-mono text-[10px]">
+          <div className="flex items-center gap-0.5 font-mono text-[11px]">
             {totalAdditions > 0 && (
               <span className="text-green-500">+{totalAdditions}</span>
             )}
@@ -253,9 +254,9 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
 
       {/* File tree */}
       <ScrollArea className="flex-1">
-        <div className="py-0.5">
+        <div className="px-1 py-1">
           {diffFiles.length === 0 && (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            <div className="flex h-full items-center justify-center py-6 text-xs text-muted-foreground">
               暂无变更
             </div>
           )}

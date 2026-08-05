@@ -1,4 +1,4 @@
-# CLAUDE.md123
+# CLAUDE.md
 
 ---
 

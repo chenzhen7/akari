@@ -1,8 +1,22 @@
-import { memo } from 'react'
-import { ChevronDown, ChevronRight, FileIcon, Eye } from 'lucide-react'
+import { memo, useMemo } from 'react'
+import {
+  ChevronDown,
+  ChevronRight,
+  File as FileIcon,
+  FileCode,
+  FileCode2,
+  FileImage,
+  FileJson,
+  FileText,
+  FileType,
+  FileType2,
+  Folder,
+  FolderOpen,
+} from 'lucide-react'
 import type { DiffFile } from '@akari/shared-types'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/components/ui/button'
+import { Checkbox } from '@/shared/components/ui/checkbox'
 import { useDiffReviewStore } from '../stores/diff-review-store'
 
 export interface FileTreeNode {
@@ -12,6 +26,7 @@ export interface FileTreeNode {
   status?: DiffFile['status']
   additions?: number
   deletions?: number
+  fileCount?: number
   children: FileTreeNode[]
 }
 
@@ -47,14 +62,92 @@ export function buildFileTree(files: DiffFile[]): FileTreeNode {
     }
   }
 
+  collapseSingleChildDirectories(root)
+  computeFileCounts(root)
   return root
 }
 
-function statusColor(status?: DiffFile['status']): string {
-  if (status === 'A') return 'text-green-500'
-  if (status === 'D') return 'text-red-500'
-  if (status === 'R') return 'text-blue-400'
-  return 'text-amber-400'
+function collapseSingleChildDirectories(node: FileTreeNode): void {
+  if (node.type !== 'directory') return
+
+  for (const child of node.children) {
+    collapseSingleChildDirectories(child)
+  }
+
+  while (
+    node.children.length === 1 &&
+    node.children[0]!.type === 'directory'
+  ) {
+    const onlyChild = node.children[0]!
+    node.name = node.name ? `${node.name}/${onlyChild.name}` : onlyChild.name
+    node.path = onlyChild.path
+    node.children = onlyChild.children
+  }
+}
+
+function computeFileCounts(node: FileTreeNode): number {
+  if (node.type === 'file') {
+    node.fileCount = 1
+    return 1
+  }
+
+  let count = 0
+  for (const child of node.children) {
+    count += computeFileCounts(child)
+  }
+  node.fileCount = count
+  return count
+}
+
+function statusBadgeClass(status?: DiffFile['status']): string {
+  if (status === 'A') return 'bg-green-500/15 text-green-500'
+  if (status === 'D') return 'bg-red-500/15 text-red-500'
+  if (status === 'R') return 'bg-blue-500/15 text-blue-400'
+  return 'bg-amber-500/15 text-amber-400'
+}
+
+function FileTypeIcon({ path, className }: { path: string; className?: string }) {
+  const Icon = useMemo(() => {
+    const ext = path.split('.').pop()?.toLowerCase() ?? ''
+    switch (ext) {
+      case 'ts':
+      case 'tsx':
+      case 'js':
+      case 'jsx':
+      case 'mjs':
+      case 'cjs':
+        return FileCode2
+      case 'json':
+        return FileJson
+      case 'md':
+      case 'mdx':
+      case 'txt':
+        return FileText
+      case 'css':
+      case 'scss':
+      case 'less':
+      case 'styl':
+        return FileType
+      case 'html':
+      case 'xml':
+      case 'svg':
+        return FileCode
+      case 'vue':
+      case 'svelte':
+        return FileType2
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'gif':
+      case 'webp':
+      case 'ico':
+        return FileImage
+      default:
+        return FileIcon
+    }
+  }, [path])
+
+  return <Icon className={cn('h-3.5 w-3.5', className)} />
 }
 
 interface DiffFileTreeNodeProps {
@@ -81,14 +174,18 @@ export const DiffFileTreeNode = memo(function DiffFileTreeNode({
   const isDirectory = node.type === 'directory'
 
   const viewed = useDiffReviewStore((s) => s.getFileViewed(sessionId, node.path))
+  const setFileViewed = useDiffReviewStore((s) => s.setFileViewed)
 
   const row = (
     <div
       className={cn(
-        'group flex cursor-pointer items-center gap-1 py-1 pr-2 transition-colors',
-        isSelected ? 'bg-accent/40' : 'hover:bg-muted/50',
+        'group mx-1 my-0.5 flex cursor-pointer items-center gap-1.5 rounded-md border py-1.5 pr-2 transition-colors select-none',
+        isSelected
+          ? 'border-accent/50 bg-accent/50'
+          : 'border-transparent hover:border-border/60 hover:bg-muted/60',
       )}
-      style={{ paddingLeft: `${depth * 12 + 4}px` }}
+      style={{ paddingLeft: `${depth * 14 + 6}px` }}
+      title={node.path}
       onClick={() => {
         if (isDirectory) {
           onToggleExpand(node.path)
@@ -98,46 +195,82 @@ export const DiffFileTreeNode = memo(function DiffFileTreeNode({
       }}
     >
       {isDirectory ? (
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          className="h-4 w-4 shrink-0"
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggleExpand(node.path)
-          }}
-        >
+        <>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            className="h-5 w-5 shrink-0 text-muted-foreground"
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleExpand(node.path)
+            }}
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+          </Button>
           {isExpanded ? (
-            <ChevronDown className="h-3 w-3" />
+            <FolderOpen className="h-4 w-4 shrink-0 text-blue-400" />
           ) : (
-            <ChevronRight className="h-3 w-3" />
+            <Folder className="h-4 w-4 shrink-0 text-blue-500" />
           )}
-        </Button>
+        </>
       ) : (
-        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[10px] font-bold leading-none">
-          <FileIcon className={cn('h-3 w-3', statusColor(node.status))} />
-        </span>
+        <>
+          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center" />
+          <FileTypeIcon path={node.name} className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </>
       )}
 
-      <span className={cn('min-w-0 flex-1 truncate text-[12px]', isDirectory && 'font-medium')} >
+      <span
+        className={cn(
+          'min-w-0 flex-1 truncate text-xs',
+          isDirectory && 'font-medium text-foreground',
+        )}
+      >
         {node.name}
       </span>
 
-      {!isDirectory && (
-        <div className="flex shrink-0 items-center gap-1">
-          {viewed && <Eye className="h-3 w-3 text-muted-foreground" />}
+      {isDirectory && node.fileCount ? (
+        <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">
+          {node.fileCount}
+        </span>
+      ) : null}
 
-          <div className="flex items-center gap-0.5 font-mono text-[10px] leading-none">
+      {!isDirectory && (
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span
+            className={cn(
+              'rounded px-1 py-px text-[10px] font-medium uppercase tracking-wide',
+              statusBadgeClass(node.status),
+            )}
+          >
+            {node.status ?? 'M'}
+          </span>
+
+          <div className="flex items-center gap-0.5 font-mono text-[11px] leading-none">
             {(node.additions ?? 0) > 0 && (
               <span className="text-green-500">+{node.additions}</span>
-            )}
-            {(node.additions ?? 0) > 0 && (node.deletions ?? 0) > 0 && (
-              <span className="text-muted-foreground/50"> </span>
             )}
             {(node.deletions ?? 0) > 0 && (
               <span className="text-red-400">-{node.deletions}</span>
             )}
           </div>
+
+          <label
+            className="flex h-5 cursor-pointer items-center px-1"
+            onClick={(e) => e.stopPropagation()}
+            title={viewed ? '已查看' : '未查看'}
+          >
+            <Checkbox
+              checked={viewed}
+              onCheckedChange={() => setFileViewed(sessionId, node.path, !viewed)}
+              aria-label={viewed ? '已查看' : '未查看'}
+              className="h-3.5 w-3.5 rounded-[3px]"
+            />
+          </label>
         </div>
       )}
     </div>
