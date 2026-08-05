@@ -39,12 +39,19 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   const allPaths = useMemo(() => collectAllPaths(tree), [tree])
 
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
-  const initializedPathsRef = useRef(false)
   useEffect(() => {
-    if (initializedPathsRef.current) return
-    if (allPaths.length === 0) return
-    initializedPathsRef.current = true
-    setExpandedPaths(new Set(allPaths.filter(Boolean)))
+    // 默认展开所有目录节点；diff 更新后自动展开新增的目录，同时保留用户已折叠的节点
+    setExpandedPaths((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      for (const path of allPaths) {
+        if (path && !next.has(path)) {
+          next.add(path)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
   }, [allPaths])
 
   const resetSession = useDiffReviewStore((s) => s.resetSession)

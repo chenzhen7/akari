@@ -154,7 +154,7 @@ export class GitRepository {
 
       const [stat, full, nameStatus, numStat] = await Promise.all([
         this.runner.run(['diff', '--stat', baseRef], this.repoPath),
-        this.runner.run(['diff', baseRef], this.repoPath),
+        this.runner.run(['diff', '-U6', baseRef], this.repoPath),
         this.runner.run(['diff', '--name-status', baseRef], this.repoPath),
         this.runner.run(['diff', '--numstat', baseRef], this.repoPath),
       ])
@@ -171,7 +171,7 @@ export class GitRepository {
       const extraFiles: DiffFile[] = []
       for (const file of untrackedFiles) {
         const fileDiff = await this.runner
-          .run(['diff', '--no-index', '--', '/dev/null', file], this.repoPath)
+          .run(['diff', '-U6', '--no-index', '--', '/dev/null', file], this.repoPath)
           .catch((e: unknown) => {
             const err = e as { exitCode?: number; stdout?: string }
             return err.exitCode === 1 ? (err.stdout ?? '') : ''
@@ -241,7 +241,7 @@ export class GitRepository {
     const t0 = perfNow()
     try {
       const headDiff = await this.runner
-        .run(['diff', 'HEAD', '--', filePath], this.repoPath)
+        .run(['diff', '-U6', 'HEAD', '--', filePath], this.repoPath)
         .catch(() => '')
 
       if (headDiff) return parseDiffHunks(headDiff)
@@ -254,7 +254,7 @@ export class GitRepository {
       if (existsInHead) return []
 
       const untrackedDiff = await this.runner
-        .run(['diff', '--no-index', '--', '/dev/null', filePath], this.repoPath)
+        .run(['diff', '-U6', '--no-index', '--', '/dev/null', filePath], this.repoPath)
         .catch((e: unknown) => {
           const err = e as { exitCode?: number; stdout?: string }
           return err.exitCode === 1 ? (err.stdout ?? '') : ''

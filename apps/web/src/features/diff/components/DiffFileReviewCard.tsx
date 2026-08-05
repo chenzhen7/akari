@@ -21,7 +21,7 @@ export interface DiffFileReviewCardProps {
 }
 
 const CONTEXT_FOLD_THRESHOLD = 10
-const CONTEXT_FOLD_BUFFER = 3
+const CONTEXT_FOLD_BUFFER = 6
 
 type RenderItem =
   | { type: 'line'; line: DiffLine }
