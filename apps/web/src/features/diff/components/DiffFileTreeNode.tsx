@@ -1,22 +1,10 @@
-import { memo, useMemo } from 'react'
-import {
-  ChevronDown,
-  ChevronRight,
-  File as FileIcon,
-  FileCode,
-  FileCode2,
-  FileImage,
-  FileJson,
-  FileText,
-  FileType,
-  FileType2,
-  Folder,
-  FolderOpen,
-} from 'lucide-react'
+import { memo } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { DiffFile } from '@akari/shared-types'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/components/ui/button'
 import { Checkbox } from '@/shared/components/ui/checkbox'
+import { FileTypeIcon } from '@/shared/components/file-icon'
 import { useDiffReviewStore } from '../stores/diff-review-store'
 
 export interface FileTreeNode {
@@ -106,50 +94,6 @@ function statusBadgeClass(status?: DiffFile['status']): string {
   return 'bg-amber-500/15 text-amber-400'
 }
 
-function FileTypeIcon({ path, className }: { path: string; className?: string }) {
-  const Icon = useMemo(() => {
-    const ext = path.split('.').pop()?.toLowerCase() ?? ''
-    switch (ext) {
-      case 'ts':
-      case 'tsx':
-      case 'js':
-      case 'jsx':
-      case 'mjs':
-      case 'cjs':
-        return FileCode2
-      case 'json':
-        return FileJson
-      case 'md':
-      case 'mdx':
-      case 'txt':
-        return FileText
-      case 'css':
-      case 'scss':
-      case 'less':
-      case 'styl':
-        return FileType
-      case 'html':
-      case 'xml':
-      case 'svg':
-        return FileCode
-      case 'vue':
-      case 'svelte':
-        return FileType2
-      case 'png':
-      case 'jpg':
-      case 'jpeg':
-      case 'gif':
-      case 'webp':
-      case 'ico':
-        return FileImage
-      default:
-        return FileIcon
-    }
-  }, [path])
-
-  return <Icon className={cn('h-3.5 w-3.5', className)} />
-}
-
 interface DiffFileTreeNodeProps {
   sessionId: string
   node: FileTreeNode
@@ -179,7 +123,7 @@ export const DiffFileTreeNode = memo(function DiffFileTreeNode({
   const row = (
     <div
       className={cn(
-        'group mx-1 my-0.5 flex cursor-pointer items-center gap-1.5 rounded-md border py-1.5 pr-2 transition-colors select-none',
+        'group mx-1 my-0.5 flex cursor-pointer items-center gap-1 rounded-md border py-0.5 pr-2 transition-colors select-none',
         isSelected
           ? 'border-accent/50 bg-accent/50'
           : 'border-transparent hover:border-border/60 hover:bg-muted/60',
@@ -195,32 +139,25 @@ export const DiffFileTreeNode = memo(function DiffFileTreeNode({
       }}
     >
       {isDirectory ? (
-        <>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            className="h-5 w-5 shrink-0 text-muted-foreground"
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleExpand(node.path)
-            }}
-          >
-            {isExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5" />
-            )}
-          </Button>
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          className="h-5 w-5 shrink-0 text-muted-foreground"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleExpand(node.path)
+          }}
+        >
           {isExpanded ? (
-            <FolderOpen className="h-4 w-4 shrink-0 text-blue-400" />
+            <ChevronDown className="h-4 w-4" />
           ) : (
-            <Folder className="h-4 w-4 shrink-0 text-blue-500" />
+            <ChevronRight className="h-4 w-4" />
           )}
-        </>
+        </Button>
       ) : (
         <>
           <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center" />
-          <FileTypeIcon path={node.name} className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <FileTypeIcon fileName={node.name} className="shrink-0 text-muted-foreground" />
         </>
       )}
 
@@ -268,7 +205,7 @@ export const DiffFileTreeNode = memo(function DiffFileTreeNode({
               checked={viewed}
               onCheckedChange={() => setFileViewed(sessionId, node.path, !viewed)}
               aria-label={viewed ? '已查看' : '未查看'}
-              className="h-3.5 w-3.5 rounded-[3px]"
+              className="h-3 w-3 rounded-[3px]"
             />
           </label>
         </div>

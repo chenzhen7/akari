@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Tree } from 'react-arborist'
 import type { NodeRendererProps, TreeApi } from 'react-arborist'
-import { Folder, FolderOpen, File, RefreshCw, ChevronRight, ChevronDown } from 'lucide-react'
+import { RefreshCw, ChevronRight, ChevronDown } from 'lucide-react'
+import { FileTypeIcon } from '@/shared/components/file-icon'
 import { cn } from '@/shared/lib/utils'
 import type { FileNode } from '@akari/shared-types'
 import { getFileTreeChildren, fetchFileTreeChildren, useFileTreeChildren, useFileTreeTick } from '@/features/explorer/lib/file-tree-store'
@@ -109,32 +110,27 @@ function NodeRenderer({
       onClick={handleClick}
       onContextMenu={handleContextMenu}
       className={cn(
-        'flex cursor-pointer items-center gap-1 py-[3px] pr-2 text-[12px] select-none',
-        isSelected ? 'bg-muted/70 text-foreground' : 'text-muted-foreground hover:bg-muted/50',
+        'flex cursor-pointer items-center gap-1 rounded-md border py-0.5 pr-2 text-xs select-none',
+        isSelected
+          ? 'border-accent/50 bg-accent/50 text-foreground'
+          : 'border-transparent text-muted-foreground hover:border-border/60 hover:bg-muted/60',
       )}
     >
       {isDirectory ? (
-        <>
-          <span
-            className="flex h-3.5 w-3.5 shrink-0 items-center justify-center"
-            onClick={handleToggleClick}
-          >
-            {node.isOpen ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-          </span>
+        <span
+          className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center text-muted-foreground"
+          onClick={handleToggleClick}
+        >
           {node.isOpen ? (
-            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-400/80" />
+            <ChevronDown className="h-4 w-4" />
           ) : (
-            <Folder className="h-3.5 w-3.5 shrink-0 text-amber-400/80" />
+            <ChevronRight className="h-4 w-4" />
           )}
-        </>
+        </span>
       ) : (
         <>
-          <span className="h-3.5 w-3.5 shrink-0" />
-          <File className="h-3.5 w-3.5 shrink-0 text-blue-400/70" />
+          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center" />
+          <FileTypeIcon fileName={node.data.name} className="shrink-0 text-muted-foreground" />
         </>
       )}
       <span className={cn('truncate', isSelected && 'font-medium text-foreground')}>
@@ -249,7 +245,7 @@ export function ArboristFileTree({
   return (
     <div ref={containerRef} className="flex h-full flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-2 py-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">文件</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">文件</span>
         {onRefresh && (
           <button
             type="button"
@@ -258,7 +254,7 @@ export function ArboristFileTree({
             title="刷新"
             className="text-muted-foreground hover:text-foreground disabled:opacity-50"
           >
-            <RefreshCw className={cn('h-3 w-3', isRefreshing && 'animate-spin')} />
+            <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
           </button>
         )}
       </div>
@@ -268,7 +264,7 @@ export function ArboristFileTree({
           data={treeData}
           height={height}
           width="100%"
-          rowHeight={24}
+          rowHeight={26}
           indent={12}
           openByDefault={false}
           initialOpenState={{ [ROOT_ID]: true }}
