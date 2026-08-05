@@ -9,7 +9,7 @@ import { isTerminalLikeTab } from './tab-utils.js'
 import { launchAgentInTerminal } from './agent-launcher.js'
 
 export interface ITabService {
-  createTab(sessionId: string, type: 'terminal' | 'agent' | 'diff' | 'file', filePath?: string, agentType?: AgentType, launchOptions?: AgentLaunchOptions): SessionTab
+  createTab(sessionId: string, type: 'terminal' | 'agent' | 'diff' | 'file' | 'review', filePath?: string, agentType?: AgentType, launchOptions?: AgentLaunchOptions): SessionTab
   closeTab(sessionId: string, tabId: string): void
   activateTab(sessionId: string, tabId: string): void
   reorderTabs(sessionId: string, orderedTabIds: string[]): void
@@ -27,7 +27,7 @@ export class TabService implements ITabService {
 
   createTab(
     sessionId: string,
-    type: 'terminal' | 'agent' | 'diff' | 'file',
+    type: 'terminal' | 'agent' | 'diff' | 'file' | 'review',
     filePath?: string,
     agentType?: AgentType,
     launchOptions?: AgentLaunchOptions,
@@ -50,6 +50,8 @@ export class TabService implements ITabService {
         const count = session.tabs.filter(t => t.type === 'terminal').length + 1
         label = `Terminal ${count}`
       }
+    } else if (type === 'review') {
+      label = '审查'
     } else {
       label = filePath ? path.basename(filePath) : (type === 'file' ? 'File' : 'Diff')
     }
@@ -59,8 +61,8 @@ export class TabService implements ITabService {
     const activeTabId = tabId
 
     const evictedTabIds: string[] = []
-    if (resolvedType === 'file' || resolvedType === 'diff') {
-      const isDocTab = (t: SessionTab): boolean => t.type === 'file' || t.type === 'diff'
+    if (resolvedType === 'file' || resolvedType === 'diff' || resolvedType === 'review') {
+      const isDocTab = (t: SessionTab): boolean => t.type === 'file' || t.type === 'diff' || t.type === 'review'
       let docCount = updatedTabs.filter(isDocTab).length
       while (docCount > TabService.MAX_DOC_TABS) {
         const victim = updatedTabs.find(t => isDocTab(t) && t.id !== tabId)

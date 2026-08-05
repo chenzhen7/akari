@@ -5,6 +5,7 @@ import { useSessionById } from '@/features/session/stores/session-store'
 import { useNavigationStore } from '@/shared/stores/navigation-store'
 import { useUIStore } from '@/shared/stores/ui-store'
 import { useTabStore } from '@/features/session/stores/tab-store'
+import { useDiffReviewStore } from '@/features/diff/stores/diff-review-store'
 import { GitGraphPanel } from '@/features/git/components/GitGraphPanel'
 import { DiffFileList } from '@/features/diff/components/DiffFileList'
 import { SessionInfoPanel } from '@/features/session/components/SessionInfoPanel'
@@ -50,16 +51,20 @@ export function RightSidebar({ sessionId }: RightSidebarProps) {
 
   const shouldRenderPanel = (id: RightTabId): boolean => activeRightTab === id || mountedPanels.has(id)
 
+  const setScrollTarget = useDiffReviewStore(s => s.setScrollTarget)
+
   const handleSelectFile = (path: string) => {
     if (!session) return
     // Select the session first (ensures middle area shows this session's tab bar)
     selectSession(session.id)
-    // Check if a diff tab for this file already exists
-    const existingTab = session.tabs.find(t => t.type === 'diff' && t.filePath === path)
+    // Always set the scroll target so the review page scrolls to this file
+    setScrollTarget(session.id, path)
+    // Check if a review tab already exists
+    const existingTab = session.tabs.find(t => t.type === 'review')
     if (existingTab) {
       activateTab(session.id, existingTab.id)
     } else {
-      createTab(session.id, 'diff', path)
+      createTab(session.id, 'review')
     }
   }
 

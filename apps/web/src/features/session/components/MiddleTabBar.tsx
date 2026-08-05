@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FileText, Plus, X, Terminal, GitCompare } from 'lucide-react'
+import { FileText, Plus, X, Terminal, GitCompare, GitPullRequest } from 'lucide-react'
 import { CreateTerminalDialog } from './CreateTerminalDialog'
 import { TabContextMenu } from './TabContextMenu'
 import { cn } from '@/shared/lib/utils'
@@ -29,6 +29,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 
 function getTabDisplayLabel(tab: SessionTab, allTabs: SessionTab[]): string {
+  if (tab.type === 'review') return '审查'
   if (!tab.filePath || (tab.type !== 'file' && tab.type !== 'diff')) {
     return tab.label
   }
@@ -97,6 +98,7 @@ const SortableTab = memo(function SortableTab({
   }
 
   const Icon = (() => {
+    if (tab.type === 'review') return GitPullRequest
     if (tab.type === 'diff') return GitCompare
     if (tab.type === 'file') return FileText
     if (tab.type !== 'agent') return Terminal
@@ -196,11 +198,13 @@ export function MiddleTabBar({ sessionId }: MiddleTabBarProps) {
     return tabs.map(tab => {
       const rawLabel = getTabDisplayLabel(tab, tabs)
       const displayLabel = tab.type === 'diff' ? `(diff) ${rawLabel}` : rawLabel
-      const tooltipContent = tab.filePath
-        ? tab.type === 'diff'
-          ? `Diff: ${resolveAbsoluteFilePath(worktreePath, tab.filePath, workspace)}`
-          : resolveAbsoluteFilePath(worktreePath, tab.filePath, workspace)
-        : tab.label
+      const tooltipContent = tab.type === 'review'
+        ? '变更审查'
+        : tab.filePath
+          ? tab.type === 'diff'
+            ? `Diff: ${resolveAbsoluteFilePath(worktreePath, tab.filePath, workspace)}`
+            : resolveAbsoluteFilePath(worktreePath, tab.filePath, workspace)
+          : tab.label
       return { tab, displayLabel, tooltipContent }
     })
   }, [tabs, worktreePath, workspace])

@@ -37,6 +37,27 @@ export interface DiffFile {
   deletions: number
 }
 
+export type DiffLineType = 'context' | 'added' | 'removed'
+
+export interface DiffLine {
+  type: DiffLineType
+  content: string
+  oldLineNumber?: number
+  newLineNumber?: number
+}
+
+export interface DiffHunk {
+  id: string
+  header: string
+  oldStart: number
+  oldCount: number
+  newStart: number
+  newCount: number
+  lines: DiffLine[]
+  additions: number
+  deletions: number
+}
+
 export interface FileDiffLine {
   type: 'added' | 'removed' | 'modified'
   lineNumber: number
@@ -63,7 +84,7 @@ export interface FileChangeEvent {
 
 export interface SessionTab {
   id: string
-  type: 'terminal' | 'agent' | 'diff' | 'file'
+  type: 'terminal' | 'agent' | 'diff' | 'file' | 'review'
   label: string
   filePath?: string
   terminalId?: string
@@ -167,7 +188,7 @@ export type ClientMessage =
   | { event: 'terminal:input'; payload: { sessionId: string; terminalId: string; data: string } }
   | { event: 'terminal:resize'; payload: { sessionId: string; terminalId: string; cols: number; rows: number } }
   | { event: 'broadcast:send'; payload: { message: string; targets?: string[] } }
-  | { event: 'tab:create'; payload: { sessionId: string; type: 'terminal' | 'agent' | 'diff' | 'file'; filePath?: string } }
+  | { event: 'tab:create'; payload: { sessionId: string; type: 'terminal' | 'agent' | 'diff' | 'file' | 'review'; filePath?: string } }
   | { event: 'tab:close'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:activate'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:reorder'; payload: { sessionId: string; orderedTabIds: string[] } }

@@ -8,6 +8,7 @@ import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
 import { useMonacoTheme } from '@/shared/hooks/useMonacoTheme'
 import { useAbsoluteFilePath } from '@/shared/hooks/useAbsoluteFilePath'
 import { EditorContainer } from '@/shared/components/EditorContainer'
+import { DiffViewModeToggle } from './DiffViewModeToggle'
 
 interface DiffViewerProps {
   sessionId: string
@@ -18,26 +19,37 @@ interface DiffViewerProps {
   isActive?: boolean
 }
 
-export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFiles, workspaceId, worktreePath, isActive }: DiffViewerProps) {
+export const DiffViewer = memo(function DiffViewer({
+  sessionId,
+  filePath,
+  diffFiles,
+  workspaceId,
+  worktreePath,
+  isActive,
+}: DiffViewerProps) {
+  const [mode, setMode] = useState<'split' | 'unified'>('split')
   const [content, setContent] = useState<{ original: string; modified: string } | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const monacoTheme = useMonacoTheme()
 
+  const currentFile = diffFiles.find((f) => f.path === filePath)
+  const absoluteFilePath = useAbsoluteFilePath(worktreePath, filePath, workspaceId)
+
   useEffect(() => {
     if (!filePath || !sessionId) return
     setLoading(true)
     setError(null)
     setContent(null)
-
     const controller = new AbortController()
-    apiClient.get<{ original: string; modified: string }>(`/sessions/${sessionId}/diff-content`, {
-      params: { file: filePath },
-      signal: controller.signal,
-      toast: false,
-    })
-      .then(data => setContent(data))
+    apiClient
+      .get<{ original: string; modified: string }>(`/sessions/${sessionId}/diff-content`, {
+        params: { file: filePath },
+        signal: controller.signal,
+        toast: false,
+      })
+      .then((data) => setContent(data))
       .catch((e: unknown) => {
         if (e instanceof Error && e.name === 'AbortError') return
         setError(String(e))
@@ -47,39 +59,33 @@ export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFi
     return () => controller.abort()
   }, [filePath, sessionId])
 
-  // Listen for external file changes broadcast from the shared watcher
   useEffect(() => {
     return fileUpdateBus.on(sessionId, (event) => {
       if (event.filePath !== filePath) return
-      setLoading(true)
-      setError(null)
-      setContent(null)
-      apiClient.get<{ original: string; modified: string }>(`/sessions/${sessionId}/diff-content`, {
-        params: { file: filePath },
-        toast: '重新加载 diff 失败',
-      })
-        .then(data => setContent(data))
-        .catch((e: unknown) => console.error('[DiffViewer] reload failed:', e))
-        .finally(() => setLoading(false))
+      apiClient
+        .get<{ original: string; modified: string }>(`/sessions/${sessionId}/diff-content`, {
+          params: { file: filePath },
+          toast: '重新加载 diff 失败',
+        })
+        .then((data) => setContent(data))
+        .catch((e: unknown) => console.error('[DiffViewer] reload content failed:', e))
     })
   }, [sessionId, filePath])
 
-  // Relayout the diff editor when this tab becomes active again.
   useEffect(() => {
     if (!isActive) return
     const editor = diffEditorRef.current
     if (!editor) return
     try {
       editor.layout()
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [isActive])
 
   const handleEditorMount = useCallback((editor: editor.IStandaloneDiffEditor) => {
     diffEditorRef.current = editor
   }, [])
-
-  const currentFile = diffFiles.find(f => f.path === filePath)
-  const absoluteFilePath = useAbsoluteFilePath(worktreePath, filePath, workspaceId)
 
   const diffStats = currentFile ? (
     <div className="ml-auto flex items-center gap-2 text-[11px]">
@@ -88,33 +94,45 @@ export const DiffViewer = memo(function DiffViewer({ sessionId, filePath, diffFi
     </div>
   ) : null
 
-  return (
-    <EditorContainer filePath={absoluteFilePath} loading={loading} error={error} headerExtra={diffStats}>
-      {content && (
-        <MonacoDiffEditor
-          height="100%"
-          language={detectLanguage(filePath)}
-          original={content.original}
-          modified={content.modified}
-          theme={monacoTheme}
-          onMount={handleEditorMount}
-          options={{
-            readOnly: true,
-            renderSideBySide: true,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            fontSize: 12,
-            lineNumbers: 'on',
-            padding: { top: 8, bottom: 8 },
-            diffWordWrap: 'off',
-          }}
-        />
-      )}
-      {!content && !error && (
+  const renderBody = () => {
+    if (!content) {
+      return (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           选择文件查看差异
         </div>
-      )}
+      )
+    }
+
+    return (
+      <MonacoDiffEditor
+        height="100%"
+        language={detectLanguage(filePath)}
+        original={content.original}
+        modified={content.modified}
+        theme={monacoTheme}
+        onMount={handleEditorMount}
+        options={{
+          readOnly: true,
+          renderSideBySide: mode === 'split',
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          fontSize: 12,
+          lineNumbers: 'on',
+          padding: { top: 8, bottom: 8 },
+          diffWordWrap: 'off',
+        }}
+      />
+    )
+  }
+
+  return (
+    <EditorContainer filePath={absoluteFilePath} loading={loading} error={error} headerExtra={diffStats}>
+      <div className="flex h-full flex-col overflow-hidden">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/30 px-3 py-1.5">
+          <DiffViewModeToggle mode={mode} onChange={setMode} />
+        </div>
+        <div className="min-w-0 flex-1 overflow-hidden">{renderBody()}</div>
+      </div>
     </EditorContainer>
   )
 })

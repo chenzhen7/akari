@@ -1,4 +1,5 @@
 import { memo, useEffect, useState } from 'react'
+import { DiffReviewPage } from '@/features/diff/components/DiffReviewPage'
 import { TerminalPanel } from './TerminalPanel'
 import { DiffViewer } from '@/features/diff/components/DiffViewer'
 import { FileEditor } from '@/features/explorer/components/FileEditor'
@@ -61,6 +62,13 @@ const TabPane = memo(function TabPane({
           diffFiles={diffFiles ?? EMPTY_DIFF_FILES}
           workspaceId={workspaceId}
           worktreePath={worktreePath}
+          isActive={isActive}
+        />
+      )}
+      {type === 'review' && (
+        <DiffReviewPage
+          sessionId={sessionId}
+          diffFiles={diffFiles ?? EMPTY_DIFF_FILES}
           isActive={isActive}
         />
       )}
@@ -154,7 +162,7 @@ export const TabContent = memo(function TabContent({ sessionId, send }: TabConte
             filePath={tab.filePath}
             isActive={tab.id === activeTabId}
             send={send}
-            diffFiles={tab.type === 'diff' ? diffFiles : undefined}
+            diffFiles={tab.type === 'diff' || tab.type === 'review' ? diffFiles : undefined}
             workspaceId={workspaceId}
             worktreePath={worktreePath}
           />

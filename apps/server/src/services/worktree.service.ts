@@ -1,7 +1,7 @@
 import { watch, type FSWatcher } from 'chokidar'
 import { mkdir, symlink, rm, access, constants } from 'node:fs/promises'
 import { join, resolve, basename } from 'node:path'
-import type { GitBranch, GitDiff, FileDiffLine, GitLogResponse } from '@akari/shared-types'
+import type { GitBranch, GitDiff, DiffHunk, FileDiffLine, GitLogResponse } from '@akari/shared-types'
 import { GitCommandRunner } from '../infrastructure/git/git-command-runner.js'
 import { GitRepositoryDetector } from '../infrastructure/git/git-repository-detector.js'
 import { GitRepositoryRegistry } from '../infrastructure/git/git-repository-registry.js'
@@ -19,6 +19,8 @@ export interface IWorktreeService {
   updateFromBase(sessionId: string, sourceBranch: string, cwd: string): Promise<void>
   getFileDiffContent(cwd: string, filePath: string): Promise<{ original: string; modified: string }>
   getFileDiffLines(cwd: string, filePath: string): Promise<FileDiffLine[]>
+  getFileDiffHunks(cwd: string, filePath: string): Promise<DiffHunk[]>
+  getAllDiffHunks(cwd: string): Promise<Record<string, DiffHunk[]>>
   getCurrentDiff(cwd: string): Promise<GitDiff>
   getGitLog(cwd: string, limit?: number, offset?: number, branch?: string): Promise<GitLogResponse>
   getGitBranches(cwd: string): Promise<GitBranch[]>
@@ -180,6 +182,14 @@ export class WorktreeService implements IWorktreeService {
 
   async getFileDiffLines(cwd: string, filePath: string): Promise<FileDiffLine[]> {
     return (await this.runners.registry.get(cwd)?.getFileDiffLines(filePath)) ?? []
+  }
+
+  async getFileDiffHunks(cwd: string, filePath: string): Promise<DiffHunk[]> {
+    return (await this.runners.registry.get(cwd)?.getFileDiffHunks(filePath)) ?? []
+  }
+
+  async getAllDiffHunks(cwd: string): Promise<Record<string, DiffHunk[]>> {
+    return (await this.runners.registry.get(cwd)?.getAllDiffHunks()) ?? {}
   }
 
   async getCurrentDiff(cwd: string): Promise<GitDiff> {

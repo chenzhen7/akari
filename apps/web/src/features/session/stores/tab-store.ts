@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { findSession } from '@/features/session/stores/session-store'
 
 interface TabStore {
-  createTab: (sessionId: string, type: 'terminal' | 'agent' | 'diff' | 'file', filePath?: string) => void
+  createTab: (sessionId: string, type: 'terminal' | 'agent' | 'diff' | 'file' | 'review', filePath?: string) => void
   closeTab: (sessionId: string, tabId: string) => void
   activateTab: (sessionId: string, tabId: string) => void
   reorderTabs: (sessionId: string, orderedTabIds: string[]) => void

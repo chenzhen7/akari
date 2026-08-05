@@ -164,7 +164,7 @@ export class SessionManager {
 
   createTab(
     sessionId: string,
-    type: 'terminal' | 'agent' | 'diff' | 'file',
+    type: 'terminal' | 'agent' | 'diff' | 'file' | 'review',
     filePath?: string,
     agentType?: AgentType,
     launchOptions?: import('./agent-adapters/base.js').AgentLaunchOptions,
@@ -318,6 +318,18 @@ export class SessionManager {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     return this.worktreeService.getFileDiffLines(session.worktreePath, filePath)
+  }
+
+  async getFileDiffHunks(sessionId: string, filePath: string): Promise<import('@akari/shared-types').DiffHunk[]> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    return this.worktreeService.getFileDiffHunks(session.worktreePath, filePath)
+  }
+
+  async getAllDiffHunks(sessionId: string): Promise<Record<string, import('@akari/shared-types').DiffHunk[]>> {
+    const session = this.getSession(sessionId)
+    if (!session?.worktreePath) return {}
+    return this.worktreeService.getAllDiffHunks(session.worktreePath)
   }
 
   async listFiles(sessionId: string, relativePath: string): Promise<FileNode[]> {

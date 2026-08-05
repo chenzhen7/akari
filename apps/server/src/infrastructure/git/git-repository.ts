@@ -1,8 +1,9 @@
 import { watch, type FSWatcher } from 'chokidar'
 import { join, relative, resolve } from 'node:path'
-import type { GitDiff, DiffFile, GitCommit, GitBranch, GitLogResponse, FileDiffLine } from '@akari/shared-types'
+import type { GitDiff, DiffFile, DiffHunk, GitCommit, GitBranch, GitLogResponse, FileDiffLine } from '@akari/shared-types'
 import { GitCommandRunner } from './git-command-runner.js'
 import { loadGitignoreFilter } from '../fs/gitignore-loader.js'
+import { parseDiffHunks, parseDiffHunksByFile, parseDiffLines } from './diff-parser.js'
 import { perfLog, perfNow } from '../../perf-log.js'
 
 interface WatchDiffCallbacks {
@@ -236,6 +237,46 @@ export class GitRepository {
     }
   }
 
+  async getFileDiffHunks(filePath: string): Promise<DiffHunk[]> {
+    const t0 = perfNow()
+    try {
+      const headDiff = await this.runner
+        .run(['diff', 'HEAD', '--', filePath], this.repoPath)
+        .catch(() => '')
+
+      if (headDiff) return parseDiffHunks(headDiff)
+
+      const existsInHead = await this.runner
+        .run(['cat-file', '-e', `HEAD:${filePath}`], this.repoPath)
+        .then(() => true)
+        .catch(() => false)
+
+      if (existsInHead) return []
+
+      const untrackedDiff = await this.runner
+        .run(['diff', '--no-index', '--', '/dev/null', filePath], this.repoPath)
+        .catch((e: unknown) => {
+          const err = e as { exitCode?: number; stdout?: string }
+          return err.exitCode === 1 ? (err.stdout ?? '') : ''
+        })
+
+      if (!untrackedDiff) return []
+      return parseDiffHunks(untrackedDiff)
+    } finally {
+      perfLog(`[getFileDiffHunks] ${filePath} @ ${this.repoPath}`, t0)
+    }
+  }
+
+  async getAllDiffHunks(): Promise<Record<string, DiffHunk[]>> {
+    const t0 = perfNow()
+    try {
+      const diff = await this.getDiff()
+      return parseDiffHunksByFile(diff.fullDiff)
+    } finally {
+      perfLog(`[getAllDiffHunks] @ ${this.repoPath}`, t0)
+    }
+  }
+
   async commitAll(message: string): Promise<void> {
     await this.runner.run(['add', '-A'], this.repoPath)
     await this.runner.run(['commit', '-m', message], this.repoPath)
@@ -453,80 +494,4 @@ function parseStat(stat: string): { additions: number; deletions: number; files:
     additions: parseInt(stat.match(/(\d+) insertion/)?.[1] ?? '0'),
     deletions: parseInt(stat.match(/(\d+) deletion/)?.[1] ?? '0'),
   }
-}
-
-function parseDiffLines(diffOutput: string): FileDiffLine[] {
-  const lines: FileDiffLine[] = []
-  const diffLines = diffOutput.split('\n')
-  let i = 0
-
-  while (i < diffLines.length) {
-    const line = diffLines[i]
-    if (!line.startsWith('@@')) {
-      i++
-      continue
-    }
-
-    const match = line.match(/@@ -(\d+)(?::(\d+))? \+(\d+)(?::(\d+))? @@/)
-    if (!match) {
-      i++
-      continue
-    }
-
-    const oldStart = parseInt(match[1]!)
-    const oldCount = parseInt(match[2] ?? '1')
-    const newStart = parseInt(match[3]!)
-    const newCount = parseInt(match[4] ?? '1')
-
-    let oldLine = oldStart
-    let newLine = newStart
-    i++
-
-    const hunkMinusLines: number[] = []
-    const hunkPlusLines: number[] = []
-
-    while (i < diffLines.length && !diffLines[i]!.startsWith('@@') && !diffLines[i]!.startsWith('diff --git')) {
-      const dline = diffLines[i]!
-      if (dline.startsWith(' ')) {
-        oldLine++
-        newLine++
-      } else if (dline.startsWith('+')) {
-        hunkPlusLines.push(newLine)
-        newLine++
-      } else if (dline.startsWith('-')) {
-        hunkMinusLines.push(oldLine)
-        oldLine++
-      }
-      i++
-    }
-
-    if (hunkMinusLines.length > 0 && hunkPlusLines.length > 0) {
-      const pairCount = Math.min(hunkMinusLines.length, hunkPlusLines.length)
-      for (let j = 0; j < pairCount; j++) {
-        lines.push({ type: 'modified', lineNumber: hunkPlusLines[j]! })
-      }
-      for (let j = pairCount; j < hunkPlusLines.length; j++) {
-        lines.push({ type: 'added', lineNumber: hunkPlusLines[j]! })
-      }
-      if (hunkPlusLines.length > 0) {
-        for (let j = pairCount; j < hunkMinusLines.length; j++) {
-          lines.push({ type: 'removed', lineNumber: hunkPlusLines[0]! })
-        }
-      } else {
-        for (let j = 0; j < hunkMinusLines.length; j++) {
-          lines.push({ type: 'removed', lineNumber: newStart })
-        }
-      }
-    } else if (hunkPlusLines.length > 0) {
-      for (const ln of hunkPlusLines) {
-        lines.push({ type: 'added', lineNumber: ln })
-      }
-    } else if (hunkMinusLines.length > 0) {
-      for (let j = 0; j < hunkMinusLines.length; j++) {
-        lines.push({ type: 'removed', lineNumber: newStart })
-      }
-    }
-  }
-
-  return lines
 }

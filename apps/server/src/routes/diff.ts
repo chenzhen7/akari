@@ -49,4 +49,25 @@ export default async function diffRoutes(fastify: FastifyInstance) {
       }
     },
   )
+
+  fastify.get<{ Params: { id: string }; Querystring: { file?: string } }>(
+    '/sessions/:id/diff-hunks',
+    async (request, reply) => {
+      const { id } = request.params
+      const { file } = request.query
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      try {
+        if (file) {
+          const hunks = await request.sessionManager.getFileDiffHunks(id, file)
+          return { hunks }
+        }
+        const hunksByFile = await request.sessionManager.getAllDiffHunks(id)
+        return { hunksByFile }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.warn({ err: msg, sessionId: id }, 'getDiffHunks failed')
+        return file ? { hunks: [] } : { hunksByFile: {} }
+      }
+    },
+  )
 }

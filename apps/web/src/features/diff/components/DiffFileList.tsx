@@ -1,41 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentSession, DiffFile } from '@akari/shared-types'
-import { cn } from '@/shared/lib/utils'
-import { Button } from '@/shared/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { AgentSession } from '@akari/shared-types'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/shared/components/ui/dialog'
-import { Textarea } from '@/shared/components/ui/textarea'
-import {
-  GitCommit, Trash2, GitMerge, GitPullRequest, Loader2, FileIcon,
+  GitCommit, Trash2, GitMerge, GitPullRequest, Loader2,
   RefreshCw,
 } from 'lucide-react'
 import { toast } from '@/shared/lib/toast'
 import { apiClient } from '@/shared/lib/api-client'
-import { useTabStore } from '@/features/session/stores/tab-store'
-
-function statusColor(s: DiffFile['status']) {
-  return s === 'A' ? 'text-green-500' : s === 'D' ? 'text-red-500' : s === 'R' ? 'text-blue-400' : 'text-amber-400'
-}
-
-function splitFilePath(path: string): { fileName: string; dirPath: string } {
-  const normalized = path.replace(/\\/g, '/')
-  const lastSlash = normalized.lastIndexOf('/')
-  if (lastSlash === -1) {
-    return { fileName: path, dirPath: '' }
-  }
-  return { fileName: normalized.slice(lastSlash + 1), dirPath: normalized.slice(0, lastSlash + 1) }
-}
+import { useDiffReviewStore } from '../stores/diff-review-store'
+import { DiffFileTreeNode, buildFileTree, type FileTreeNode } from './DiffFileTreeNode'
+import { Button } from '@/shared/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog'
+import { Textarea } from '@/shared/components/ui/textarea'
+import { ScrollArea } from '@/shared/components/ui/scroll-area'
 
 interface DiffFileListProps {
   session: AgentSession
   onSelectFile: (path: string) => void
+}
+
+function collectAllPaths(node: FileTreeNode): string[] {
+  const paths = [node.path]
+  if (node.children) {
+    for (const child of node.children) {
+      paths.push(...collectAllPaths(child))
+    }
+  }
+  return paths
 }
 
 export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
@@ -43,10 +34,20 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   const hasDiff = diffFiles.length > 0
   const initialRefreshSessionRef = useRef<string | null>(null)
 
-  const sortedFiles = useMemo(
-    () => [...diffFiles].sort((a, b) => a.path.localeCompare(b.path)),
-    [diffFiles],
-  )
+  const diffFilesKey = useMemo(() => diffFiles.map((f) => f.path).sort().join('\0'), [diffFiles])
+  const tree = useMemo(() => buildFileTree(diffFiles), [diffFilesKey])
+  const allPaths = useMemo(() => collectAllPaths(tree), [tree])
+
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
+  const initializedPathsRef = useRef(false)
+  useEffect(() => {
+    if (initializedPathsRef.current) return
+    if (allPaths.length === 0) return
+    initializedPathsRef.current = true
+    setExpandedPaths(new Set(allPaths.filter(Boolean)))
+  }, [allPaths])
+
+  const resetSession = useDiffReviewStore((s) => s.resetSession)
 
   // Commit dialog
   const [commitOpen, setCommitOpen] = useState(false)
@@ -56,10 +57,6 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   // Discard dialog
   const [discardOpen, setDiscardOpen] = useState(false)
   const [discarding, setDiscarding] = useState(false)
-
-  // Single-file discard dialog
-  const [discardFileTarget, setDiscardFileTarget] = useState<DiffFile | null>(null)
-  const [discardingFile, setDiscardingFile] = useState(false)
 
   // Merge dialog
   const [mergeOpen, setMergeOpen] = useState(false)
@@ -78,6 +75,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
     try {
       await apiClient.post(`/sessions/${session.id}/git/commit`, { message: commitMsg.trim() }, { toast: '提交失败' })
       toast.success('已提交')
+      resetSession(session.id)
       setCommitMsg('')
       setCommitOpen(false)
     } finally {
@@ -90,24 +88,10 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
     try {
       await apiClient.post(`/sessions/${session.id}/git/discard`, undefined, { toast: '丢弃失败' })
       toast.success('已丢弃所有变更')
+      resetSession(session.id)
       setDiscardOpen(false)
     } finally {
       setDiscarding(false)
-    }
-  }
-
-  function handleOpenFile(file: DiffFile) {
-    useTabStore.getState().createTab(session.id, 'file', file.path)
-  }
-
-  async function handleDiscardFile(file: DiffFile) {
-    setDiscardingFile(true)
-    try {
-      await apiClient.post(`/sessions/${session.id}/git/discard-file`, { filePath: file.path }, { toast: '丢弃文件失败' })
-      toast.success(`已丢弃 ${file.path}`)
-      setDiscardFileTarget(null)
-    } finally {
-      setDiscardingFile(false)
     }
   }
 
@@ -142,11 +126,23 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
     }
   }
 
+  const handleToggleExpand = useCallback((path: string) => {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
+      return next
+    })
+  }, [])
+
   const totalAdditions = diffFiles.reduce((s, f) => s + f.additions, 0)
   const totalDeletions = diffFiles.reduce((s, f) => s + f.deletions, 0)
 
-  const activeTab = session.tabs.find(t => t.id === session.activeTabId)
-  const selectedPath = activeTab?.type === 'diff' ? (activeTab.filePath ?? null) : null
+  const activeTab = session.tabs.find((t) => t.id === session.activeTabId)
+  const selectedPath = activeTab?.type === 'review' ? (activeTab.filePath ?? null) : null
 
   useEffect(() => {
     if (session.diffFiles !== undefined) return
@@ -156,7 +152,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
 
     initialRefreshSessionRef.current = session.id
     apiClient.post(`/sessions/${session.id}/diff-refresh`, undefined, { toast: false })
-      .catch(err => {
+      .catch((err) => {
         console.error('[DiffFileList] initial diff refresh failed:', err)
         initialRefreshSessionRef.current = null
       })
@@ -255,89 +251,27 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
         </div>
       </div>
 
-      {/* Flat file list */}
-      <div className="flex-1 overflow-y-auto py-0.5">
-        {sortedFiles.length === 0 && (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            暂无变更
-          </div>
-        )}
-        {sortedFiles.map(file => {
-          const isSelected = selectedPath === file.path
-          const hasAdd = file.additions > 0
-          const hasDel = file.deletions > 0
-          const { fileName, dirPath } = splitFilePath(file.path)
-          return (
-            <Tooltip key={file.path}>
-              <TooltipTrigger asChild>
-                <div
-                  onClick={() => onSelectFile(file.path)}
-                  className={cn(
-                    'group flex w-full cursor-pointer items-center gap-1.5 py-1 pl-1.5 pr-2 transition-colors',
-                    isSelected
-                      ? 'border-l-2 border-primary bg-accent/40'
-                      : 'border-l-2 border-transparent hover:bg-muted/50',
-                  )}
-                >
-                  <span className={cn('w-3.5 shrink-0 text-center text-[10px] font-bold leading-none', statusColor(file.status))}>
-                    {file.status}
-                  </span>
-                  <div className="min-w-0 flex-1 truncate">
-                    <span className="text-[12px] leading-tight text-foreground">{fileName}</span>
-                    {dirPath && (
-                      <span className="ml-1 text-[12px] leading-tight text-muted-foreground">{dirPath}</span>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    <div className="flex items-center opacity-0 transition-opacity group-hover:opacity-100">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            className="h-6 w-6"
-                            onClick={e => {
-                              e.stopPropagation()
-                              handleOpenFile(file)
-                            }}
-                          >
-                            <FileIcon className="h-3 w-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">在编辑器中打开</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="icon-xs"
-                            variant="ghost"
-                            className="h-6 w-6 text-red-400 hover:text-red-400"
-                            onClick={e => {
-                              e.stopPropagation()
-                              setDiscardFileTarget(file)
-                            }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">丢弃此文件变更</TooltipContent>
-                      </Tooltip>
-                    </div>
-                    {(hasAdd || hasDel) && (
-                      <div className="font-mono text-[10px] leading-none">
-                        {hasAdd && <span className="text-green-500">+{file.additions}</span>}
-                        {hasAdd && hasDel && <span className="text-muted-foreground/50"> </span>}
-                        {hasDel && <span className="text-red-400">-{file.deletions}</span>}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{file.path}</TooltipContent>
-            </Tooltip>
-          )
-        })}
-      </div>
+      {/* File tree */}
+      <ScrollArea className="flex-1">
+        <div className="py-0.5">
+          {diffFiles.length === 0 && (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              暂无变更
+            </div>
+          )}
+          {tree.children.map((child) => (
+            <DiffFileTreeNode
+              key={child.path}
+              sessionId={session.id}
+              node={child}
+              selectedPath={selectedPath}
+              expandedPaths={expandedPaths}
+              onToggleExpand={handleToggleExpand}
+              onSelectFile={onSelectFile}
+            />
+          ))}
+        </div>
+      </ScrollArea>
 
       {/* Commit dialog */}
       <Dialog open={commitOpen} onOpenChange={setCommitOpen}>
@@ -352,8 +286,8 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
             placeholder="提交信息（必填）"
             className="min-h-[80px] resize-none"
             value={commitMsg}
-            onChange={e => setCommitMsg(e.target.value)}
-            onKeyDown={e => {
+            onChange={(e) => setCommitMsg(e.target.value)}
+            onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) void handleCommit()
             }}
           />
@@ -381,29 +315,6 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
             <Button variant="outline" onClick={() => setDiscardOpen(false)} disabled={discarding}>取消</Button>
             <Button variant="destructive" onClick={() => void handleDiscard()} disabled={discarding}>
               {discarding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '确认丢弃'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Discard single file dialog */}
-      <Dialog open={!!discardFileTarget} onOpenChange={open => { if (!open) setDiscardFileTarget(null) }}>
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>丢弃文件变更</DialogTitle>
-            <DialogDescription className="break-words">
-              将丢弃 <span className="break-all font-mono text-foreground">{discardFileTarget?.path}</span> 的变更。
-              此操作不可恢复。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDiscardFileTarget(null)} disabled={discardingFile}>取消</Button>
-            <Button
-              variant="destructive"
-              onClick={() => { if (discardFileTarget) void handleDiscardFile(discardFileTarget) }}
-              disabled={discardingFile}
-            >
-              {discardingFile ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '确认丢弃'}
             </Button>
           </DialogFooter>
         </DialogContent>
