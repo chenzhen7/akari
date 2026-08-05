@@ -53,6 +53,14 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   const [commitOpen, setCommitOpen] = useState(false)
   const [commitMsg, setCommitMsg] = useState('')
   const [committing, setCommitting] = useState(false)
+  const [commitScope, setCommitScope] = useState<'all' | 'viewed'>('all')
+
+  const sessionReviewState = useDiffReviewStore((s) => s.states[session.id])
+  const viewedFiles = useMemo(
+    () => diffFiles.filter((f) => sessionReviewState?.[f.path]?.viewed).map((f) => f.path),
+    [diffFiles, sessionReviewState],
+  )
+  const viewedFileCount = viewedFiles.length
 
   // Discard dialog
   const [discardOpen, setDiscardOpen] = useState(false)
@@ -71,10 +79,18 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
 
   async function handleCommit() {
     if (!commitMsg.trim()) return
+    if (commitScope === 'viewed' && viewedFileCount === 0) return
     setCommitting(true)
     try {
-      await apiClient.post(`/sessions/${session.id}/git/commit`, { message: commitMsg.trim() }, { toast: '提交失败' })
-      toast.success('已提交')
+      const payload: { message: string; scope?: 'all' | 'viewed'; filePaths?: string[] } = {
+        message: commitMsg.trim(),
+      }
+      if (commitScope === 'viewed') {
+        payload.scope = 'viewed'
+        payload.filePaths = viewedFiles
+      }
+      await apiClient.post(`/sessions/${session.id}/git/commit`, payload, { toast: '提交失败' })
+      toast.success(commitScope === 'viewed' ? `已提交 ${viewedFileCount} 个已查看文件` : '已提交')
       resetSession(session.id)
       setCommitMsg('')
       setCommitOpen(false)
@@ -278,11 +294,34 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
       <Dialog open={commitOpen} onOpenChange={setCommitOpen}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>提交所有变更</DialogTitle>
+            <DialogTitle>提交变更</DialogTitle>
             <DialogDescription>
-              将暂存全部文件（git add -A）并创建新提交。
+              {commitScope === 'all'
+                ? `将暂存全部 ${diffFiles.length} 个变更文件并创建新提交。`
+                : `只提交已查看的 ${viewedFileCount} 个文件，其余文件继续保留在工作区。`}
             </DialogDescription>
           </DialogHeader>
+
+          <div className="flex gap-2">
+            <Button
+              size="xs"
+              variant={commitScope === 'all' ? 'default' : 'outline'}
+              className="flex-1"
+              onClick={() => setCommitScope('all')}
+            >
+              全部提交
+            </Button>
+            <Button
+              size="xs"
+              variant={commitScope === 'viewed' ? 'default' : 'outline'}
+              className="flex-1"
+              disabled={viewedFileCount === 0}
+              onClick={() => setCommitScope('viewed')}
+            >
+              只提交已查看 ({viewedFileCount})
+            </Button>
+          </div>
+
           <Textarea
             placeholder="提交信息（必填）"
             className="min-h-[80px] resize-none"
@@ -294,7 +333,10 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCommitOpen(false)} disabled={committing}>取消</Button>
-            <Button onClick={() => void handleCommit()} disabled={!commitMsg.trim() || committing}>
+            <Button
+              onClick={() => void handleCommit()}
+              disabled={!commitMsg.trim() || committing || (commitScope === 'viewed' && viewedFileCount === 0)}
+            >
               {committing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '提交'}
             </Button>
           </DialogFooter>

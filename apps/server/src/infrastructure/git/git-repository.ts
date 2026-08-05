@@ -283,6 +283,13 @@ export class GitRepository {
     this.invalidateRepoCache()
   }
 
+  async commitFiles(message: string, filePaths: string[]): Promise<void> {
+    if (filePaths.length === 0) throw new Error('no files to commit')
+    await this.runner.run(['add', '--', ...filePaths], this.repoPath)
+    await this.runner.run(['commit', '-m', message], this.repoPath)
+    this.invalidateRepoCache()
+  }
+
   async discardAll(): Promise<void> {
     await this.runner.run(['checkout', '--', '.'], this.repoPath)
     await this.runner.run(['clean', '-fd'], this.repoPath)

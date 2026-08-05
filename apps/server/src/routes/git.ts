@@ -22,15 +22,22 @@ export default async function gitRoutes(fastify: FastifyInstance) {
     },
   )
 
-  fastify.post<{ Params: { id: string }; Body: { message: string } }>(
+  fastify.post<{ Params: { id: string }; Body: { message: string; scope?: 'all' | 'viewed'; filePaths?: string[] } }>(
     '/sessions/:id/git/commit',
     async (request, reply) => {
       const { id } = request.params
-      const { message } = request.body
+      const { message, scope = 'all', filePaths } = request.body
       if (!message?.trim()) return reply.status(400).send({ error: 'message is required' })
       if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
       try {
-        await request.sessionManager.commitAll(id, message.trim())
+        if (scope === 'viewed') {
+          if (!filePaths || filePaths.length === 0) {
+            return reply.status(400).send({ error: 'no viewed files to commit' })
+          }
+          await request.sessionManager.commitFiles(id, message.trim(), filePaths)
+        } else {
+          await request.sessionManager.commitAll(id, message.trim())
+        }
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)

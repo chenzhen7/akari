@@ -247,6 +247,15 @@ export class SessionManager {
     this.refreshDiff(sessionId)
   }
 
+  async commitFiles(sessionId: string, message: string, filePaths: string[]): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.worktreeService.commitFiles(sessionId, message, filePaths, session.worktreePath)
+    const log = await this.worktreeService.getGitLog(session.worktreePath, 100, 0)
+    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+    this.refreshDiff(sessionId)
+  }
+
   async discardAll(sessionId: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)

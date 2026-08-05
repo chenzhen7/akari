@@ -12,6 +12,7 @@ export interface IWorktreeService {
   createWorktree(sessionId: string, baseBranch?: string): Promise<{ branchName: string; worktreePath: string; resolvedBase: string }>
   removeWorktree(sessionId: string, worktreePath: string, branchName?: string): Promise<void>
   commitAll(sessionId: string, message: string, cwd: string): Promise<void>
+  commitFiles(sessionId: string, message: string, filePaths: string[], cwd: string): Promise<void>
   discardAll(sessionId: string, cwd: string): Promise<void>
   discardFile(sessionId: string, filePath: string, cwd: string): Promise<void>
   checkoutBranch(sessionId: string, branch: string, createNew: boolean, cwd: string): Promise<void>
@@ -132,6 +133,12 @@ export class WorktreeService implements IWorktreeService {
     const repo = this.runners.registry.get(cwd)
     if (!repo) throw new Error(`not a git repository: ${cwd}`)
     await repo.commitAll(message)
+  }
+
+  async commitFiles(_sessionId: string, message: string, filePaths: string[], cwd: string): Promise<void> {
+    const repo = this.runners.registry.get(cwd)
+    if (!repo) throw new Error(`not a git repository: ${cwd}`)
+    await repo.commitFiles(message, filePaths)
   }
 
   async discardAll(_sessionId: string, cwd: string): Promise<void> {

@@ -205,7 +205,7 @@ export const DiffFileTreeNode = memo(function DiffFileTreeNode({
               checked={viewed}
               onCheckedChange={() => setFileViewed(sessionId, node.path, !viewed)}
               aria-label={viewed ? '已查看' : '未查看'}
-              className="h-3 w-3 rounded-[3px]"
+              className="h-4 w-4"
             />
           </label>
         </div>
