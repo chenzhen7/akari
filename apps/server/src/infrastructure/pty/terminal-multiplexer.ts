@@ -47,6 +47,12 @@ export class TerminalMultiplexer extends EventEmitter {
       cols,
       rows,
       cwd,
+      // Windows: load the conpty.dll bundled with node-pty (v1.23, same as VS
+      // Code) instead of the OS one. Windows 10's built-in ConPTY swallows
+      // DECSET mouse-enable sequences so TUI mouse features (Claude Code click
+      // interaction, box auto-copy) never reach the client. The fix only
+      // landed in the newer OpenConsole; a no-op on non-Windows.
+      useConptyDll: isWindows ? true : undefined,
       env: {
         ...process.env,
         AGENT_SESSION_ID: sessionId,
