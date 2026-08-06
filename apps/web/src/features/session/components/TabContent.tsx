@@ -69,7 +69,6 @@ const TabPane = memo(function TabPane({
         <DiffReviewPage
           sessionId={sessionId}
           diffFiles={diffFiles ?? EMPTY_DIFF_FILES}
-          isActive={isActive}
         />
       )}
       {type === 'file' && filePath && (

@@ -10,13 +10,11 @@ import { DiffReviewToolbar } from './DiffReviewToolbar'
 interface DiffReviewPageProps {
   sessionId: string
   diffFiles: DiffFile[]
-  isActive?: boolean
 }
 
 export function DiffReviewPage({
   sessionId,
   diffFiles,
-  isActive,
 }: DiffReviewPageProps) {
   const [hunksByFile, setHunksByFile] = useState<Record<string, DiffHunk[]>>({})
   const [loading, setLoading] = useState(false)
