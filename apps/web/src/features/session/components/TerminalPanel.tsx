@@ -10,7 +10,7 @@ import { terminalBus } from '@/features/terminal/lib/terminalBus'
 import { resizeMutex } from '@/shared/lib/ptyResizeMutex'
 import { attachImeAnchor } from '@/shared/lib/xterm-ime-anchor'
 import { apiClient } from '@/shared/lib/api-client'
-import { terminalInstances } from '@/features/session/lib/terminal-instances'
+import { terminalInstances, type TerminalEntry } from '@/features/session/lib/terminal-instances'
 import { perfMark, perfMeasure } from '@/shared/lib/perf-log'
 
 interface TerminalPanelProps {
@@ -78,6 +78,34 @@ function updateTerminalTheme(terminalId: string, isDark: boolean) {
   } catch { /* ignore if disposed */ }
 }
 
+/**
+ * Atomically re-fit the terminal and notify the backend of the new size.
+ *
+ * The client buffer and the PTY must change size together: if the client
+ * resizes first, a TUI redraws at its old width into the newly-sized buffer
+ * and text lands garbled/overlapping until the next full frame. Running
+ * acquire() before fit() also means the resize-mutex buffers any data that
+ * arrives mid-resize instead of letting it render at the wrong size.
+ */
+function fitAndSendResize(
+  entry: TerminalEntry,
+  sessionId: string,
+  terminalId: string,
+  send: (msg: ClientMessage) => void,
+): void {
+  // Coalesce rapid resizes: if one is already in flight, it owns this fit.
+  if (!resizeMutex.acquire(terminalId)) return
+  try {
+    entry.fitAddon.fit()
+    const { cols, rows } = entry.term
+    send({ event: 'terminal:resize', payload: { sessionId, terminalId, cols, rows } })
+  } catch {
+    // fit() can throw on a zero-size container (hidden tab) — don't leave the
+    // resize lock stuck for this terminal.
+    resizeMutex.release(terminalId)
+  }
+}
+
 export function TerminalPanel({ sessionId, terminalId, send, isActive }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalReadyTick = useConnectionStore(s => s.terminalReadyTick[terminalId] ?? 0)
@@ -92,11 +120,11 @@ export function TerminalPanel({ sessionId, terminalId, send, isActive }: Termina
     if (!entry) return
     requestAnimationFrame(() => {
       try {
-        entry.fitAddon.fit()
+        fitAndSendResize(entry, sessionId, terminalId, send)
         entry.term.focus()
       } catch { /* ignore if disposed */ }
     })
-  }, [isActive, terminalId])
+  }, [isActive, terminalId, sessionId, send])
 
   /* ─── Mount / unmount ─────────────────────────────────────────────────── */
 
@@ -115,7 +143,7 @@ export function TerminalPanel({ sessionId, terminalId, send, isActive }: Termina
       }
       requestAnimationFrame(() => {
         try {
-          existing.fitAddon.fit()
+          fitAndSendResize(existing, sessionId, terminalId, send)
           existing.term.focus()
         } catch { /* ignore if disposed */ }
       })
@@ -147,10 +175,10 @@ export function TerminalPanel({ sessionId, terminalId, send, isActive }: Termina
     const entry = terminalInstances.get(terminalId)
     if (!entry) return
     try {
-      entry.fitAddon.fit()
+      fitAndSendResize(entry, sessionId, terminalId, send)
       entry.term.focus()
     } catch { /* ignore */ }
-  }, [terminalReadyTick, terminalId])
+  }, [terminalReadyTick, terminalId, sessionId, send])
 
   /* ─── ResizeObserver (debounced) — set up on every mount ──────────────── */
 
@@ -164,18 +192,12 @@ export function TerminalPanel({ sessionId, terminalId, send, isActive }: Termina
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
     const ro = new ResizeObserver(() => {
-      try { entry.fitAddon.fit() } catch { /* ignore */ }
-
       if (debounceTimer) clearTimeout(debounceTimer)
       debounceTimer = setTimeout(() => {
         debounceTimer = null
-        // Coalesce rapid resize events: acquire() returns false if a resize
-        // is already in flight for this terminal.
-        if (!resizeMutex.acquire(terminalId)) return
-        try {
-          const { cols, rows } = entry.term
-          send({ event: 'terminal:resize', payload: { sessionId, terminalId, cols, rows } })
-        } catch { /* ignore if disposed */ }
+        // Debounced so rapid resize events coalesce. fit() + backend resize
+        // run atomically inside fitAndSendResize (see its doc comment).
+        fitAndSendResize(entry, sessionId, terminalId, send)
       }, 150)
     })
     ro.observe(container)
@@ -331,6 +353,11 @@ function createTerminal(
     }
     try {
       term.scrollToBottom()
+      // Defensive repaint: after a resize the app redraws at the new size, but
+      // the renderer can keep stale/overlapping glyphs from the old frame.
+      // Force a full re-render of the visible viewport to clear orphaned cells
+      // (alt-screen TUIs are the worst offenders).
+      term.refresh(0, term.rows - 1)
     } catch { /* ignore */ }
   })
 
@@ -353,11 +380,22 @@ function createTerminal(
   })
     .then(({ buffer }) => {
       perfMeasure(perfKey, 'terminal-buffer 历史响应返回（HTTP 耗时）')
-      // Skip TUI animation frames (\x1b[H = cursor home) that would push
-      // duplicate history into scrollback on replay.
-      buffer
-        .filter(chunk => !chunk.includes('\x1b[H'))
-        .forEach(chunk => term.write(chunk))
+      // Replay history faithfully. Do NOT drop chunks containing \x1b[H — a
+      // TUI frame is often split across chunk boundaries, so dropping one half
+      // breaks the cursor-positioning context of the rest and garbles the
+      // screen. Instead, if the buffer currently ends inside the alt-screen
+      // buffer (a running TUI like Claude Code fullscreen), truncate the
+      // replay to the pre-TUI history and let live terminal:data repaint the
+      // TUI screen.
+      const all = buffer.join('')
+      const lastAltEnter = all.lastIndexOf('\x1b[?1049h')
+      const lastAltExit = all.lastIndexOf('\x1b[?1049l')
+      if (lastAltEnter > lastAltExit) {
+        term.write(all.slice(0, lastAltEnter))
+        term.write('\x1b[?1049h') // re-enter alt-screen so live frames render in place
+      } else {
+        term.write(all)
+      }
 
       // Flush any data that arrived during the fetch
       historyLoaded = true
