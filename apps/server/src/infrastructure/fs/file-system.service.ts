@@ -1,4 +1,4 @@
-import { mkdir, access, constants, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, access, constants, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import type { FileNode } from '@akari/shared-types'
 
@@ -6,6 +6,10 @@ export interface IFileSystemService {
   listFiles(cwd: string, relativePath: string): Promise<FileNode[]>
   readFileContent(cwd: string, filePath: string): Promise<string>
   writeFileContent(cwd: string, filePath: string, content: string): Promise<void>
+  createDirectory(cwd: string, dirPath: string): Promise<void>
+  createFile(cwd: string, filePath: string): Promise<void>
+  renamePath(cwd: string, fromPath: string, toPath: string): Promise<void>
+  deletePath(cwd: string, targetPath: string): Promise<void>
   resolveFilePath(filePath: string, cwd: string): Promise<string>
   resolveWritePath(filePath: string, cwd: string): string
   assertPathInWorktree(worktreePath: string, filePath: string): string
@@ -114,6 +118,51 @@ export class FileSystemService implements IFileSystemService {
 
     await mkdir(dirname(fullPath), { recursive: true })
     await writeFile(fullPath, content, 'utf8')
+  }
+
+  private async pathExists(filePath: string): Promise<boolean> {
+    return access(filePath, constants.F_OK)
+      .then(() => true)
+      .catch(() => false)
+  }
+
+  private getAllowedBase(cwd: string): string {
+    return this.isAgentWorktree(cwd) ? resolve(cwd) : resolve(this.repoRoot)
+  }
+
+  async createDirectory(cwd: string, dirPath: string): Promise<void> {
+    const fullPath = this.resolveWritePath(dirPath, cwd)
+    this.assertPathInWorktree(cwd, fullPath)
+    if (await this.pathExists(fullPath)) throw new Error(`已存在同名文件或文件夹：${dirPath}`)
+    await mkdir(fullPath, { recursive: true })
+  }
+
+  async createFile(cwd: string, filePath: string): Promise<void> {
+    const fullPath = this.resolveWritePath(filePath, cwd)
+    this.assertPathInWorktree(cwd, fullPath)
+    if (await this.pathExists(fullPath)) throw new Error(`已存在同名文件或文件夹：${filePath}`)
+    await mkdir(dirname(fullPath), { recursive: true })
+    await writeFile(fullPath, '', 'utf8')
+  }
+
+  async renamePath(cwd: string, fromPath: string, toPath: string): Promise<void> {
+    const fullFrom = this.resolveWritePath(fromPath, cwd)
+    const fullTo = this.resolveWritePath(toPath, cwd)
+    this.assertPathInWorktree(cwd, fullFrom)
+    this.assertPathInWorktree(cwd, fullTo)
+    if (resolve(fullFrom) === this.getAllowedBase(cwd)) throw new Error('不能重命名根目录')
+    if (fullFrom === fullTo) return
+    if (!(await this.pathExists(fullFrom))) throw new Error(`文件或文件夹不存在：${fromPath}`)
+    if (await this.pathExists(fullTo)) throw new Error(`已存在同名文件或文件夹：${toPath}`)
+    await rename(fullFrom, fullTo)
+  }
+
+  async deletePath(cwd: string, targetPath: string): Promise<void> {
+    const fullPath = this.resolveWritePath(targetPath, cwd)
+    this.assertPathInWorktree(cwd, fullPath)
+    if (resolve(fullPath) === this.getAllowedBase(cwd)) throw new Error('不能删除根目录')
+    if (!(await this.pathExists(fullPath))) throw new Error(`文件或文件夹不存在：${targetPath}`)
+    await rm(fullPath, { recursive: true })
   }
 
   getWorktreePath(sessionId: string): string {

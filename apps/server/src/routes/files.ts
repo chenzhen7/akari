@@ -54,4 +54,76 @@ export default async function filesRoutes(fastify: FastifyInstance) {
       }
     },
   )
+
+  fastify.post<{ Params: { id: string }; Body: { path: string } }>(
+    '/sessions/:id/directory',
+    async (request, reply) => {
+      const { id } = request.params
+      const { path: dirPath } = request.body
+      if (!dirPath) return reply.status(400).send({ error: 'path is required' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      try {
+        await request.sessionManager.createDirectory(id, dirPath)
+        return { ok: true }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.warn({ err: msg, sessionId: id, dirPath }, 'createDirectory failed')
+        return reply.status(422).send({ error: msg })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string }; Body: { path: string } }>(
+    '/sessions/:id/file',
+    async (request, reply) => {
+      const { id } = request.params
+      const { path: filePath } = request.body
+      if (!filePath) return reply.status(400).send({ error: 'path is required' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      try {
+        await request.sessionManager.createFile(id, filePath)
+        return { ok: true }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.warn({ err: msg, sessionId: id, filePath }, 'createFile failed')
+        return reply.status(422).send({ error: msg })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string }; Body: { from: string; to: string } }>(
+    '/sessions/:id/rename',
+    async (request, reply) => {
+      const { id } = request.params
+      const { from, to } = request.body
+      if (!from || !to) return reply.status(400).send({ error: 'from and to are required' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      try {
+        await request.sessionManager.renamePath(id, from, to)
+        return { ok: true }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.warn({ err: msg, sessionId: id, from, to }, 'renamePath failed')
+        return reply.status(422).send({ error: msg })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string }; Body: { path: string } }>(
+    '/sessions/:id/delete',
+    async (request, reply) => {
+      const { id } = request.params
+      const { path: targetPath } = request.body
+      if (!targetPath) return reply.status(400).send({ error: 'path is required' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      try {
+        await request.sessionManager.deletePath(id, targetPath)
+        return { ok: true }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.warn({ err: msg, sessionId: id, targetPath }, 'deletePath failed')
+        return reply.status(422).send({ error: msg })
+      }
+    },
+  )
 }

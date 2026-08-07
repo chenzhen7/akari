@@ -389,6 +389,30 @@ export class SessionManager {
     await this.fileService.writeFileContent(session.worktreePath, filePath, content)
   }
 
+  async createDirectory(sessionId: string, dirPath: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.fileService.createDirectory(session.worktreePath, dirPath)
+  }
+
+  async createFile(sessionId: string, filePath: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.fileService.createFile(session.worktreePath, filePath)
+  }
+
+  async renamePath(sessionId: string, fromPath: string, toPath: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.fileService.renamePath(session.worktreePath, fromPath, toPath)
+  }
+
+  async deletePath(sessionId: string, targetPath: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.fileService.deletePath(session.worktreePath, targetPath)
+  }
+
   async restoreSessions(): Promise<void> {
     return this.sessionLifecycle.restoreSessions()
   }

@@ -1,9 +1,16 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Tree } from 'react-arborist'
 import type { NodeRendererProps, TreeApi } from 'react-arborist'
-import { RefreshCw, ChevronRight, ChevronDown } from 'lucide-react'
+import { RefreshCw, ChevronRight, ChevronDown, Plus, FilePlus, FolderPlus } from 'lucide-react'
 import { FileTypeIcon } from '@/shared/components/file-icon'
 import { cn } from '@/shared/lib/utils'
+import { Button } from '@/shared/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu'
 import type { FileNode } from '@akari/shared-types'
 import { getFileTreeChildren, fetchFileTreeChildren, useFileTreeChildren, useFileTreeTick } from '@/features/explorer/lib/file-tree-store'
 import { perfMark } from '@/shared/lib/perf-log'
@@ -38,6 +45,8 @@ interface ArboristFileTreeProps {
   onContextMenu?: (e: React.MouseEvent, node: FileNode) => void
   onRefresh?: () => void
   isRefreshing?: boolean
+  onCreateFile?: (parentPath: string) => void
+  onCreateFolder?: (parentPath: string) => void
 }
 
 function buildNode(fileNode: FileNode, sessionId: string): ArboristFileNode {
@@ -148,6 +157,8 @@ export function ArboristFileTree({
   onContextMenu,
   onRefresh,
   isRefreshing,
+  onCreateFile,
+  onCreateFolder,
 }: ArboristFileTreeProps) {
   const rootChildren = useFileTreeChildren(sessionId, '')
   const treeTick = useFileTreeTick()
@@ -246,19 +257,56 @@ export function ArboristFileTree({
     <div ref={containerRef} className="flex h-full flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-2 py-1">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">文件</span>
-        {onRefresh && (
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            title="刷新"
-            className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-          >
-            <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
-          </button>
-        )}
+        <div className="flex items-center gap-0.5">
+          {(onCreateFile || onCreateFolder) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  title="新建"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onCreateFile && (
+                  <DropdownMenuItem onSelect={() => onCreateFile('')}>
+                    <FilePlus className="h-3.5 w-3.5" />
+                    新建文件
+                  </DropdownMenuItem>
+                )}
+                {onCreateFolder && (
+                  <DropdownMenuItem onSelect={() => onCreateFolder('')}>
+                    <FolderPlus className="h-3.5 w-3.5" />
+                    新建文件夹
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              title="刷新"
+              className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
+            </button>
+          )}
+        </div>
       </div>
-      <div className="flex-1 overflow-hidden">
+      <div
+        className="flex-1 overflow-hidden"
+        onContextMenu={e => {
+          e.preventDefault()
+          onContextMenu?.(e, { name: rootName, path: '', type: 'directory' })
+        }}
+      >
         <Tree
           ref={treeRef}
           data={treeData}

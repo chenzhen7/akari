@@ -1,11 +1,13 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { FolderOpen, Copy, Check, Terminal } from 'lucide-react'
+import { FolderOpen, Copy, Check, Terminal, FilePlus, FolderPlus, Pencil, Trash2 } from 'lucide-react'
 import { toast, toastError } from '@/shared/lib/toast'
 import { cn } from '@/shared/lib/utils'
 import { findSession } from '@/features/session/stores/session-store'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { useConnectionStore } from '@/features/terminal/stores/connection-store'
+import { dirnameRelPath } from '@/features/explorer/lib/path-utils'
 import type { FileNode } from '@akari/shared-types'
+import type { FileMutation } from './FileMutationDialog'
 
 interface FileTreeContextMenuProps {
   sessionId: string
@@ -15,21 +17,25 @@ interface FileTreeContextMenuProps {
   x: number
   y: number
   onClose: () => void
+  onMutation?: (m: FileMutation) => void
 }
 
 interface MenuItemProps {
   icon: React.ComponentType<{ className?: string }>
   label: string
   onClick: () => void | Promise<void>
+  danger?: boolean
 }
 
-function MenuItem({ icon: Icon, label, onClick }: MenuItemProps) {
+function MenuItem({ icon: Icon, label, onClick, danger }: MenuItemProps) {
   return (
     <button
       onClick={onClick}
       className={cn(
         'flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors',
-        'hover:bg-accent hover:text-accent-foreground',
+        danger
+          ? 'text-red-500 hover:bg-destructive/10 hover:text-red-500'
+          : 'hover:bg-accent hover:text-accent-foreground',
       )}
     >
       <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -62,6 +68,7 @@ export function FileTreeContextMenu({
   x,
   y,
   onClose,
+  onMutation,
 }: FileTreeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const sendTerminalInput = useConnectionStore(s => s.sendTerminalInput)
@@ -97,6 +104,28 @@ export function FileTreeContextMenu({
   const fullPath = getFullPath(worktreePath, node.path)
   const folderPath = getFolderPath(fullPath, node.type)
   const relativePath = node.path || '.'
+  const isRoot = node.path === ''
+  const parentPath = node.type === 'directory' ? node.path : dirnameRelPath(node.path)
+
+  const handleNewFile = () => {
+    onMutation?.({ type: 'create-file', parentPath })
+    onClose()
+  }
+
+  const handleNewFolder = () => {
+    onMutation?.({ type: 'create-folder', parentPath })
+    onClose()
+  }
+
+  const handleRename = () => {
+    onMutation?.({ type: 'rename', node })
+    onClose()
+  }
+
+  const handleDelete = () => {
+    onMutation?.({ type: 'delete', node })
+    onClose()
+  }
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -159,6 +188,14 @@ export function FileTreeContextMenu({
       className="fixed z-50 min-w-[180px] rounded-md border border-border bg-popover py-1 shadow-lg"
       style={{ left: x, top: y }}
     >
+      <MenuItem icon={FilePlus} label="新建文件" onClick={handleNewFile} />
+      <MenuItem icon={FolderPlus} label="新建文件夹" onClick={handleNewFolder} />
+      {!isRoot && (
+        <>
+          <MenuItem icon={Pencil} label="重命名" onClick={handleRename} />
+          <MenuItem icon={Trash2} label="删除" onClick={handleDelete} danger />
+        </>
+      )}
       {canOpenFolder && (
         <MenuItem icon={FolderOpen} label="打开文件夹" onClick={handleOpenFolder} />
       )}

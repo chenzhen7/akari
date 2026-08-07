@@ -8,6 +8,7 @@ import {
 } from '@/features/explorer/lib/file-tree-store'
 import { ArboristFileTree } from './ArboristFileTree'
 import { FileTreeContextMenu } from './FileTreeContextMenu'
+import { FileMutationDialog, type FileMutation } from './FileMutationDialog'
 
 interface ExplorerPanelProps {
   session: AgentSession
@@ -31,6 +32,7 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
   const [selectedPath, setSelectedPath] = useState<string | undefined>()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null)
+  const [mutation, setMutation] = useState<FileMutation | null>(null)
   const lastSessionIdRef = useRef<string | null>(null)
 
   const activeFilePath = useMemo(() => getActiveFilePath(session), [session])
@@ -116,6 +118,24 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
     }
   }, [session.id])
 
+  // 文件变更提交后：先全量刷新缓存（保证新路径已进入），再维护选中态
+  const handleCommitted = useCallback(
+    async (result: { action: FileMutation['type']; path: string }) => {
+      await handleRefresh()
+      if (result.action === 'rename') {
+        setSelectedPath(result.path)
+      } else if (result.action === 'delete') {
+        setSelectedPath(prev =>
+          prev === result.path || prev?.startsWith(result.path + '/') ? undefined : prev,
+        )
+      } else if (result.action === 'create-file') {
+        setSelectedPath(result.path)
+        onOpenFile(result.path)
+      }
+    },
+    [handleRefresh, onOpenFile],
+  )
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {error && (
@@ -140,6 +160,8 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
           onContextMenu={handleContextMenu}
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
+          onCreateFile={parentPath => setMutation({ type: 'create-file', parentPath })}
+          onCreateFolder={parentPath => setMutation({ type: 'create-folder', parentPath })}
         />
       )}
 
@@ -152,6 +174,16 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
           x={contextMenu.x}
           y={contextMenu.y}
           onClose={closeContextMenu}
+          onMutation={setMutation}
+        />
+      )}
+
+      {mutation && (
+        <FileMutationDialog
+          sessionId={session.id}
+          mutation={mutation}
+          onClose={() => setMutation(null)}
+          onCommitted={handleCommitted}
         />
       )}
     </div>
