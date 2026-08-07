@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentSession } from '@akari/shared-types'
 import {
-  GitCommit, Trash2, GitMerge, GitPullRequest, Loader2,
-  RefreshCw,
+  Download, GitCommit, GitMerge, GitPullRequest, Loader2,
+  RefreshCw, Trash2, Upload,
 } from 'lucide-react'
 import { toast } from '@/shared/lib/toast'
 import { apiClient } from '@/shared/lib/api-client'
@@ -149,6 +149,30 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
     }
   }
 
+  // 仅主会话：从远程快进更新（git pull --ff-only）
+  async function handlePull() {
+    setUpdating(true)
+    try {
+      await apiClient.post(`/sessions/${session.id}/git/pull`, undefined, { toast: '更新失败' })
+      toast.success('已从远程更新')
+      setUpdateOpen(false)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  // 仅主会话：推送到远程（git push -u origin HEAD）
+  async function handlePush() {
+    setMerging(true)
+    try {
+      const res = await apiClient.post<{ upToDate?: boolean }>(`/sessions/${session.id}/git/push`, undefined, { toast: '推送失败' })
+      toast.success(res?.upToDate ? '已是最新，无需推送' : '已推送')
+      setMergeOpen(false)
+    } finally {
+      setMerging(false)
+    }
+  }
+
   const handleToggleExpand = useCallback((path: string) => {
     setExpandedPaths((prev) => {
       const next = new Set(prev)
@@ -231,30 +255,61 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
               </TooltipTrigger>
               <TooltipContent side="bottom">Commit 所有变更</TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  onClick={() => setUpdateOpen(true)}
-                >
-                  <GitPullRequest className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">从主会话当前分支更新</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  onClick={() => setMergeOpen(true)}
-                >
-                  <GitMerge className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">合并到主会话当前分支</TooltipContent>
-            </Tooltip>
+            {session.isMain ? (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={() => setUpdateOpen(true)}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">从远程更新（git pull --ff-only）</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={() => setMergeOpen(true)}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">推送当前分支到远程（git push -u origin HEAD）</TooltipContent>
+                </Tooltip>
+              </>
+            ) : (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={() => setUpdateOpen(true)}
+                    >
+                      <GitPullRequest className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">从主会话当前分支更新</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={() => setMergeOpen(true)}
+                    >
+                      <GitMerge className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">合并到主会话当前分支</TooltipContent>
+                </Tooltip>
+              </>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="inline-flex" tabIndex={0}>
@@ -370,39 +425,61 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Merge dialog */}
+      {/* Merge dialog（主会话为推送） */}
       <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>合并到主会话当前分支</DialogTitle>
+            <DialogTitle>{session.isMain ? '推送当前分支' : '合并到主会话当前分支'}</DialogTitle>
             <DialogDescription className="break-words">
-              将把{' '}
-              <span className="break-all font-mono text-foreground">{session.branchName}</span>{' '}
-              合并（--no-ff）到主会话当前分支。
+              {session.isMain ? (
+                <>
+                  将执行 <span className="font-mono text-foreground">git push -u origin HEAD</span>，
+                  把当前分支{' '}
+                  <span className="break-all font-mono text-foreground">{session.branchName}</span>{' '}
+                  推送到远程（无上游时自动设置），不会强制推送。
+                </>
+              ) : (
+                <>
+                  将把{' '}
+                  <span className="break-all font-mono text-foreground">{session.branchName}</span>{' '}
+                  合并（--no-ff）到主会话当前分支。
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setMergeOpen(false)} disabled={merging}>取消</Button>
-            <Button onClick={() => void handleMerge()} disabled={merging}>
-              {merging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '确认合并'}
+            <Button onClick={() => void (session.isMain ? handlePush() : handleMerge())} disabled={merging}>
+              {merging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (session.isMain ? '确认推送' : '确认合并')}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Update from base dialog */}
+      {/* Update from base dialog（主会话为从远程拉取） */}
       <Dialog open={updateOpen} onOpenChange={setUpdateOpen}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>从主会话当前分支更新</DialogTitle>
+            <DialogTitle>{session.isMain ? '从远程更新' : '从主会话当前分支更新'}</DialogTitle>
             <DialogDescription className="break-words">
-              将把主会话当前分支的最新代码合并（--no-ff）到当前分支{' '}
-              <span className="break-all font-mono text-foreground">{session.branchName}</span>。
+              {session.isMain ? (
+                <>
+                  将执行 <span className="font-mono text-foreground">git pull --ff-only</span>，
+                  把远程当前分支的最新提交快进合并到本地分支{' '}
+                  <span className="break-all font-mono text-foreground">{session.branchName}</span>。
+                  本地与远程分叉时不改动仓库，需手动处理。
+                </>
+              ) : (
+                <>
+                  将把主会话当前分支的最新代码合并（--no-ff）到当前分支{' '}
+                  <span className="break-all font-mono text-foreground">{session.branchName}</span>。
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUpdateOpen(false)} disabled={updating}>取消</Button>
-            <Button onClick={() => void handleUpdateFromBase()} disabled={updating}>
+            <Button onClick={() => void (session.isMain ? handlePull() : handleUpdateFromBase())} disabled={updating}>
               {updating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '确认更新'}
             </Button>
           </DialogFooter>

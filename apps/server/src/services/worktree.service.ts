@@ -18,6 +18,8 @@ export interface IWorktreeService {
   checkoutBranch(sessionId: string, branch: string, createNew: boolean, cwd: string): Promise<void>
   mergeIntoCurrentBranch(targetCwd: string, sourceBranch: string, strategy?: 'squash' | 'merge' | 'rebase'): Promise<void>
   updateFromBase(sessionId: string, sourceBranch: string, cwd: string): Promise<void>
+  pullMain(cwd: string): Promise<void>
+  pushMain(cwd: string): Promise<{ upToDate: boolean }>
   getFileDiffContent(cwd: string, filePath: string): Promise<{ original: string; modified: string }>
   getFileDiffLines(cwd: string, filePath: string): Promise<FileDiffLine[]>
   getFileDiffHunks(cwd: string, filePath: string): Promise<DiffHunk[]>
@@ -175,6 +177,18 @@ export class WorktreeService implements IWorktreeService {
     const repo = this.runners.registry.get(cwd)
     if (!repo) throw new Error(`not a git repository: ${cwd}`)
     await repo.updateFromBase(sourceBranch)
+  }
+
+  async pullMain(cwd: string): Promise<void> {
+    const repo = this.runners.registry.get(cwd)
+    if (!repo) throw new Error(`not a git repository: ${cwd}`)
+    await repo.pullMain()
+  }
+
+  async pushMain(cwd: string): Promise<{ upToDate: boolean }> {
+    const repo = this.runners.registry.get(cwd)
+    if (!repo) throw new Error(`not a git repository: ${cwd}`)
+    return repo.pushMain()
   }
 
   async getFileDiffContent(cwd: string, filePath: string): Promise<{ original: string; modified: string }> {

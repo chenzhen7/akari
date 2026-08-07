@@ -9,6 +9,8 @@ export type GitErrorCode =
   | 'NETWORK_ERROR'
   | 'AUTHENTICATION_FAILED'
   | 'LOCKED'
+  | 'NO_REMOTE'
+  | 'NO_UPSTREAM'
   | 'UNKNOWN'
 
 export class GitError extends Error {
@@ -105,6 +107,17 @@ export class GitCommandRunner {
     }
     if (lower.includes('unable to create') && lower.includes('lock file')) {
       return new GitError(message, 'LOCKED', args, cwd)
+    }
+    if (
+      lower.includes('does not appear to be a git repository') ||
+      lower.includes('no such remote') ||
+      lower.includes('could not read from remote repository') ||
+      lower.includes('no remote repository specified')
+    ) {
+      return new GitError(message, 'NO_REMOTE', args, cwd)
+    }
+    if (lower.includes('no tracking information') || lower.includes('no upstream branch')) {
+      return new GitError(message, 'NO_UPSTREAM', args, cwd)
     }
     return new GitError(message, 'UNKNOWN', args, cwd)
   }

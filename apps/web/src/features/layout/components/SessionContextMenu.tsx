@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { GitCommit, GitMerge, GitBranch, Copy, Check, FolderOpen } from 'lucide-react'
+import { Download, GitCommit, GitMerge, GitBranch, Copy, Check, FolderOpen, Upload } from 'lucide-react'
 import { toast, toastError } from '@/shared/lib/toast'
 import { cn } from '@/shared/lib/utils'
 import { apiClient } from '@/shared/lib/api-client'
@@ -143,6 +143,34 @@ export function SessionContextMenu({ session, x, y, onClose, onSwitchBranch }: S
     onClose()
   }
 
+  // 仅主会话：从远程快进更新
+  const handlePull = async () => {
+    const loadingId = toast.loading('正在从远程更新...')
+    try {
+      await apiClient.post(`/sessions/${session.id}/git/pull`, {}, { toast: '更新失败' })
+      toast.dismiss(loadingId)
+      toast.success('已从远程更新')
+    } catch (err) {
+      toast.dismiss(loadingId)
+      console.error('[pull] failed:', err)
+    }
+    onClose()
+  }
+
+  // 仅主会话：推送到远程
+  const handlePush = async () => {
+    const loadingId = toast.loading('正在推送到远程...')
+    try {
+      const res = await apiClient.post<{ upToDate?: boolean }>(`/sessions/${session.id}/git/push`, {}, { toast: '推送失败' })
+      toast.dismiss(loadingId)
+      toast.success(res?.upToDate ? '已是最新，无需推送' : '已推送')
+    } catch (err) {
+      toast.dismiss(loadingId)
+      console.error('[push] failed:', err)
+    }
+    onClose()
+  }
+
   const handleSwitchBranch = () => {
     onSwitchBranch()
     onClose()
@@ -172,7 +200,14 @@ export function SessionContextMenu({ session, x, y, onClose, onSwitchBranch }: S
       <MenuGroup label="Git" />
       <MenuItem icon={GitBranch} label="切换分支" onClick={handleSwitchBranch} />
       <MenuItem icon={GitCommit} label="提交..." onClick={handleCommit} />
-      <MenuItem icon={GitMerge} label={`从 ${session.baseBranch} 更新`} onClick={handleUpdateFromBase} />
+      {session.isMain ? (
+        <>
+          <MenuItem icon={Download} label="更新" onClick={handlePull} />
+          <MenuItem icon={Upload} label="推送" onClick={handlePush} />
+        </>
+      ) : (
+        <MenuItem icon={GitMerge} label={`从 ${session.baseBranch} 更新`} onClick={handleUpdateFromBase} />
+      )}
     </div>
   )
 }

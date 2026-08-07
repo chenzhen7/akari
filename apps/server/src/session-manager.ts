@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import type { AgentSession, AgentType, FileNode, GitBranch, GitDiff, GitLogResponse, ServerMessage, SessionStatus, SessionTab } from '@akari/shared-types'
-import { GitCommandRunner } from './infrastructure/git/git-command-runner.js'
+import { GitCommandRunner, GitError } from './infrastructure/git/git-command-runner.js'
 import { GitRepositoryDetector } from './infrastructure/git/git-repository-detector.js'
 import { GitRepositoryRegistry } from './infrastructure/git/git-repository-registry.js'
 import { TerminalMultiplexer } from './infrastructure/pty/terminal-multiplexer.js'
@@ -315,6 +315,50 @@ export class SessionManager {
     const log = await this.worktreeService.getGitLog(session.worktreePath, 100, 0)
     this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
     this.refreshDiff(sessionId)
+  }
+
+  async pullMain(sessionId: string): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    if (!session.isMain) {
+      throw new Error('pull is only available for the main session')
+    }
+    try {
+      await this.worktreeService.pullMain(session.worktreePath)
+    } catch (err) {
+      this.rethrowRemoteError(err)
+    }
+    const log = await this.worktreeService.getGitLog(session.worktreePath, 100, 0)
+    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+    this.refreshDiff(sessionId)
+  }
+
+  async pushMain(sessionId: string): Promise<{ upToDate: boolean }> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    if (!session.isMain) {
+      throw new Error('push is only available for the main session')
+    }
+    let result: { upToDate: boolean }
+    try {
+      result = await this.worktreeService.pushMain(session.worktreePath)
+    } catch (err) {
+      this.rethrowRemoteError(err)
+    }
+    const log = await this.worktreeService.getGitLog(session.worktreePath, 100, 0)
+    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+    return result
+  }
+
+  /** 远程相关错误给出可操作的中文提示，其余错误原样抛出 */
+  private rethrowRemoteError(err: unknown): never {
+    if (err instanceof GitError && err.code === 'NO_REMOTE') {
+      throw new Error('未配置远程仓库（origin），请先在终端执行 git remote add origin <仓库地址>')
+    }
+    if (err instanceof GitError && err.code === 'NO_UPSTREAM') {
+      throw new Error('当前分支还没有上游，请先点击「推送」把分支推送到远程')
+    }
+    throw err
   }
 
   async getFileDiffContent(sessionId: string, filePath: string): Promise<{ original: string; modified: string }> {

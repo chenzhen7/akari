@@ -79,6 +79,36 @@ export default async function gitRoutes(fastify: FastifyInstance) {
     },
   )
 
+  fastify.post<{ Params: { id: string } }>(
+    '/sessions/:id/git/pull',
+    async (request, reply) => {
+      const { id } = request.params
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      try {
+        await request.sessionManager.pullMain(id)
+        return { ok: true }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return reply.status(422).send({ error: msg })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string } }>(
+    '/sessions/:id/git/push',
+    async (request, reply) => {
+      const { id } = request.params
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      try {
+        const { upToDate } = await request.sessionManager.pushMain(id)
+        return { ok: true, upToDate }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return reply.status(422).send({ error: msg })
+      }
+    },
+  )
+
   fastify.post<{ Params: { id: string }; Body: { branch: string; createNew?: boolean } }>(
     '/sessions/:id/git/checkout',
     async (request, reply) => {

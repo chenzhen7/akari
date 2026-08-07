@@ -335,6 +335,25 @@ export class GitRepository {
     this.invalidateRepoCache()
   }
 
+  /**
+   * 主会话「更新」：仅快进拉取。本地与远程分叉时 git 直接报错且不改动仓库，
+   * 不会留下 MERGE_HEAD 冲突中间态。
+   */
+  async pullMain(): Promise<void> {
+    await this.runner.run(['pull', '--ff-only'], this.repoPath, { timeout: 120000 })
+    this.invalidateRepoCache()
+  }
+
+  /**
+   * 主会话「推送」：推送当前分支到 origin，无上游时自动设置（-u），永不 force。
+   * 返回是否已是最新（git 输出 "Everything up-to-date"）。
+   */
+  async pushMain(): Promise<{ upToDate: boolean }> {
+    const stdout = await this.runner.run(['push', '-u', 'origin', 'HEAD'], this.repoPath, { timeout: 120000 })
+    this.invalidateRepoCache()
+    return { upToDate: /everything up-to-date/i.test(stdout) }
+  }
+
   async discardFile(filePath: string): Promise<void> {
     await this.runner.run(['checkout', '--', filePath], this.repoPath)
     await this.runner.run(['clean', '-fd', '--', filePath], this.repoPath)
