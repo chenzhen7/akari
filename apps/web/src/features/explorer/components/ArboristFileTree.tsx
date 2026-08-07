@@ -137,10 +137,9 @@ function NodeRenderer({
           )}
         </span>
       ) : (
-        <>
-          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center" />
-          <FileTypeIcon fileName={node.data.name} className="shrink-0 text-muted-foreground" />
-        </>
+        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground">
+          <FileTypeIcon fileName={node.data.name} />
+        </span>
       )}
       <span className={cn('truncate', isSelected && 'font-medium text-foreground')}>
         {node.data.name}
