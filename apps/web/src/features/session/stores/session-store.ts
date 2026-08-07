@@ -33,6 +33,7 @@ interface SessionStore {
   deleteSession: (id: string) => void
   restoreSession: (id: string) => void
   setGitLog: (sessionId: string, log: GitLogResponse) => void
+  clearGitLog: (sessionId: string) => void
   setSelectedGitCommit: (sessionId: string, hash: string | null) => void
   fetchCanvasEdges: () => void
   setPendingCreatePosition: (position: { x: number; y: number } | null) => void
@@ -118,6 +119,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       .then(() => {
         const ws = useWorkspaceStore.getState()
         ws.removeSession(id)
+        get().clearGitLog(id)
         // 删除的若是当前选中会话，则重选第一个（数据删除只修正选中，不改动视图模式）
         if (useNavigationStore.getState().sessionId === id) {
           const wsId = ws.currentWorkspace?.id
@@ -158,6 +160,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   setGitLog: (sessionId, log) =>
     set(state => ({ gitLogs: { ...state.gitLogs, [sessionId]: log } })),
+
+  clearGitLog: (sessionId) =>
+    set(state => {
+      const gitLogs = { ...state.gitLogs }
+      delete gitLogs[sessionId]
+      const selectedGitCommits = { ...state.selectedGitCommits }
+      delete selectedGitCommits[sessionId]
+      return { gitLogs, selectedGitCommits }
+    }),
 
   setSelectedGitCommit: (sessionId, hash) =>
     set(state => ({ selectedGitCommits: { ...state.selectedGitCommits, [sessionId]: hash } })),

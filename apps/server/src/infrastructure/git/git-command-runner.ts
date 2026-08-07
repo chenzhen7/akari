@@ -27,46 +27,97 @@ export class GitError extends Error {
 
 export interface GitRunOptions {
   timeout?: number
+  /**
+   * 'write'（默认）：进入 per-repo 串行写锁，保证 add/commit/checkout/merge/pull/push
+   * 等修改仓库状态的操作彼此绝不重叠。
+   * 'read'：跳过写锁，走全局并发读池（Limiter），用于 status/diff/log/show 等只读命令。
+   * 漏标默认是 'write'，即便误标也只影响并发、不破坏写串行化。
+   */
+  mode?: 'read' | 'write'
+  /**
+   * 默认 true → 对 diff 命令注入 --no-renames（确定性好：rename 表现为 D+A 两条记录）。
+   * false → 只注入 --no-ext-diff，保留 rename 检测（暂无用例，预留）。
+   */
+  renames?: boolean
 }
+
+/** 全局并发读池：限制同时 spawn 的只读 git 进程数，避免 IO 尖峰。 */
+class ReadLimiter {
+  private readonly waiters: Array<() => void> = []
+  private active = 0
+
+  constructor(private readonly limit: number) {}
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.active >= this.limit) {
+      await new Promise<void>(resolve => this.waiters.push(resolve))
+    }
+    this.active++
+    try {
+      return await fn()
+    } finally {
+      this.active--
+      this.waiters.shift()?.()
+    }
+  }
+}
+
+/** 所有 git 命令注入的稳定环境：禁用 optional lock（status 不抢 index 锁）、固定 locale。 */
+const GIT_ENV = { LC_ALL: 'C', LANG: 'C', GIT_OPTIONAL_LOCKS: '0' }
 
 /**
  * Centralized Git command executor.
  *
  * Responsibilities:
- * - Serialize git commands per repository root to avoid IO spikes.
+ * - Serialize WRITE git commands per repository root to avoid IO spikes.
+ * - Let READ commands (status/diff/log) run concurrently via a global limiter,
+ *   so heavy reads never block a user's commit/push.
  * - Disable pager and enforce consistent quoting.
  * - Add --no-ext-diff and --no-renames to diff commands.
  * - Apply a default timeout so git commands cannot hang forever.
  * - Classify common git errors so callers can react specifically.
  */
 export class GitCommandRunner {
-  private readonly locks = new Map<string, Promise<unknown>>()
+  private readonly writeLocks = new Map<string, Promise<unknown>>()
+  private readonly readLimiter = new ReadLimiter(4)
   private readonly defaultTimeout = 30000
 
   async run(args: string[], cwd: string, options: GitRunOptions = {}): Promise<string> {
+    if (options.mode === 'read') {
+      return this.runRead(args, cwd, options)
+    }
     const key = resolve(cwd)
     const enqueueAt = perfNow()
-    const previous = this.locks.get(key) ?? Promise.resolve()
+    const previous = this.writeLocks.get(key) ?? Promise.resolve()
     const task = previous.then(() => {
       const queueWait = perfNow() - enqueueAt
       if (queueWait > 50) {
         console.log(`[Perf] [git] 排队等待 ${queueWait.toFixed(1)}ms: git ${args.join(' ')} @ ${key}`)
       }
-      const t0 = perfNow()
-      return this.exec(args, cwd, options).finally(() => {
-        perfLog(`[git] 执行 git ${args.join(' ')} @ ${key}`, t0)
-      })
+      return this.execWithPerf(args, cwd, options)
     })
-    this.locks.set(key, task.catch(() => {}))
+    this.writeLocks.set(key, task.catch(() => {}))
     return task
   }
 
+  runRead(args: string[], cwd: string, options: GitRunOptions = {}): Promise<string> {
+    return this.readLimiter.run(() => this.execWithPerf(args, cwd, options))
+  }
+
+  private execWithPerf(args: string[], cwd: string, options: GitRunOptions): Promise<string> {
+    const t0 = perfNow()
+    return this.exec(args, cwd, options).finally(() => {
+      perfLog(`[git] 执行 git ${args.join(' ')} @ ${resolve(cwd)}`, t0)
+    })
+  }
+
   private async exec(args: string[], cwd: string, options: GitRunOptions): Promise<string> {
-    const normalizedArgs = this.normalizeArgs(args)
+    const normalizedArgs = this.normalizeArgs(args, options)
     try {
       const result = await execa('git', normalizedArgs, {
         cwd,
         timeout: options.timeout ?? this.defaultTimeout,
+        env: { ...process.env, ...GIT_ENV },
       })
       return result.stdout
     } catch (err) {
@@ -77,12 +128,16 @@ export class GitCommandRunner {
     }
   }
 
-  private normalizeArgs(args: string[]): string[] {
+  private normalizeArgs(args: string[], options: GitRunOptions): string[] {
     const result = ['--no-pager', '-c', 'core.quotepath=false', ...args]
 
     // Insert diff-specific flags immediately after the 'diff' subcommand.
     if (args[0] === 'diff') {
-      result.splice(4, 0, '--no-ext-diff', '--no-renames')
+      if (options.renames === false) {
+        result.splice(4, 0, '--no-ext-diff')
+      } else {
+        result.splice(4, 0, '--no-ext-diff', '--no-renames')
+      }
     }
 
     return result

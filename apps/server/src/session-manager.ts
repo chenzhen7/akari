@@ -76,6 +76,7 @@ export class SessionManager {
     })
 
     this.terminalService.dispose()
+    this.sessionLifecycle.dispose()
   }
 
   private guardDisposed(): void {
@@ -192,7 +193,7 @@ export class SessionManager {
   async getCurrentDiff(sessionId: string): Promise<GitDiff> {
     const session = this.getSession(sessionId)
     if (!session?.worktreePath) {
-      return { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
+      return { files: [], summary: { additions: 0, deletions: 0, files: 0 } }
     }
     return this.worktreeService.getCurrentDiff(session.worktreePath)
   }
@@ -242,32 +243,30 @@ export class SessionManager {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     await this.worktreeService.commitAll(sessionId, message, session.worktreePath)
-    const log = await this.worktreeService.getGitLog(session.worktreePath, 100, 0)
-    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
-    this.refreshDiff(sessionId)
+    // 快速返回：git 写命令结束后后台异步刷新（列表 + 图），不阻塞前端按钮
+    this.sessionLifecycle.scheduleGitRefresh(sessionId, true)
   }
 
   async commitFiles(sessionId: string, message: string, filePaths: string[]): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     await this.worktreeService.commitFiles(sessionId, message, filePaths, session.worktreePath)
-    const log = await this.worktreeService.getGitLog(session.worktreePath, 100, 0)
-    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
-    this.refreshDiff(sessionId)
+    this.sessionLifecycle.scheduleGitRefresh(sessionId, true)
   }
 
   async discardAll(sessionId: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     await this.worktreeService.discardAll(sessionId, session.worktreePath)
-    this.refreshDiff(sessionId)
+    // 只刷变更列表，HEAD 未动图不刷
+    this.sessionLifecycle.scheduleGitRefresh(sessionId, false)
   }
 
   async discardFile(sessionId: string, filePath: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     await this.worktreeService.discardFile(sessionId, filePath, session.worktreePath)
-    this.refreshDiff(sessionId)
+    this.sessionLifecycle.scheduleGitRefresh(sessionId, false)
   }
 
   async checkoutBranch(sessionId: string, branch: string, createNew = false): Promise<void> {
@@ -281,7 +280,7 @@ export class SessionManager {
         this.broadcast({ event: 'session:updated', payload: updated })
       }
     }
-    this.refreshDiff(sessionId)
+    this.sessionLifecycle.scheduleGitRefresh(sessionId, true)
   }
 
   async worktreeMerge(sessionId: string, sourceBranch: string): Promise<void> {
@@ -296,9 +295,7 @@ export class SessionManager {
     }
     const branchToMerge = session.branchName || sourceBranch
     await this.worktreeService.mergeIntoCurrentBranch(mainSession.worktreePath, branchToMerge, 'merge')
-    const log = await this.worktreeService.getGitLog(mainSession.worktreePath, 100, 0)
-    this.broadcast({ event: 'git:log-updated', payload: { sessionId: mainSession.id, ...log } })
-    this.refreshDiff(mainSession.id)
+    this.sessionLifecycle.scheduleGitRefresh(mainSession.id, true)
   }
 
   async updateFromBase(sessionId: string): Promise<void> {
@@ -312,9 +309,7 @@ export class SessionManager {
       throw new Error('Main session not found or has no worktree')
     }
     await this.worktreeService.updateFromBase(sessionId, mainSession.branchName, session.worktreePath)
-    const log = await this.worktreeService.getGitLog(session.worktreePath, 100, 0)
-    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
-    this.refreshDiff(sessionId)
+    this.sessionLifecycle.scheduleGitRefresh(sessionId, true)
   }
 
   async pullMain(sessionId: string): Promise<void> {
@@ -328,9 +323,7 @@ export class SessionManager {
     } catch (err) {
       this.rethrowRemoteError(err)
     }
-    const log = await this.worktreeService.getGitLog(session.worktreePath, 100, 0)
-    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
-    this.refreshDiff(sessionId)
+    this.sessionLifecycle.scheduleGitRefresh(sessionId, true)
   }
 
   async pushMain(sessionId: string): Promise<{ upToDate: boolean }> {
@@ -345,8 +338,7 @@ export class SessionManager {
     } catch (err) {
       this.rethrowRemoteError(err)
     }
-    const log = await this.worktreeService.getGitLog(session.worktreePath, 100, 0)
-    this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
+    this.sessionLifecycle.scheduleGitRefresh(sessionId, true)
     return result
   }
 
@@ -377,12 +369,6 @@ export class SessionManager {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     return this.worktreeService.getFileDiffHunks(session.worktreePath, filePath)
-  }
-
-  async getAllDiffHunks(sessionId: string): Promise<Record<string, import('@akari/shared-types').DiffHunk[]>> {
-    const session = this.getSession(sessionId)
-    if (!session?.worktreePath) return {}
-    return this.worktreeService.getAllDiffHunks(session.worktreePath)
   }
 
   async listFiles(sessionId: string, relativePath: string): Promise<FileNode[]> {

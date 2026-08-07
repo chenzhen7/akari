@@ -165,6 +165,8 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   }, [branchName])
 
   const logData: GitLogResponse | null = gitLogs
+  /** 记录自己 fetch 到的数据引用：WS 推送同步时跳过自己的结果，防死循环 */
+  const selfFetchRef = useRef<GitLogResponse | null>(null)
 
   const fetchLog = useCallback((branch?: string) => {
     setLoading(true)
@@ -173,6 +175,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       toast: '加载 Git 日志失败',
     })
       .then((data) => {
+        selfFetchRef.current = data
         setCommits(data.commits)
         setGitLog(sessionId, data)
       })
@@ -188,12 +191,22 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, branchFilter, fetchLog])
 
-  // WebSocket 推送全量日志时同步到本地（仅在未做分支筛选时）
+  // WebSocket 推送 git:log-updated 时同步：
+  // - 未做分支筛选：直接覆盖 commits（同一查询维度）
+  // - 做了分支筛选：WS 推的是 --all 日志（不同查询维度），不能直接覆盖，
+  //   debounce 400ms 重拉该分支，避免分支视图陈旧
   useEffect(() => {
-    if (branchFilter === '__all__' && logData && logData.commits.length > 0) {
+    if (!logData) return
+    if (logData === selfFetchRef.current) return
+    if (branchFilter === '__all__') {
       setCommits(logData.commits)
+      return
     }
-  }, [logData, branchFilter])
+    const timer = setTimeout(() => {
+      fetchLog(branchFilter)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [logData, branchFilter, fetchLog])
 
   const filteredCommits = useMemo(() => {
     if (!search.trim()) return commits

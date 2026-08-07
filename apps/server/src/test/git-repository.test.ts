@@ -1,103 +1,163 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { EventEmitter } from 'node:events'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { GitRepository } from '../infrastructure/git/git-repository.js'
+import type { GitCommandRunner } from '../infrastructure/git/git-command-runner.js'
 
+const runRead = vi.fn()
 const run = vi.fn()
-const runner = { run } as unknown as import('../git-command-runner.js').GitCommandRunner
+const runner = { runRead, run } as unknown as GitCommandRunner
 
-const watchEmitter = Object.assign(new EventEmitter(), {
-  close: vi.fn().mockResolvedValue(undefined),
-})
+const MAX_CHANGE_FILES = 20000
 
-vi.mock('chokidar', () => ({
-  watch: vi.fn(() => watchEmitter),
-}))
+let tmpDir: string
 
 describe('GitRepository', () => {
   beforeEach(() => {
+    runRead.mockReset()
     run.mockReset()
-    watchEmitter.removeAllListeners()
+    tmpDir = mkdtempSync(join(tmpdir(), 'git-repo-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
   })
 
   it('caches current branch', async () => {
-    run.mockResolvedValueOnce('main\n')
+    runRead.mockResolvedValueOnce('main\n')
     const repo = new GitRepository('/repo', runner)
     const first = await repo.getCurrentBranch()
     const second = await repo.getCurrentBranch()
     expect(first).toBe('main')
     expect(second).toBe('main')
-    expect(run).toHaveBeenCalledTimes(1)
+    expect(runRead).toHaveBeenCalledTimes(1)
   })
 
   it('returns main when git fails', async () => {
-    run.mockRejectedValueOnce(new Error('not a git repo'))
+    runRead.mockRejectedValueOnce(new Error('not a git repo'))
     const repo = new GitRepository('/repo', runner)
     expect(await repo.getCurrentBranch()).toBe('main')
   })
 
   it('invalidates repo cache', async () => {
-    run.mockResolvedValueOnce('main\n')
+    runRead.mockResolvedValueOnce('main\n')
     const repo = new GitRepository('/repo', runner)
     await repo.getCurrentBranch()
     repo.invalidateRepoCache()
-    run.mockResolvedValueOnce('feature\n')
+    runRead.mockResolvedValueOnce('feature\n')
     expect(await repo.getCurrentBranch()).toBe('feature')
-    expect(run).toHaveBeenCalledTimes(2)
+    expect(runRead).toHaveBeenCalledTimes(2)
   })
 
-  it('computes and caches diff', async () => {
-    run.mockImplementation((args: string[]) => {
-      if (args.includes('--stat')) return Promise.resolve('1 file changed, 2 insertions(+), 1 deletion(-)')
-      if (args.includes('--name-status')) return Promise.resolve('M\tfoo.ts')
-      if (args.includes('--numstat')) return Promise.resolve('2\t1\tfoo.ts')
-      if (args[0] === 'ls-files') return Promise.resolve('')
-      return Promise.resolve('diff --git a/foo.ts b/foo.ts\n')
+  it('computes and caches change list with exactly 2 commands', async () => {
+    runRead.mockImplementation((args: string[]) => {
+      if (args[0] === 'status') return Promise.resolve(' M foo.ts\0')
+      if (args[0] === 'diff') return Promise.resolve('2\t1\tfoo.ts\0')
+      return Promise.resolve('')
     })
     const repo = new GitRepository('/repo', runner)
     const diff1 = await repo.getDiff()
     const diff2 = await repo.getDiff()
-    expect(diff1.files).toHaveLength(1)
-    expect(diff1.files[0].path).toBe('foo.ts')
+    expect(diff1.files).toEqual([{ path: 'foo.ts', status: 'M', additions: 2, deletions: 1 }])
+    expect(diff1.summary).toEqual({ additions: 2, deletions: 1, files: 1 })
     expect(diff2).toBe(diff1)
-    expect(run).toHaveBeenCalledTimes(5)
+    // changeList = status + numstat 两条只读命令；缓存命中不再发命令
+    expect(runRead).toHaveBeenCalledTimes(2)
   })
 
   it('clears diff cache on invalidateDiffCache', async () => {
-    run.mockImplementation((args: string[]) => {
-      if (args.includes('--stat')) return Promise.resolve('')
-      if (args.includes('--name-status')) return Promise.resolve('')
-      if (args.includes('--numstat')) return Promise.resolve('')
-      if (args[0] === 'ls-files') return Promise.resolve('')
+    runRead.mockImplementation((args: string[]) => {
+      if (args[0] === 'status') return Promise.resolve(' M foo.ts\0')
+      if (args[0] === 'diff') return Promise.resolve('2\t1\tfoo.ts\0')
       return Promise.resolve('')
     })
     const repo = new GitRepository('/repo', runner)
     await repo.getDiff()
     repo.invalidateDiffCache()
     await repo.getDiff()
-    expect(run).toHaveBeenCalledTimes(10)
+    expect(runRead).toHaveBeenCalledTimes(4)
+  })
+
+  it('parses rename attribution (new path first, additions from new, deletions from old)', async () => {
+    // porcelain -z：`R  new.ts\0old.ts\0`；numstat --no-renames 拆成 A/D 两条
+    runRead.mockImplementation((args: string[]) => {
+      if (args[0] === 'status') return Promise.resolve('R  new.ts\0old.ts\0')
+      if (args[0] === 'diff') return Promise.resolve('4\t0\tnew.ts\0' + '0\t3\told.ts\0')
+      return Promise.resolve('')
+    })
+    const repo = new GitRepository('/repo', runner)
+    const diff = await repo.getDiff()
+    expect(diff.files).toHaveLength(1)
+    expect(diff.files[0]).toEqual({ path: 'new.ts', status: 'R', additions: 4, deletions: 3 })
+    expect(diff.summary).toEqual({ additions: 4, deletions: 3, files: 1 })
+  })
+
+  it('counts untracked file lines via fs without spawning git', async () => {
+    writeFileSync(join(tmpDir, 'untracked.txt'), 'a\nb\nc\n')
+    runRead.mockImplementation((args: string[]) => {
+      if (args[0] === 'status') return Promise.resolve('?? untracked.txt\0')
+      if (args[0] === 'diff') return Promise.resolve('')
+      return Promise.resolve('')
+    })
+    const repo = new GitRepository(tmpDir, runner)
+    const diff = await repo.getDiff()
+    expect(diff.files).toEqual([{ path: 'untracked.txt', status: 'A', additions: 3, deletions: 0 }])
+    expect(diff.summary.additions).toBe(3)
+    // 未跟踪文件数行不 spawn git，仍是 status + numstat 两条
+    expect(runRead).toHaveBeenCalledTimes(2)
+  })
+
+  it('skips binary untracked files (count 0)', async () => {
+    writeFileSync(join(tmpDir, 'bin.dat'), Buffer.from([0x00, 0x01, 0x02, 0x03]))
+    runRead.mockImplementation((args: string[]) => {
+      if (args[0] === 'status') return Promise.resolve('?? bin.dat\0')
+      if (args[0] === 'diff') return Promise.resolve('')
+      return Promise.resolve('')
+    })
+    const repo = new GitRepository(tmpDir, runner)
+    const diff = await repo.getDiff()
+    expect(diff.files[0]).toMatchObject({ path: 'bin.dat', status: 'A', additions: 0 })
+  })
+
+  it('truncates change list at max files', async () => {
+    const entries = Array.from({ length: MAX_CHANGE_FILES + 5 }, (_, i) => ` M file${i}.ts\0`).join('')
+    runRead.mockImplementation((args: string[]) => {
+      if (args[0] === 'status') return Promise.resolve(entries)
+      if (args[0] === 'diff') return Promise.resolve('')
+      return Promise.resolve('')
+    })
+    const repo = new GitRepository('/repo', runner)
+    const diff = await repo.getDiff()
+    expect(diff.truncated).toBe(true)
+    expect(diff.files).toHaveLength(MAX_CHANGE_FILES)
+    expect(diff.summary.files).toBe(MAX_CHANGE_FILES)
   })
 
   it('returns original file content from HEAD', async () => {
-    run.mockResolvedValueOnce('original content')
+    runRead.mockResolvedValueOnce('original content')
     const repo = new GitRepository('/repo', runner)
     const result = await repo.getFileDiffContent('foo.ts')
     expect(result.original).toBe('original content')
-    expect(run).toHaveBeenCalledWith(['show', 'HEAD:foo.ts'], '/repo')
+    expect(runRead).toHaveBeenCalledWith(['show', 'HEAD:foo.ts'], '/repo')
   })
 
-  it('parses git log output', async () => {
-    run.mockImplementation((args: string[]) => {
+  it('parses git log output and caches within TTL', async () => {
+    runRead.mockImplementation((args: string[]) => {
       if (args[0] === 'log') {
         return Promise.resolve('hash1||short1||msg||author||email||2024-01-01T00:00:00Z|| ||HEAD -> main')
       }
-      if (args[0] === 'rev-parse' && args[1] === 'HEAD') return Promise.resolve('hash1\n')
+      if (args[0] === 'rev-parse') return Promise.resolve('hash1\n')
       if (args[0] === 'branch') return Promise.resolve('* main|hash1|*')
       return Promise.resolve('')
     })
     const repo = new GitRepository('/repo', runner)
-    const log = await repo.getGitLog(10, 0)
-    expect(log.commits).toHaveLength(1)
-    expect(log.commits[0].hash).toBe('hash1')
-    expect(log.head).toBe('hash1')
+    const log1 = await repo.getGitLog(10, 0)
+    const log2 = await repo.getGitLog(10, 0)
+    expect(log1.commits).toHaveLength(1)
+    expect(log1.commits[0].hash).toBe('hash1')
+    expect(log1.head).toBe('hash1')
+    // 3 条只读命令（log + rev-parse + branch）真并行一次，第二次命中 TTL 缓存
+    expect(runRead).toHaveBeenCalledTimes(3)
   })
 })

@@ -34,6 +34,7 @@ export function handleServerMessage(msg: ServerMessage): void {
       break
     case 'session:deleted': {
       useWorkspaceStore.getState().removeSession(msg.payload.id)
+      useSessionStore.getState().clearGitLog(msg.payload.id)
       // 若被删的恰是当前选中会话，重选当前工作区第一个会话
       const ws = useWorkspaceStore.getState()
       const wsId = ws.currentWorkspace?.id
@@ -58,7 +59,6 @@ export function handleServerMessage(msg: ServerMessage): void {
     case 'diff:update':
       useWorkspaceStore.getState().updateSession(msg.payload.sessionId, {
         diffSummary: msg.payload.diff.summary,
-        diffFull: msg.payload.diff.fullDiff,
         diffFiles: msg.payload.diff.files,
       })
       break

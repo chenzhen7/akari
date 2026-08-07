@@ -70,10 +70,9 @@ export interface FileNode {
 }
 
 export interface GitDiff {
-  stat: string
-  fullDiff: string
   files: DiffFile[]
   summary: { additions: number; deletions: number; files: number }
+  truncated?: boolean
 }
 
 export interface FileChangeEvent {
@@ -112,7 +111,6 @@ export interface AgentSession {
   terminalOutput: string[]
   lastAiMessage: string
   diffSummary: { additions: number; deletions: number }
-  diffFull?: string
   diffFiles?: DiffFile[]
 
   createdAt: Date

@@ -1,12 +1,13 @@
 import { access } from 'node:fs/promises'
 import { nanoid } from 'nanoid'
-import type { AgentSession, AgentType, GitDiff, GitLogResponse, ServerMessage, SessionStatus, SessionTab } from '@akari/shared-types'
+import type { AgentSession, AgentType, ServerMessage, SessionStatus, SessionTab } from '@akari/shared-types'
 import { createAgentAdapter } from '../agent-adapters/index.js'
 import { createAgentSession, createMainSession } from '../core/session-factory.js'
 import { STATUS_TO_KANBAN, validateTransition } from '../core/session-state-machine.js'
 import { SessionRepository } from '../infrastructure/db/repositories/session.repository.js'
 import { SettingsStore } from '../infrastructure/db/settings-store.js'
 import { launchAgentInTerminal } from './agent-launcher.js'
+import { GitRefreshCoordinator } from './git-refresh-coordinator.service.js'
 import { ITabService } from './tab.service.js'
 import { ITerminalService } from './terminal.service.js'
 import { IWorktreeService } from './worktree.service.js'
@@ -37,10 +38,12 @@ export interface ISessionLifecycleService {
   setLastAiMessage(sessionId: string, message: string): void
   updateCanvasPosition(sessionId: string, x: number, y: number): void
   refreshDiff(sessionId: string): void
+  scheduleGitRefresh(sessionId: string, full: boolean): void
   broadcastMessage(msg: ServerMessage): void
   getSettings(): { worktreeBaseDir: string }
   updateSettings(settings: { worktreeBaseDir: string }): void
   setWorkspace(workspaceId: string, workspacePath: string, repoRoot: string, isGitWorkspace?: boolean): void
+  dispose(): void
 }
 
 export class SessionLifecycleService implements ISessionLifecycleService {
@@ -48,6 +51,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
   private repoRoot: string
   private workspacePath: string
   private isGitWorkspace: boolean
+  private readonly gitRefresh: GitRefreshCoordinator
 
   constructor(
     opts: {
@@ -67,6 +71,11 @@ export class SessionLifecycleService implements ISessionLifecycleService {
     this.repoRoot = opts.repoRoot
     this.workspacePath = opts.workspacePath
     this.isGitWorkspace = opts.isGitWorkspace ?? true
+    this.gitRefresh = new GitRefreshCoordinator(
+      worktreeService,
+      (sessionId, summary) => this.sessionRepository.updateDiffSummary(sessionId, summary),
+      broadcast,
+    )
   }
 
   setWorkspace(workspaceId: string, workspacePath: string, repoRoot: string, isGitWorkspace = true): void {
@@ -164,6 +173,9 @@ export class SessionLifecycleService implements ISessionLifecycleService {
           if (updated) {
             this.broadcast({ event: 'session:updated', payload: updated })
           }
+          this.gitRefresh.scheduleFullRefresh(existing.id, existing.worktreePath)
+        } else {
+          this.gitRefresh.scheduleChangeList(existing.id, existing.worktreePath)
         }
       } else {
         const workspaceName = workspacePath.split(/[\\/]/).filter(Boolean).pop() ?? '主工作区'
@@ -196,6 +208,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
         session.worktreePath,
       )
       this.watchMainBranch(session.id, this.repoRoot)
+      this.gitRefresh.scheduleChangeList(session.id, session.worktreePath)
     }
 
     return session
@@ -259,6 +272,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
             this.createDiffCallbacks(session.id, session.worktreePath),
             session.worktreePath,
           )
+          this.gitRefresh.scheduleChangeList(session.id, session.worktreePath)
         }
       }
 
@@ -351,6 +365,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
       if (!session.isMain && session.worktreePath) {
         this.worktreeService.watchDiff(session.id, this.createDiffCallbacks(session.id))
         this.watchSessionGitMetadata(session.id)
+        this.gitRefresh.scheduleChangeList(session.id, session.worktreePath)
       }
 
       perfLog(`[restoreSessions] 会话 ${session.id}（isMain=${session.isMain}）恢复完成`, tSession)
@@ -362,11 +377,22 @@ export class SessionLifecycleService implements ISessionLifecycleService {
   refreshDiff(sessionId: string): void {
     const session = this.getSession(sessionId)
     if (session?.worktreePath) {
-      // 外部 git 操作（commit/push）不会触发内存 diff 缓存失效，
-      // 手动刷新必须先清缓存，否则只是把缓存里的旧 diff 再广播一遍。
-      this.worktreeService.invalidateDiffCache(session.worktreePath)
+      this.gitRefresh.scheduleChangeList(sessionId, session.worktreePath)
     }
-    this.broadcastDiffUpdate(sessionId)
+  }
+
+  scheduleGitRefresh(sessionId: string, full: boolean): void {
+    const session = this.getSession(sessionId)
+    if (!session?.worktreePath) return
+    if (full) {
+      this.gitRefresh.scheduleFullRefresh(sessionId, session.worktreePath)
+    } else {
+      this.gitRefresh.scheduleChangeList(sessionId, session.worktreePath)
+    }
+  }
+
+  dispose(): void {
+    this.gitRefresh.dispose()
   }
 
   private clearSessionTerminalIds(sessionId: string): void {
@@ -440,6 +466,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
 
       this.worktreeService.watchDiff(id, this.createDiffCallbacks(id))
       this.watchSessionGitMetadata(id)
+      this.gitRefresh.scheduleChangeList(id, worktreePath)
       this.updateStatus(id, 'idle')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -460,32 +487,16 @@ export class SessionLifecycleService implements ISessionLifecycleService {
     }
   }
 
-  private broadcastDiffUpdate(sessionId: string): void {
-    const session = this.getSession(sessionId)
-    if (!session?.worktreePath) return
-    void this.worktreeService.getCurrentDiff(session.worktreePath).then(diff => {
-      this.sessionRepository.updateDiffSummary(sessionId, diff.summary)
-      this.broadcast({ event: 'diff:update', payload: { sessionId, diff } })
-    }).catch((err: unknown) => {
-      console.warn(`[SessionLifecycleService] failed to broadcast diff update for ${sessionId}:`, err)
-    })
-  }
-
   private createDiffCallbacks(sessionId: string, cwd?: string): {
-    onDiff: (diff: GitDiff) => void
+    onChanged: () => void
     onFileChange: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void
   } {
     return {
-      onDiff: (diff: GitDiff) => {
-        this.sessionRepository.updateDiffSummary(sessionId, diff.summary)
-        this.broadcast({ event: 'diff:update', payload: { sessionId, diff } })
-        const targetCwd = cwd ?? this.getSession(sessionId)?.worktreePath
-        if (targetCwd) {
-          this.worktreeService.getGitLog(targetCwd, 100, 0).then((log: GitLogResponse) => {
-            this.broadcast({ event: 'git:log-updated', payload: { sessionId, ...log } })
-          }).catch((err: unknown) => {
-            console.warn(`[SessionLifecycleService] git log failure after diff update for ${sessionId}:`, err)
-          })
+      onChanged: () => {
+        const path = cwd ?? this.getSession(sessionId)?.worktreePath
+        if (path) {
+          // Agent 写文件只刷变更列表，不重拉 git log——图的刷新由 metadata watcher 驱动
+          this.gitRefresh.scheduleChangeList(sessionId, path)
         }
       },
       onFileChange: (filePath: string, changeType: 'add' | 'change' | 'unlink') => {
@@ -507,7 +518,8 @@ export class SessionLifecycleService implements ISessionLifecycleService {
             this.broadcast({ event: 'session:updated', payload: updated })
           }
         }
-        this.refreshDiff(sessionId)
+        // 外部 git 操作改了 HEAD/refs → 变更列表 + git log 都要刷
+        this.gitRefresh.scheduleFullRefresh(sessionId, repoRoot)
       })()
     }).catch((err: unknown) => {
       console.warn(`[SessionLifecycleService] failed to watch git metadata for main session ${sessionId}:`, err)
@@ -522,15 +534,10 @@ export class SessionLifecycleService implements ISessionLifecycleService {
     const session = this.getSession(sessionId)
     if (!session?.worktreePath) return
     const worktreePath = session.worktreePath
-    const callbacks = this.createDiffCallbacks(sessionId)
     void this.worktreeService
       .watchGitMetadata(sessionId, worktreePath, () => {
-        void this.worktreeService
-          .getCurrentDiff(worktreePath)
-          .then(callbacks.onDiff)
-          .catch((err: unknown) => {
-            console.warn(`[SessionLifecycleService] failed to refresh diff after git metadata change for ${sessionId}:`, err)
-          })
+        // 外部 commit/push/checkout 改了 HEAD/index/refs → 列表 + 图都刷
+        this.gitRefresh.scheduleFullRefresh(sessionId, worktreePath)
       })
       .catch((err: unknown) => {
         console.warn(`[SessionLifecycleService] failed to watch git metadata for ${sessionId}:`, err)

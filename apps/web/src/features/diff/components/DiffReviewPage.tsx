@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { DiffFile, DiffHunk } from '@akari/shared-types'
-import { apiClient } from '@/shared/lib/api-client'
+import type { DiffFile } from '@akari/shared-types'
 import { useTabStore } from '@/features/session/stores/tab-store'
-import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
 import { useDiffReviewStore } from '../stores/diff-review-store'
-import { DiffFileReviewCard } from './DiffFileReviewCard'
+import { LazyDiffFileCard } from './LazyDiffFileCard'
 import { DiffReviewToolbar } from './DiffReviewToolbar'
 
 interface DiffReviewPageProps {
@@ -16,9 +14,6 @@ export function DiffReviewPage({
   sessionId,
   diffFiles,
 }: DiffReviewPageProps) {
-  const [hunksByFile, setHunksByFile] = useState<Record<string, DiffHunk[]>>({})
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [expandAllVersion, setExpandAllVersion] = useState(0)
   const [collapseAllVersion, setCollapseAllVersion] = useState(0)
   const [perFileExpandVersion, setPerFileExpandVersion] = useState<Record<string, number>>({})
@@ -38,34 +33,9 @@ export function DiffReviewPage({
     reconcileSession(sessionId, filePaths)
   }, [sessionId, filePaths, reconcileSession])
 
-  const loadHunks = () => {
-    if (!sessionId) return
-    setLoading(true)
-    setError(null)
-    apiClient
-      .get<{ hunksByFile?: Record<string, DiffHunk[]> }>(`/sessions/${sessionId}/diff-hunks`, {
-        toast: false,
-      })
-      .then((data) => {
-        setHunksByFile(data.hunksByFile ?? {})
-      })
-      .catch((e: unknown) => {
-        setError(String(e))
-      })
-      .finally(() => {
-        setLoading(false)
-      })
-  }
-
-  useEffect(() => {
-    loadHunks()
-  }, [sessionId])
-
-  useEffect(() => {
-    return fileUpdateBus.on(sessionId, () => {
-      loadHunks()
-    })
-  }, [sessionId])
+  const handleCardRef = useCallback((filePath: string, el: HTMLDivElement | null) => {
+    cardRefs.current[filePath] = el
+  }, [])
 
   const scrollToFile = useCallback((filePath: string) => {
     const el = cardRefs.current[filePath]
@@ -104,13 +74,13 @@ export function DiffReviewPage({
     })
   }, [scrollTarget, scrollToFile])
 
-  // Retry pending scroll target when hunks arrive (cards are guaranteed rendered).
+  // Retry pending scroll target when cards (re)mount.
   useEffect(() => {
     const pending = pendingScrollTargetRef.current
     if (!pending) return
     if (!cardRefs.current[pending]) return
     scrollToFile(pending)
-  }, [hunksByFile, scrollToFile])
+  }, [diffFiles, scrollToFile])
 
   const viewedCount = useMemo(() => {
     return diffFiles.filter((f) => sessionReviewState?.[f.path]?.viewed).length
@@ -166,36 +136,19 @@ export function DiffReviewPage({
 
       <div className="flex-1 overflow-auto">
         <div className="space-y-3 p-3">
-          {loading && diffFiles.length > 0 && Object.keys(hunksByFile).length === 0 && (
-            <div className="py-8 text-center text-sm text-muted-foreground">加载 diff 中…</div>
-          )}
-          {error && (
-            <div className="py-8 text-center text-sm text-red-400">
-              加载失败：{error}
-            </div>
-          )}
-          {diffFiles.map((file) => {
-            const hunks = hunksByFile[file.path] ?? []
-            return (
-              <DiffFileReviewCard
-                key={file.path}
-                ref={(el) => {
-                  cardRefs.current[file.path] = el
-                }}
-                sessionId={sessionId}
-                filePath={file.path}
-                status={file.status}
-                additions={file.additions}
-                deletions={file.deletions}
-                hunks={hunks}
-                expandBodyVersion={perFileExpandVersion[file.path]}
-                expandAllVersion={expandAllVersion}
-                collapseAllVersion={collapseAllVersion}
-                onOpenInDiffEditor={() => handleOpenInDiffEditor(file.path)}
-                onOpenInFileEditor={() => handleOpenInFileEditor(file.path)}
-              />
-            )
-          })}
+          {diffFiles.map((file) => (
+            <LazyDiffFileCard
+              key={file.path}
+              sessionId={sessionId}
+              file={file}
+              expandBodyVersion={perFileExpandVersion[file.path]}
+              expandAllVersion={expandAllVersion}
+              collapseAllVersion={collapseAllVersion}
+              onOpenInDiffEditor={handleOpenInDiffEditor}
+              onOpenInFileEditor={handleOpenInFileEditor}
+              onCardRef={handleCardRef}
+            />
+          ))}
         </div>
       </div>
     </div>

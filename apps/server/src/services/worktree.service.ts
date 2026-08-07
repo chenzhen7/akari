@@ -23,17 +23,17 @@ export interface IWorktreeService {
   getFileDiffContent(cwd: string, filePath: string): Promise<{ original: string; modified: string }>
   getFileDiffLines(cwd: string, filePath: string): Promise<FileDiffLine[]>
   getFileDiffHunks(cwd: string, filePath: string): Promise<DiffHunk[]>
-  getAllDiffHunks(cwd: string): Promise<Record<string, DiffHunk[]>>
   getCurrentDiff(cwd: string): Promise<GitDiff>
   getGitLog(cwd: string, limit?: number, offset?: number, branch?: string): Promise<GitLogResponse>
   getGitBranches(cwd: string): Promise<GitBranch[]>
   getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]>
   watchDiff(sessionId: string, callbacks: {
-    onDiff: (diff: GitDiff) => void
+    onChanged: () => void
     onFileChange?: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void
   }, cwd?: string): FSWatcher
   watchGitMetadata(sessionId: string, repoPath: string, callback: () => void): Promise<FSWatcher | null>
   invalidateDiffCache(cwd: string): void
+  invalidateGitLogCache(cwd: string): void
   getCurrentBranch(cwd?: string): Promise<string>
   getWorktreePath(sessionId: string): string
   dispose(): Promise<void>
@@ -76,9 +76,9 @@ export class WorktreeService implements IWorktreeService {
 
     let resolvedBase = baseBranch
     try {
-      await this.runners.runner.run(['rev-parse', '--verify', baseBranch], this.repoRoot)
+      await this.runners.runner.runRead(['rev-parse', '--verify', baseBranch], this.repoRoot)
     } catch {
-      resolvedBase = (await this.runners.runner.run(['rev-parse', '--abbrev-ref', 'HEAD'], this.repoRoot)).trim()
+      resolvedBase = (await this.runners.runner.runRead(['rev-parse', '--abbrev-ref', 'HEAD'], this.repoRoot)).trim()
     }
 
     await this.runners.runner.run(['worktree', 'add', '-b', branchName, worktreePath, resolvedBase], this.repoRoot)
@@ -209,10 +209,6 @@ export class WorktreeService implements IWorktreeService {
     return (await this.runners.registry.get(cwd)?.getFileDiffHunks(filePath)) ?? []
   }
 
-  async getAllDiffHunks(cwd: string): Promise<Record<string, DiffHunk[]>> {
-    return (await this.runners.registry.get(cwd)?.getAllDiffHunks()) ?? {}
-  }
-
   async getCurrentDiff(cwd: string): Promise<GitDiff> {
     return this.gitQuery.getCurrentDiff(cwd)
   }
@@ -231,7 +227,7 @@ export class WorktreeService implements IWorktreeService {
 
   watchDiff(
     sessionId: string,
-    callbacks: { onDiff: (diff: GitDiff) => void; onFileChange?: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void },
+    callbacks: { onChanged: () => void; onFileChange?: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void },
     cwd?: string,
   ): FSWatcher {
     const resolvedPath = resolve(cwd ?? this.getWorktreePath(sessionId))
@@ -253,6 +249,10 @@ export class WorktreeService implements IWorktreeService {
 
   invalidateDiffCache(cwd: string): void {
     this.gitQuery.invalidateDiffCache(cwd)
+  }
+
+  invalidateGitLogCache(cwd: string): void {
+    this.gitQuery.invalidateGitLogCache(cwd)
   }
 
   async getCurrentBranch(cwd?: string): Promise<string> {

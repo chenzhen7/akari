@@ -13,6 +13,9 @@ export interface DiffFileReviewCardProps {
   additions: number
   deletions: number
   hunks: DiffHunk[]
+  loading?: boolean
+  error?: string | null
+  onRetry?: () => void
   expandBodyVersion?: number
   expandAllVersion: number
   collapseAllVersion: number
@@ -123,6 +126,9 @@ export const DiffFileReviewCard = forwardRef<HTMLDivElement, DiffFileReviewCardP
     additions,
     deletions,
     hunks,
+    loading = false,
+    error = null,
+    onRetry,
     expandBodyVersion,
     expandAllVersion,
     collapseAllVersion,
@@ -145,7 +151,10 @@ export const DiffFileReviewCard = forwardRef<HTMLDivElement, DiffFileReviewCardP
     setBodyExpanded(true)
   }, [expandBodyVersion])
 
+  // 展开全部：展开 body + 展开所有折叠段。hunks 异步到达时若此前点过展开全部则补齐折叠段；
+  // 否则（首次加载）保持当前 body 展开态与默认收起折叠，不强制展开「已查看」的卡片。
   useEffect(() => {
+    if (expandAllVersion <= 0) return
     setBodyExpanded(true)
     const totalFolds = hunks.reduce((sum, hunk) => {
       const items = buildFoldedItems(hunk.lines, CONTEXT_FOLD_THRESHOLD, CONTEXT_FOLD_BUFFER)
@@ -270,6 +279,23 @@ export const DiffFileReviewCard = forwardRef<HTMLDivElement, DiffFileReviewCardP
 
       {bodyExpanded && (
         <div className="rounded-b-lg font-mono text-[11px]">
+          {loading && hunks.length === 0 && (
+            <div className="px-3 py-4 text-center text-[11px] text-muted-foreground">加载 diff 中…</div>
+          )}
+          {!loading && error && (
+            <div className="flex items-center justify-center gap-2 px-3 py-4 text-center text-[11px] text-red-400">
+              <span>加载失败：{error}</span>
+              <button
+                className="text-muted-foreground underline hover:text-foreground"
+                onClick={() => onRetry?.()}
+              >
+                重试
+              </button>
+            </div>
+          )}
+          {!loading && !error && hunks.length === 0 && (
+            <div className="px-3 py-4 text-center text-[11px] text-muted-foreground">无 diff 内容</div>
+          )}
           {renderedHunks.map(({ hunk, items }, hunkIndex) => {
             let globalFoldIndex = 0
             for (let i = 0; i < hunkIndex; i++) {

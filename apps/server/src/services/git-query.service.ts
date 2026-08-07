@@ -9,11 +9,12 @@ export interface IGitQueryService {
   getGitBranches(cwd: string): Promise<GitBranch[]>
   getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]>
   watchDiff(cwd: string, callbacks: {
-    onDiff: (diff: GitDiff) => void
+    onChanged: () => void
     onFileChange?: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void
   }): FSWatcher | null
   watchGitMetadata(repoPath: string, callback: () => void): Promise<FSWatcher | null>
   invalidateDiffCache(cwd: string): void
+  invalidateGitLogCache(cwd: string): void
   getCurrentBranch(cwd?: string): Promise<string>
 }
 
@@ -24,7 +25,7 @@ export class GitQueryService implements IGitQueryService {
   ) {}
 
   async getCurrentDiff(cwd: string): Promise<GitDiff> {
-    const emptyDiff: GitDiff = { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
+    const emptyDiff: GitDiff = { files: [], summary: { additions: 0, deletions: 0, files: 0 } }
     return (await this.registry.get(cwd)?.getDiff()) ?? emptyDiff
   }
 
@@ -42,7 +43,7 @@ export class GitQueryService implements IGitQueryService {
   }
 
   watchDiff(cwd: string, callbacks: {
-    onDiff: (diff: GitDiff) => void
+    onChanged: () => void
     onFileChange?: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void
   }): FSWatcher | null {
     const repo = this.registry.get(cwd)
@@ -58,6 +59,10 @@ export class GitQueryService implements IGitQueryService {
 
   invalidateDiffCache(cwd: string): void {
     this.registry.get(cwd)?.invalidateDiffCache()
+  }
+
+  invalidateGitLogCache(cwd: string): void {
+    this.registry.get(cwd)?.invalidateGitLogCache()
   }
 
   async getCurrentBranch(cwd?: string): Promise<string> {

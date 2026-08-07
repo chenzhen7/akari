@@ -1,28 +1,51 @@
 import { watch, type FSWatcher } from 'chokidar'
 import { join, relative, resolve } from 'node:path'
+import { open, stat as fsStat } from 'node:fs/promises'
 import type { GitDiff, DiffFile, DiffHunk, GitCommit, GitBranch, GitLogResponse, FileDiffLine } from '@akari/shared-types'
 import { GitCommandRunner } from './git-command-runner.js'
 import { loadGitignoreFilter } from '../fs/gitignore-loader.js'
-import { parseDiffHunks, parseDiffHunksByFile, parseDiffLines } from './diff-parser.js'
+import { parseDiffHunks, parseDiffLines } from './diff-parser.js'
 import { perfLog, perfNow } from '../../perf-log.js'
 
 interface WatchDiffCallbacks {
-  onDiff: (diff: GitDiff) => void
+  /** 工作树文件变化（add/change/unlink）→ 由上层防抖后刷新变更列表 */
+  onChanged: () => void
   onFileChange?: (filePath: string, changeType: 'add' | 'change' | 'unlink') => void
 }
+
+/** porcelain v1 -z 单条记录：`XY path`（rename 时后续还有一条 newPath） */
+interface PorcelainEntry {
+  x: string
+  y: string
+  path: string
+  oldPath?: string
+}
+
+/** 变更列表截断上限（对齐 VSCode statusLimit 思路：超限只取前 N，标记 truncated） */
+const MAX_CHANGE_FILES = 20000
+/** 未跟踪文件行数统计的并发上限 */
+const UNTRACKED_PARALLEL = 8
+/** 未跟踪文件大小上限：超过视为大文件/二进制，不做行数统计 */
+const MAX_UNTRACKED_FILE_SIZE = 8 * 1024 * 1024
 
 /**
  * Represents a single Git repository (main repo or a worktree).
  *
  * Responsibilities:
  * - Execute git commands in its own root via GitCommandRunner.
- * - Cache HEAD, current branch, and diff results.
+ * - Cache HEAD, current branch, change list, and git log (short TTL).
  * - Watch working tree files and git metadata to invalidate caches.
+ *
+ * 变更列表（getDiff）改用 `git status --porcelain=v1 -z -uall` + `git diff --numstat -z HEAD`
+ * 两条只读命令一次拿全（原 computeDiff 要 4 条 diff + 每个未跟踪文件一条 `--no-index`），
+ * 未跟踪文件的行数用纯 fs 数行、不 spawn git。
  */
 export class GitRepository {
   private head: string | undefined
   private branch: string | undefined
   private diff: GitDiff | undefined
+  private readonly gitLogCache = new Map<string, { data: GitLogResponse; at: number }>()
+  private readonly GIT_LOG_TTL_MS = 1500
   private diffWatcher: FSWatcher | null = null
   private metadataWatcher: FSWatcher | null = null
 
@@ -38,7 +61,7 @@ export class GitRepository {
   async getCurrentBranch(): Promise<string> {
     if (this.branch !== undefined) return this.branch
     try {
-      const result = await this.runner.run(['rev-parse', '--abbrev-ref', 'HEAD'], this.repoPath)
+      const result = await this.runner.runRead(['rev-parse', '--abbrev-ref', 'HEAD'], this.repoPath)
       this.branch = result.trim()
       return this.branch
     } catch {
@@ -49,7 +72,7 @@ export class GitRepository {
   private async resolveHead(): Promise<string> {
     if (this.head !== undefined) return this.head
     try {
-      const result = await this.runner.run(['rev-parse', 'HEAD'], this.repoPath)
+      const result = await this.runner.runRead(['rev-parse', 'HEAD'], this.repoPath)
       this.head = result.trim()
       return this.head
     } catch {
@@ -58,6 +81,12 @@ export class GitRepository {
   }
 
   async getGitLog(limit = 100, offset = 0, branch?: string): Promise<GitLogResponse> {
+    const cacheKey = `${branch ?? ''}|${limit}|${offset}`
+    const cached = this.gitLogCache.get(cacheKey)
+    if (cached && perfNow() - cached.at < this.GIT_LOG_TTL_MS) {
+      return cached.data
+    }
+
     const emptyLog: GitLogResponse = { commits: [], branches: [], head: '' }
     try {
       const sep = '||'
@@ -65,7 +94,14 @@ export class GitRepository {
       const logArgs = branch
         ? ['log', branch, '--topo-order', `--skip=${offset}`, `--max-count=${limit}`, `--format=${fmt}`]
         : ['log', '--all', '--topo-order', `--skip=${offset}`, `--max-count=${limit}`, `--format=${fmt}`]
-      const raw = await this.runner.run(logArgs, this.repoPath)
+
+      // 三条只读命令走读池，真并行（原实现串行 await）
+      const [raw, head, branches] = await Promise.all([
+        this.runner.runRead(logArgs, this.repoPath),
+        this.resolveHead(),
+        this.getGitBranches(),
+      ])
+
       const commits: GitCommit[] = raw
         .trim()
         .split('\n')
@@ -88,9 +124,9 @@ export class GitRepository {
           return { hash, shortHash, message, author, email, date, parents, refs }
         })
 
-      const head = await this.resolveHead()
-      const branches = await this.getGitBranches()
-      return { commits, branches, head }
+      const data: GitLogResponse = { commits, branches, head }
+      this.gitLogCache.set(cacheKey, { data, at: perfNow() })
+      return data
     } catch {
       return emptyLog
     }
@@ -98,7 +134,7 @@ export class GitRepository {
 
   async getGitBranches(): Promise<GitBranch[]> {
     try {
-      const raw = await this.runner.run(
+      const raw = await this.runner.runRead(
         ['branch', '-a', '--format=%(refname:short)|%(objectname:short)|%(HEAD)'],
         this.repoPath,
       )
@@ -122,7 +158,7 @@ export class GitRepository {
 
   async getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]> {
     try {
-      const raw = await this.runner.run(['branch', '--format=%(refname:short)|%(HEAD)'], this.repoPath)
+      const raw = await this.runner.runRead(['branch', '--format=%(refname:short)|%(HEAD)'], this.repoPath)
       return raw
         .trim()
         .split('\n')
@@ -139,71 +175,91 @@ export class GitRepository {
     }
   }
 
+  /** 变更列表（含未跟踪文件）。缓存命中直接返回。 */
   async getDiff(): Promise<GitDiff> {
     if (this.diff !== undefined) return this.diff
-    const diff = await this.computeDiff()
+    const diff = await this.computeChangeList()
     this.diff = diff
     return diff
   }
 
-  private async computeDiff(): Promise<GitDiff> {
-    const emptyDiff: GitDiff = { stat: '', fullDiff: '', files: [], summary: { additions: 0, deletions: 0, files: 0 } }
+  /**
+   * 两条只读命令拿全量变更列表：
+   *   git status --porcelain=v1 -z -uall   → 文件清单 + 状态位（含未跟踪、rename）
+   *   git diff --numstat -z HEAD          → 已跟踪文件的 +/- 行数（runner 恒注入 --no-renames，
+   *                                          故 rename 表现为 D+A 两条独立记录，确定性好）
+   * 未跟踪文件的行数用 fs 流式数行（不 spawn git），二进制/超大文件返回 0。
+   */
+  private async computeChangeList(): Promise<GitDiff> {
+    const emptyDiff: GitDiff = { files: [], summary: { additions: 0, deletions: 0, files: 0 } }
     const t0 = perfNow()
     try {
-      const baseRef = 'HEAD'
-
-      const [stat, full, nameStatus, numStat] = await Promise.all([
-        this.runner.run(['diff', '--stat', baseRef], this.repoPath),
-        this.runner.run(['diff', '-U6', baseRef], this.repoPath),
-        this.runner.run(['diff', '--name-status', baseRef], this.repoPath),
-        this.runner.run(['diff', '--numstat', baseRef], this.repoPath),
+      const [statusRaw, numstatRaw] = await Promise.all([
+        this.runner.runRead(['status', '--porcelain=v1', '-z', '-uall', '--'], this.repoPath),
+        this.runner.runRead(['diff', '--numstat', '-z', 'HEAD', '--'], this.repoPath),
       ])
 
-      const numStatMap = parseNumStat(numStat)
+      const entries = parsePorcelainV1Z(statusRaw)
+      const numstat = parseNumstatZ(numstatRaw)
 
-      const untrackedRaw = await this.runner
-        .run(['ls-files', '--others', '--exclude-standard', '--full-name'], this.repoPath)
-        .catch(() => '')
-      const untrackedFiles = untrackedRaw.trim() ? untrackedRaw.trim().split('\n').filter(Boolean) : []
-      console.log(`[Perf] [computeDiff] untracked 文件数=${untrackedFiles.length}（每个都要单独跑 git diff --no-index）@ ${this.repoPath}`)
+      const files: DiffFile[] = []
+      const untrackedJobs: Array<{ index: number; path: string }> = []
+      let truncated = false
 
-      let extraDiff = ''
-      const extraFiles: DiffFile[] = []
-      for (const file of untrackedFiles) {
-        const fileDiff = await this.runner
-          .run(['diff', '-U6', '--no-index', '--', '/dev/null', file], this.repoPath)
-          .catch((e: unknown) => {
-            const err = e as { exitCode?: number; stdout?: string }
-            return err.exitCode === 1 ? (err.stdout ?? '') : ''
-          })
-        if (fileDiff) {
-          extraDiff += fileDiff + '\n'
-          const added = fileDiff.split('\n').filter((l: string) => l.startsWith('+') && !l.startsWith('+++')).length
-          extraFiles.push({ path: file, status: 'A', additions: added, deletions: 0 })
+      for (const entry of entries) {
+        if (files.length >= MAX_CHANGE_FILES) {
+          truncated = true
+          break
         }
+        if (entry.x === '?' || entry.y === '?') {
+          untrackedJobs.push({ index: files.length, path: entry.path })
+          files.push({ path: entry.path, status: 'A', additions: 0, deletions: 0 })
+          continue
+        }
+        const status = mapStatus(entry)
+        const additions = numstat.get(entry.path)?.additions ?? 0
+        const deletions =
+          (status === 'R' ? numstat.get(entry.oldPath ?? '')?.deletions : numstat.get(entry.path)?.deletions) ?? 0
+        files.push({ path: entry.path, status, additions, deletions })
       }
 
-      const trackedFiles = parseFileStatus(nameStatus).map(f => ({
-        ...f,
-        additions: numStatMap.get(f.path)?.additions ?? 0,
-        deletions: numStatMap.get(f.path)?.deletions ?? 0,
-      }))
+      // 有界并行统计未跟踪文件行数
+      let cursor = 0
+      await Promise.all(
+        Array.from({ length: Math.min(UNTRACKED_PARALLEL, untrackedJobs.length) }, async () => {
+          for (;;) {
+            const job = untrackedJobs[cursor]
+            if (!job) return
+            cursor++
+            const n = await this.countUntrackedLines(job.path)
+            files[job.index]!.additions = n
+          }
+        }),
+      )
 
-      return {
-        stat,
-        fullDiff: full + extraDiff,
-        files: [...trackedFiles, ...extraFiles],
-        summary: parseStat(stat),
+      let additions = 0
+      let deletions = 0
+      for (const f of files) {
+        additions += f.additions
+        deletions += f.deletions
       }
+
+      const result: GitDiff = { files, summary: { additions, deletions, files: files.length } }
+      if (truncated) result.truncated = true
+      return result
     } catch {
       return emptyDiff
     } finally {
-      perfLog(`[computeDiff] 总耗时 @ ${this.repoPath}`, t0)
+      perfLog(`[computeChangeList] 总耗时 @ ${this.repoPath}`, t0)
     }
   }
 
+  private async countUntrackedLines(relPath: string): Promise<number> {
+    return countLinesOfFile(resolve(this.repoPath, relPath))
+  }
+
   async getFileDiffContent(filePath: string): Promise<{ original: string }> {
-    const original = await this.runner.run(['show', `HEAD:${filePath}`], this.repoPath).catch(() => '')
+    const original = await this.runner.runRead(['show', `HEAD:${filePath}`], this.repoPath).catch(() => '')
     return { original }
   }
 
@@ -211,20 +267,20 @@ export class GitRepository {
     const t0 = perfNow()
     try {
       const headDiff = await this.runner
-        .run(['diff', '--unified=0', 'HEAD', '--', filePath], this.repoPath)
+        .runRead(['diff', '--unified=0', 'HEAD', '--', filePath], this.repoPath)
         .catch(() => '')
 
       if (headDiff) return parseDiffLines(headDiff)
 
       const existsInHead = await this.runner
-        .run(['cat-file', '-e', `HEAD:${filePath}`], this.repoPath)
+        .runRead(['cat-file', '-e', `HEAD:${filePath}`], this.repoPath)
         .then(() => true)
         .catch(() => false)
 
       if (existsInHead) return []
 
       const untrackedDiff = await this.runner
-        .run(['diff', '--no-index', '--unified=0', '--', '/dev/null', filePath], this.repoPath)
+        .runRead(['diff', '--no-index', '--unified=0', '--', '/dev/null', filePath], this.repoPath)
         .catch((e: unknown) => {
           const err = e as { exitCode?: number; stdout?: string }
           return err.exitCode === 1 ? (err.stdout ?? '') : ''
@@ -241,20 +297,20 @@ export class GitRepository {
     const t0 = perfNow()
     try {
       const headDiff = await this.runner
-        .run(['diff', '-U6', 'HEAD', '--', filePath], this.repoPath)
+        .runRead(['diff', '-U6', 'HEAD', '--', filePath], this.repoPath)
         .catch(() => '')
 
       if (headDiff) return parseDiffHunks(headDiff)
 
       const existsInHead = await this.runner
-        .run(['cat-file', '-e', `HEAD:${filePath}`], this.repoPath)
+        .runRead(['cat-file', '-e', `HEAD:${filePath}`], this.repoPath)
         .then(() => true)
         .catch(() => false)
 
       if (existsInHead) return []
 
       const untrackedDiff = await this.runner
-        .run(['diff', '-U6', '--no-index', '--', '/dev/null', filePath], this.repoPath)
+        .runRead(['diff', '-U6', '--no-index', '--', '/dev/null', filePath], this.repoPath)
         .catch((e: unknown) => {
           const err = e as { exitCode?: number; stdout?: string }
           return err.exitCode === 1 ? (err.stdout ?? '') : ''
@@ -264,16 +320,6 @@ export class GitRepository {
       return parseDiffHunks(untrackedDiff)
     } finally {
       perfLog(`[getFileDiffHunks] ${filePath} @ ${this.repoPath}`, t0)
-    }
-  }
-
-  async getAllDiffHunks(): Promise<Record<string, DiffHunk[]>> {
-    const t0 = perfNow()
-    try {
-      const diff = await this.getDiff()
-      return parseDiffHunksByFile(diff.fullDiff)
-    } finally {
-      perfLog(`[getAllDiffHunks] @ ${this.repoPath}`, t0)
     }
   }
 
@@ -360,12 +406,13 @@ export class GitRepository {
     this.invalidateDiffCache()
   }
 
+  /**
+   * Watch working tree files. On any change we invalidate the change-list cache and
+   * emit `onChanged`; debounce/refresh scheduling lives in the coordinator (上层).
+   */
   watchDiff(callbacks: WatchDiffCallbacks): FSWatcher {
     const tWatch = perfNow()
 
-    // Hard-coded exclusions for common large/generated directories that are
-    // almost never relevant for diff updates. These are checked first (fast
-    // regex) before falling back to the repository's .gitignore rules.
     const defaultIgnored = /(^|[\\/])(node_modules|\.git|\.idea|\.vscode|\.cache|dist|build|out|target|coverage|\.next|\.nuxt|tmp|logs?|\.agent-worktrees)([\\/]|$)/i
     const gitignore = loadGitignoreFilter(this.repoPath)
 
@@ -387,32 +434,18 @@ export class GitRepository {
       perfLog(`[chokidar] 初始扫描完成（watch → ready）@ ${this.repoPath}`, tWatch)
     })
 
-    let debounce: ReturnType<typeof setTimeout> | null = null
-    const scheduleDiff = () => {
-      if (debounce) clearTimeout(debounce)
-      debounce = setTimeout(() => {
-        void this.getDiff().then(callbacks.onDiff)
-      }, 500)
-    }
-
     const handleChange = (absolutePath: string, changeType: 'add' | 'change' | 'unlink') => {
       const relativePath = relative(this.repoPath, absolutePath).replace(/\\/g, '/')
       if (!relativePath || relativePath.startsWith('..')) return
       callbacks.onFileChange?.(relativePath, changeType)
       this.invalidateDiffCache()
-      scheduleDiff()
+      callbacks.onChanged()
     }
 
     watcher
       .on('add', (path) => handleChange(path, 'add'))
       .on('change', (path) => handleChange(path, 'change'))
       .on('unlink', (path) => handleChange(path, 'unlink'))
-
-    const tDiff = perfNow()
-    void this.getDiff().then(diff => {
-      perfLog(`[watchDiff] 启动时首次 getDiff @ ${this.repoPath}`, tDiff)
-      callbacks.onDiff(diff)
-    })
 
     return watcher
   }
@@ -456,10 +489,10 @@ export class GitRepository {
   }
 
   private async resolveGitDirs(): Promise<{ gitDir: string; commonDir: string }> {
-    const gitDirRaw = (await this.runner.run(['rev-parse', '--git-dir'], this.repoPath)).trim()
+    const gitDirRaw = (await this.runner.runRead(['rev-parse', '--git-dir'], this.repoPath)).trim()
     const gitDir = resolve(this.repoPath, gitDirRaw)
     const commonRaw = await this.runner
-      .run(['rev-parse', '--git-common-dir'], this.repoPath)
+      .runRead(['rev-parse', '--git-common-dir'], this.repoPath)
       .then(r => r.trim())
       .catch(() => null)
     const commonDir = commonRaw ? resolve(this.repoPath, commonRaw) : gitDir
@@ -470,10 +503,15 @@ export class GitRepository {
     this.diff = undefined
   }
 
+  invalidateGitLogCache(): void {
+    this.gitLogCache.clear()
+  }
+
   invalidateRepoCache(): void {
     this.head = undefined
     this.branch = undefined
     this.diff = undefined
+    this.gitLogCache.clear()
   }
 
   async dispose(): Promise<void> {
@@ -482,42 +520,93 @@ export class GitRepository {
   }
 }
 
-function parseFileStatus(output: string): DiffFile[] {
-  if (!output.trim()) return []
-  return output
-    .trim()
-    .split('\n')
-    .flatMap(line => {
-      const parts = line.split('\t')
-      if (parts.length < 2) return []
-      const char = parts[0].charAt(0)
-      const validStatuses = new Set(['A', 'M', 'D', 'R'])
-      const status = validStatuses.has(char) ? (char as DiffFile['status']) : 'M'
-      const path = parts[1] ?? ''
-      if (!path) return []
-      return [{ path, status, additions: 0, deletions: 0 }]
-    })
+/** 解析 `git status --porcelain=v1 -z` 输出为结构化条目（含 rename 双 token）。 */
+function parsePorcelainV1Z(raw: string): PorcelainEntry[] {
+  const tokens = raw.split('\0')
+  const entries: PorcelainEntry[] = []
+  let i = 0
+  while (i < tokens.length) {
+    const token = tokens[i]!
+    i++
+    if (token.length < 4) continue // 至少 "XY x"
+    const x = token.charAt(0)
+    const y = token.charAt(1)
+    let path = token.slice(3)
+    let oldPath: string | undefined
+    if (x === 'R' || x === 'C' || y === 'R' || y === 'C') {
+      // rename/copy：`--porcelain=v1 -z` 下首条记录的 path 是「新路径」，
+      // 紧随其后的 NUL 记录是「旧路径」（实测 `git status -z` 输出顺序）
+      oldPath = tokens[i] ?? ''
+      i++
+    }
+    if (!path || path.endsWith('/')) continue // 嵌套 git 仓库以 / 结尾，跳过
+    entries.push({ x, y, path, oldPath })
+  }
+  return entries
 }
 
-function parseNumStat(output: string): Map<string, { additions: number; deletions: number }> {
+/** 解析 `git diff --numstat -z HEAD` 输出（--no-renames 下无 rename 双路径记录）。 */
+function parseNumstatZ(raw: string): Map<string, { additions: number; deletions: number }> {
   const map = new Map<string, { additions: number; deletions: number }>()
-  if (!output.trim()) return map
-  for (const line of output.trim().split('\n')) {
-    const parts = line.split('\t')
+  for (const token of raw.split('\0')) {
+    if (!token) continue
+    const parts = token.split('\t')
     if (parts.length < 3) continue
-    const additions = parseInt(parts[0] ?? '0') || 0
-    const deletions = parseInt(parts[1] ?? '0') || 0
+    const additions = parseInt(parts[0] ?? '', 10)
+    const deletions = parseInt(parts[1] ?? '', 10)
     const path = parts.slice(2).join('\t')
-    if (path) map.set(path, { additions, deletions })
+    if (!path) continue
+    map.set(path, {
+      additions: Number.isNaN(additions) ? 0 : additions,
+      deletions: Number.isNaN(deletions) ? 0 : deletions,
+    })
   }
   return map
 }
 
-function parseStat(stat: string): { additions: number; deletions: number; files: number } {
-  if (!stat.trim()) return { additions: 0, deletions: 0, files: 0 }
-  return {
-    files: parseInt(stat.match(/(\d+) file/)?.[1] ?? '0'),
-    additions: parseInt(stat.match(/(\d+) insertion/)?.[1] ?? '0'),
-    deletions: parseInt(stat.match(/(\d+) deletion/)?.[1] ?? '0'),
+/** porcelain 的 XY 双状态位 → DiffFile.status（rename/copy 优先，其次 D/A，默认 M）。 */
+function mapStatus(entry: PorcelainEntry): DiffFile['status'] {
+  if (entry.x === 'R' || entry.x === 'C' || entry.y === 'R' || entry.y === 'C') return 'R'
+  if (entry.x === 'D' || entry.y === 'D') return 'D'
+  if (entry.x === 'A' || entry.y === 'A') return 'A'
+  return 'M'
+}
+
+/**
+ * 数一个文件的文本行数（对齐 git numstat：`\n` 计数 + 无尾换行时 +1）。
+ * 二进制（首 8KB 含 NUL）或超大文件返回 0，避免把图片/压缩包计入 diff 行数。
+ */
+async function countLinesOfFile(absolutePath: string): Promise<number> {
+  try {
+    const fileStat = await fsStat(absolutePath)
+    if (!fileStat.isFile() || fileStat.size === 0 || fileStat.size > MAX_UNTRACKED_FILE_SIZE) return 0
+
+    const handle = await open(absolutePath, 'r')
+    try {
+      const probe = Buffer.alloc(Math.min(8192, fileStat.size))
+      await handle.read(probe, 0, probe.length, 0)
+      if (probe.includes(0)) return 0 // 二进制
+
+      const chunk = Buffer.alloc(64 * 1024)
+      let newlines = 0
+      let totalBytes = 0
+      let lastByteWasNewline = false
+      let position = 0
+      while (position < fileStat.size) {
+        const { bytesRead } = await handle.read(chunk, 0, chunk.length, position)
+        if (bytesRead === 0) break
+        for (let i = 0; i < bytesRead; i++) {
+          if (chunk[i] === 0x0a) newlines++
+        }
+        lastByteWasNewline = chunk[bytesRead - 1] === 0x0a
+        totalBytes += bytesRead
+        position += bytesRead
+      }
+      return newlines + (totalBytes > 0 && !lastByteWasNewline ? 1 : 0)
+    } finally {
+      await handle.close()
+    }
+  } catch {
+    return 0
   }
 }
