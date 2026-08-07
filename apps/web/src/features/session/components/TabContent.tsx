@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { DiffReviewPage } from '@/features/diff/components/DiffReviewPage'
 import { TerminalPanel } from './TerminalPanel'
 import { DiffViewer } from '@/features/diff/components/DiffViewer'
@@ -114,6 +114,15 @@ export const TabContent = memo(function TabContent({ sessionId, send }: TabConte
     () => new Set(activeTabId ? [activeTabId] : []),
   )
 
+  // Panes are `absolute inset-0` stacked on top of each other, so their DOM
+  // order is visually irrelevant. We must keep it STABLE across tab reorder:
+  // if the pane order followed `tabs`, React would physically move the
+  // `.monaco-editor` nodes on every drag-reorder, and a coordinated Monaco
+  // render firing mid-move crashes on a detached view (renderText reading an
+  // undefined domNode). Iterating the insertion-ordered `mountedTabIds` keeps
+  // the DOM untouched when the tab bar order changes.
+  const tabById = useMemo(() => new Map(tabs.map(t => [t.id, t])), [tabs])
+
   useEffect(() => {
     if (!activeTabId) return
     setMountedTabIds(prev => {
@@ -150,8 +159,9 @@ export const TabContent = memo(function TabContent({ sessionId, send }: TabConte
 
   return (
     <div className="relative h-full w-full">
-      {tabs.map(tab => {
-        if (!mountedTabIds.has(tab.id)) return null
+      {[...mountedTabIds].map(id => {
+        const tab = tabById.get(id)
+        if (!tab) return null
         return (
           <TabPane
             key={tab.id}
