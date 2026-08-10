@@ -88,6 +88,8 @@ export interface SessionTab {
   filePath?: string
   terminalId?: string
   agentType?: AgentType
+  /** PTY shell/TUI 通过 OSC 0/1/2 上报的实时标题（净化后），显示优先级高于 label */
+  titleFromShell?: string
 }
 
 export interface AgentSession {
@@ -178,6 +180,7 @@ export type ServerMessage =
   | { event: 'tab:created'; payload: { sessionId: string; tab: SessionTab } }
   | { event: 'tab:closed'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:activated'; payload: { sessionId: string; tabId: string } }
+  | { event: 'tab:title'; payload: { sessionId: string; tabId: string; title: string } }
   | { event: 'tabs:sync'; payload: { sessionId: string; tabs: SessionTab[]; activeTabId: string | null } }
   | { event: 'workspace:list'; payload: Workspace[] }
   | { event: 'workspace:activated'; payload: Workspace }

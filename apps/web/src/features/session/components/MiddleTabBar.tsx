@@ -31,7 +31,8 @@ import { CSS } from '@dnd-kit/utilities'
 function getTabDisplayLabel(tab: SessionTab, allTabs: SessionTab[]): string {
   if (tab.type === 'review') return '审查'
   if (!tab.filePath || (tab.type !== 'file' && tab.type !== 'diff')) {
-    return tab.label
+    // terminal / agent tab：优先显示 shell/TUI 实时标题（OSC），否则用固定 label
+    return tab.titleFromShell || tab.label
   }
   const parts = tab.filePath.split(/[/\\]/)
   const fileName = parts[parts.length - 1] ?? tab.label
@@ -204,7 +205,7 @@ export function MiddleTabBar({ sessionId }: MiddleTabBarProps) {
           ? tab.type === 'diff'
             ? `Diff: ${resolveAbsoluteFilePath(worktreePath, tab.filePath, workspace)}`
             : resolveAbsoluteFilePath(worktreePath, tab.filePath, workspace)
-          : tab.label
+          : rawLabel
       return { tab, displayLabel, tooltipContent }
     })
   }, [tabs, worktreePath, workspace])

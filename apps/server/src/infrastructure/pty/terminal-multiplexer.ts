@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { perfLog, perfNow } from '../../perf-log.js'
+import { OscTitleParser } from './osc-title-parser.js'
 
 interface TerminalEntry {
   terminalId: string
@@ -13,6 +14,8 @@ interface TerminalEntry {
   resizeBuffer: string[]
   /** Whether a resize is currently in-flight for this terminal */
   resizing: boolean
+  /** 解析 PTY 输出中的 OSC 标题序列（shell/TUI 上报的实时标题） */
+  titleParser: OscTitleParser
 }
 
 export class TerminalMultiplexer extends EventEmitter {
@@ -63,13 +66,27 @@ export class TerminalMultiplexer extends EventEmitter {
       } as Record<string, string>,
     })
 
-    const entry: TerminalEntry = { terminalId, sessionId, pty: proc, buffer: [], status: 'running', resizeBuffer: [], resizing: false }
+    const entry: TerminalEntry = {
+      terminalId,
+      sessionId,
+      pty: proc,
+      buffer: [],
+      status: 'running',
+      resizeBuffer: [],
+      resizing: false,
+      titleParser: new OscTitleParser(),
+    }
 
     let firstDataLogged = false
     proc.onData((data: string) => {
       if (!firstDataLogged) {
         firstDataLogged = true
         perfLog(`[pty] spawn → 首个输出（shell=${shell}）terminalId=${terminalId}`, tSpawn)
+      }
+      // 解析 OSC 标题并广播；原始数据仍原样透传（不剥离，xterm 自行正确解释）
+      const titles = entry.titleParser.push(data)
+      for (const title of titles) {
+        this.emit('terminal:title', { sessionId, terminalId, title })
       }
       this.appendBuffer(entry, data)
       if (entry.resizing) {

@@ -17,6 +17,12 @@ import { validateTransition } from './core/session-state-machine.js'
 
 export { validateTransition, CreateSessionParams }
 
+/**
+ * OSC 标题防抖窗口。Claude Code 的标题带 spinner（`⠐ Claude Code`）每帧变化，
+ * 直接应用会导致 tab 闪烁 + DB 写放大；只有标题稳定该时长后才应用。
+ */
+const TITLE_DEBOUNCE_MS = 250
+
 export class SessionManager {
   private readonly sessionLifecycle: SessionLifecycleService
   private readonly tabService: TabService
@@ -29,6 +35,9 @@ export class SessionManager {
   private readonly settingsStore: SettingsStore
   private readonly broadcast: (msg: ServerMessage) => void
   private disposed = false
+
+  /** terminalId → 待应用的 OSC 标题（trailing debounce，避免 spinner 标题闪烁 + DB 写放大） */
+  private readonly titleDebounce = new Map<string, { timer: ReturnType<typeof setTimeout>; pendingTitle: string }>()
 
   constructor(opts: { workspacePath: string; repoRoot: string; db: Database.Database; broadcast: (msg: ServerMessage) => void; workspaceId: string; isGitWorkspace?: boolean }) {
     this.broadcast = opts.broadcast
@@ -70,6 +79,9 @@ export class SessionManager {
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
+
+    for (const { timer } of this.titleDebounce.values()) clearTimeout(timer)
+    this.titleDebounce.clear()
 
     await this.worktreeService.dispose().catch((err: unknown) => {
       console.error(`[SessionManager] worktreeService.dispose failed:`, err)
@@ -436,6 +448,13 @@ export class SessionManager {
     )
 
     this.terminalMux.on(
+      'terminal:title',
+      ({ sessionId, terminalId, title }: { sessionId: string; terminalId: string; title: string }) => {
+        this.updateTabTitleFromShell(sessionId, terminalId, title)
+      },
+    )
+
+    this.terminalMux.on(
       'terminal:ready',
       ({ sessionId, terminalId }: { sessionId: string; terminalId: string }) => {
         this.broadcast({ event: 'terminal:ready', payload: { sessionId, terminalId } })
@@ -463,6 +482,38 @@ export class SessionManager {
         this.broadcast({ event: 'terminal:resized', payload: { sessionId, terminalId } })
       },
     )
+  }
+
+  /** OSC 标题防抖入口：标题稳定 TITLE_DEBOUNCE_MS 后才持久化并广播。 */
+  private updateTabTitleFromShell(sessionId: string, terminalId: string, title: string): void {
+    const existing = this.titleDebounce.get(terminalId)
+    if (existing?.pendingTitle === title) return
+    if (existing) clearTimeout(existing.timer)
+
+    const timer = setTimeout(() => {
+      this.titleDebounce.delete(terminalId)
+      this.applyTabTitleFromShell(sessionId, terminalId, title)
+    }, TITLE_DEBOUNCE_MS)
+    this.titleDebounce.set(terminalId, { timer, pendingTitle: title })
+  }
+
+  /** 把解析到的 shell/TUI 标题应用到对应 tab（仅 terminal/agent），持久化并广播。 */
+  private applyTabTitleFromShell(sessionId: string, terminalId: string, title: string): void {
+    const session = this.getSession(sessionId)
+    if (!session) return
+
+    let targetTab: SessionTab | undefined
+    const updatedTabs = session.tabs.map(tab => {
+      if (isTerminalLikeTab(tab) && tab.terminalId === terminalId && tab.titleFromShell !== title) {
+        targetTab = { ...tab, titleFromShell: title }
+        return targetTab
+      }
+      return tab
+    })
+    if (!targetTab) return
+
+    this.sessionRepository.updateTabs(sessionId, updatedTabs)
+    this.broadcast({ event: 'tab:title', payload: { sessionId, tabId: targetTab.id, title } })
   }
 }
 

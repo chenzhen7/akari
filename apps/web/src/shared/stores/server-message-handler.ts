@@ -105,6 +105,17 @@ export function handleServerMessage(msg: ServerMessage): void {
     case 'tab:activated':
       useWorkspaceStore.getState().updateSession(msg.payload.sessionId, { activeTabId: msg.payload.tabId })
       break
+    case 'tab:title': {
+      // 只更新目标 tab 的实时标题，避免用 tabs:sync 整表覆盖并发改动
+      const ws = useWorkspaceStore.getState()
+      const session = findSession(ws.workspaceSessions, msg.payload.sessionId)
+      if (!session) break
+      const updatedTabs = session.tabs.map(tab =>
+        tab.id === msg.payload.tabId ? { ...tab, titleFromShell: msg.payload.title } : tab,
+      )
+      ws.updateSession(msg.payload.sessionId, { tabs: updatedTabs })
+      break
+    }
     case 'tabs:sync':
       useWorkspaceStore.getState().updateSession(msg.payload.sessionId, {
         tabs: msg.payload.tabs,
