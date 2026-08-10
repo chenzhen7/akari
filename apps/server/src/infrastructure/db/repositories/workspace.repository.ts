@@ -141,6 +141,15 @@ export class WorkspaceRepository {
     }
   }
 
+  /** git init 或外部变更后更新该工作区的仓库状态，返回更新后的 Workspace。 */
+  updateGitState(id: string, repoRoot: string, isGit: boolean): Workspace | null {
+    const info = this.db
+      .prepare('UPDATE workspaces SET repo_root = ?, is_git = ? WHERE id = ?')
+      .run(repoRoot, isGit ? 1 : 0, id)
+    if (info.changes === 0) return null
+    return this.getById(id)
+  }
+
   touchLastOpened(id: string): boolean {
     const target = this.getById(id)
     if (!target) return false

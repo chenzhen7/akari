@@ -5,7 +5,8 @@ import Database from 'better-sqlite3'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 import fs from 'node:fs'
-import type { ServerMessage } from '@akari/shared-types'
+import type { ServerMessage, Workspace } from '@akari/shared-types'
+import { getGitRoot } from './infrastructure/git/git-utils.js'
 import { createSessionManager, type SessionManager } from './session-manager.js'
 import { WorkspaceService } from './services/workspace.service.js'
 import { CanvasEdgeStore } from './infrastructure/db/canvas-edge-store.js'
@@ -73,6 +74,30 @@ function broadcast(message: ServerMessage, workspaceId?: string): void {
   ws.send(JSON.stringify(message))
 }
 
+/**
+ * 重探测 workspace 的 git 状态并同步 DB / 运行时 SessionManager。
+ * 覆盖「外部 git init / 仓库被移除」后 DB 过期的问题。
+ * 仅 false→true 时翻转运行时状态；true→false 只改 DB（运行中删除 .git 属边界情况，不额外处理）。
+ */
+async function syncWorkspaceGitState(workspace: Workspace): Promise<Workspace> {
+  const gitRoot = await getGitRoot(workspace.path)
+  const isGit = gitRoot !== null
+  const repoRoot = gitRoot ?? workspace.path
+  if (workspace.isGit === isGit && workspace.repoRoot === repoRoot) {
+    return workspace
+  }
+  const updated = workspaceManager.updateGitState(workspace.id, repoRoot, isGit) ?? workspace
+  if (isGit) {
+    const existing = workspaceSessionManagers.get(workspace.id)
+    if (existing) {
+      await existing.enableGitWorkspace(repoRoot).catch((err: unknown) => {
+        fastify.log.warn({ err, workspaceId: workspace.id }, 'syncWorkspaceGitState: enableGitWorkspace failed')
+      })
+    }
+  }
+  return updated
+}
+
 async function getOrCreateSessionManager(workspaceId: string): Promise<SessionManager> {
   const existing = workspaceSessionManagers.get(workspaceId)
   if (existing) return existing
@@ -86,15 +111,17 @@ async function getOrCreateSessionManager(workspaceId: string): Promise<SessionMa
       if (!workspace) {
         throw new Error(`Workspace not found: ${workspaceId}`)
       }
+      // 创建 manager 前先重探测 git 状态，确保用最新 isGit/repoRoot 组装运行时
+      const synced = await syncWorkspaceGitState(workspace)
 
       const tCreate = perfNow()
       const manager = await createSessionManager({
-        workspacePath: workspace.path,
-        repoRoot: workspace.repoRoot,
+        workspacePath: synced.path,
+        repoRoot: synced.repoRoot,
         db,
         broadcast: (msg) => broadcast(msg, workspaceId),
-        workspaceId: workspace.id,
-        isGitWorkspace: workspace.isGit,
+        workspaceId: synced.id,
+        isGitWorkspace: synced.isGit,
       })
       perfLog(`[startup] createSessionManager（含 restoreSessions）`, tCreate)
 
@@ -134,6 +161,7 @@ fastify.decorate('canvasEdgeStore', canvasEdgeStore)
 fastify.decorate('wsState', wsState)
 fastify.decorate('broadcast', broadcast)
 fastify.decorate('getOrCreateSessionManager', getOrCreateSessionManager)
+fastify.decorate('syncWorkspaceGitState', syncWorkspaceGitState)
 fastify.decorate('workspaceSessionRegistry', workspaceSessionRegistry)
 
 fastify.addHook('preHandler', async (request, reply) => {

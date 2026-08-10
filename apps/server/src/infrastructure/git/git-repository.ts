@@ -196,7 +196,9 @@ export class GitRepository {
     try {
       const [statusRaw, numstatRaw] = await Promise.all([
         this.runner.runRead(['status', '--porcelain=v1', '-z', '-uall', '--'], this.repoPath),
-        this.runner.runRead(['diff', '--numstat', '-z', 'HEAD', '--'], this.repoPath),
+        // unborn HEAD（尚无首次提交）时 git diff HEAD 必然失败；此时无已跟踪文件，
+        // 全部条目都是未跟踪（status 'A'），numstat 无意义，降级为空即可继续。
+        this.runner.runRead(['diff', '--numstat', '-z', 'HEAD', '--'], this.repoPath).catch(() => ''),
       ])
 
       const entries = parsePorcelainV1Z(statusRaw)

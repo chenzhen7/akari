@@ -1,6 +1,6 @@
 import 'fastify'
 import type Database from 'better-sqlite3'
-import type { ServerMessage } from '@akari/shared-types'
+import type { ServerMessage, Workspace } from '@akari/shared-types'
 import type { SessionManager } from '../session-manager.js'
 import type { WorkspaceService } from '../services/workspace.service.js'
 import type { CanvasEdgeStore } from '../infrastructure/db/canvas-edge-store.js'
@@ -18,6 +18,7 @@ declare module 'fastify' {
     }
     broadcast: (msg: ServerMessage, workspaceId?: string) => void
     getOrCreateSessionManager: (workspaceId: string) => Promise<SessionManager>
+    syncWorkspaceGitState: (workspace: Workspace) => Promise<Workspace>
     workspaceSessionRegistry: WorkspaceSessionRegistryService
   }
 

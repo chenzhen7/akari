@@ -43,6 +43,7 @@ export interface ISessionLifecycleService {
   getSettings(): { worktreeBaseDir: string }
   updateSettings(settings: { worktreeBaseDir: string }): void
   setWorkspace(workspaceId: string, workspacePath: string, repoRoot: string, isGitWorkspace?: boolean): void
+  enableGitWorkspace(repoRoot: string): Promise<void>
   dispose(): void
 }
 
@@ -85,6 +86,35 @@ export class SessionLifecycleService implements ISessionLifecycleService {
     this.isGitWorkspace = isGitWorkspace
   }
 
+  /**
+   * git init（或外部初始化）后把当前工作区从「非 git」升级为 git 工作区，
+   * 并补齐主会话的 git 接线：显式注册仓库、diff 监听、git 元数据监听、
+   * 分支名回填、变更列表刷新。
+   */
+  async enableGitWorkspace(repoRoot: string): Promise<void> {
+    if (this.isGitWorkspace) return // 已是 git 工作区，无需重复接线
+
+    this.isGitWorkspace = true
+    // git init 后显式注册真实 git 根，避免依赖 chokidar 监听 <path>/.git 出现的时序竞态；
+    // 注册 repoRoot 后，findRepositoryRoot 从 workspacePath 上溯也能命中
+    this.worktreeService.registerRepo(repoRoot)
+
+    const main = this.getMainSession()
+    if (!main) return
+
+    this.worktreeService.watchDiff(main.id, this.createDiffCallbacks(main.id, main.worktreePath), main.worktreePath)
+    this.watchMainBranch(main.id, repoRoot)
+    const currentBranch = await this.worktreeService.getCurrentBranch(repoRoot)
+    if (currentBranch !== main.branchName) {
+      this.sessionRepository.updateBranchAndBase(main.id, currentBranch, currentBranch)
+      const updated = this.getSession(main.id)
+      if (updated) {
+        this.broadcast({ event: 'session:updated', payload: updated })
+      }
+    }
+    this.gitRefresh.scheduleChangeList(main.id, main.worktreePath)
+  }
+
   getSession(sessionId: string): AgentSession | null {
     return this.sessionRepository.getById(sessionId)
   }
@@ -120,6 +150,11 @@ export class SessionLifecycleService implements ISessionLifecycleService {
   async createSession(params: CreateSessionParams): Promise<AgentSession> {
     if (!this.isGitWorkspace) {
       throw new Error('当前工作区不是 Git 仓库，无法创建 Agent 会话')
+    }
+    // 仓库尚无首次提交（unborn HEAD）时 git worktree add 无法执行；
+    // 提前守卫并给出可操作提示，避免创建一个注定失败的会话。
+    if (!(await this.worktreeService.hasCommits(this.repoRoot))) {
+      throw new Error('仓库还没有首次提交，Agent 会话需要至少一次提交。请先在主会话执行「全部提交」创建基线。')
     }
 
     const mainSession = this.getMainSession()

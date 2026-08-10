@@ -11,6 +11,8 @@ import { IGitQueryService } from './git-query.service.js'
 export interface IWorktreeService {
   createWorktree(sessionId: string, baseBranch?: string): Promise<{ branchName: string; worktreePath: string; resolvedBase: string }>
   removeWorktree(sessionId: string, worktreePath: string, branchName?: string): Promise<void>
+  registerRepo(cwd: string): void
+  hasCommits(cwd: string): Promise<boolean>
   commitAll(sessionId: string, message: string, cwd: string): Promise<void>
   commitFiles(sessionId: string, message: string, filePaths: string[], cwd: string): Promise<void>
   discardAll(sessionId: string, cwd: string): Promise<void>
@@ -128,6 +130,26 @@ export class WorktreeService implements IWorktreeService {
       } catch {
         // branch may already be deleted — non-fatal
       }
+    }
+  }
+
+  /**
+   * 显式把一个路径注册为 Git 仓库（git init 后调用）。
+   * 手动建 worktree 依赖 .git 检测，这里直接走 registry.create，
+   * 避免依赖 chokidar 监听 <path>/.git 出现的时序竞态。
+   */
+  registerRepo(cwd: string): void {
+    this.runners.registry.create(cwd)
+  }
+
+  /** 仓库是否已有至少一次提交（unborn HEAD 时 git worktree add 无法执行）。 */
+  async hasCommits(cwd: string): Promise<boolean> {
+    try {
+      await this.runners.runner.runRead(['rev-parse', '--verify', 'HEAD'], cwd)
+      return true
+    } catch {
+      // 尚无首次提交（unborn HEAD），rev-parse HEAD 会失败
+      return false
     }
   }
 

@@ -12,6 +12,7 @@ interface WorkspaceStore {
 
   fetchWorkspaces: () => void
   addWorkspace: (name: string, path: string) => Promise<Workspace | undefined>
+  initGit: (workspaceId: string) => Promise<void>
   activateWorkspace: (id: string, sessionId?: string) => Promise<void>
   deleteWorkspace: (id: string) => Promise<void>
   pinWorkspace: (id: string) => Promise<void>
@@ -76,6 +77,27 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => {
       } catch (err) {
         toastError(`添加项目失败：${err instanceof Error ? err.message : String(err)}`)
         return undefined
+      }
+    },
+
+    initGit: async (workspaceId) => {
+      try {
+        const updated = await apiClient.post<Workspace | null>(
+          `/workspaces/${workspaceId}/git-init`,
+          undefined,
+          { toast: '初始化 Git 失败' },
+        )
+        if (updated) {
+          // 本地即时更新，避免依赖 WS 广播的时序；主会话 branchName 由 session:updated 广播驱动
+          set(state => ({
+            workspaces: state.workspaces.map(w => (w.id === updated.id ? updated : w)),
+            currentWorkspace: state.currentWorkspace?.id === updated.id ? updated : state.currentWorkspace,
+          }))
+          toast.success('Git 仓库初始化完成')
+        }
+      } catch (err) {
+        // apiClient 已按 toast 选项上报错误，这里只留日志
+        console.error('[initGit] failed:', err)
       }
     },
 

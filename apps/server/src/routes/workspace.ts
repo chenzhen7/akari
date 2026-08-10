@@ -1,4 +1,11 @@
+import { execa } from 'execa'
+import { join } from 'node:path'
+import { access, constants, writeFile } from 'node:fs/promises'
+import { getGitRoot } from '../infrastructure/git/git-utils.js'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+
+/** git init 时仅在不存在的情况下创建的 .gitignore 内容（node_modules / .agent-worktrees 是 Akari 工作流的两大污染源）。 */
+const GITIGNORE_CONTENT = ['node_modules/', '.agent-worktrees/', ''].join('\n')
 
 export default async function workspaceRoutes(fastify: FastifyInstance) {
   fastify.get('/workspaces', async () => fastify.workspaceManager.listWorkspaces())
@@ -30,9 +37,46 @@ export default async function workspaceRoutes(fastify: FastifyInstance) {
     const { id } = request.params
     const workspace = fastify.workspaceManager.activateWorkspace(id)
     if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
-    fastify.broadcast({ event: 'workspace:activated', payload: workspace }, workspace.id)
+    // 激活时重探测 git 状态（覆盖外部 git init / 仓库移除后的 DB 过期），并同步运行时 SessionManager
+    const synced = await fastify.syncWorkspaceGitState(workspace)
+    fastify.broadcast({ event: 'workspace:activated', payload: synced }, workspace.id)
     fastify.broadcast({ event: 'workspace:list', payload: fastify.workspaceManager.listWorkspaces() })
     return { ok: true }
+  })
+
+  /**
+   * 在项目内直接初始化 Git 仓库（仅 git init，不自动提交）。
+   * 幂等：已是仓库时 git init 无副作用；已存在 .gitignore 时不覆盖。
+   * 成功后同步 DB 仓库状态 + 运行时 SessionManager 的 git 能力。
+   */
+  fastify.post<{ Params: { id: string } }>('/workspaces/:id/git-init', async (request, reply) => {
+    const { id } = request.params
+    const workspace = fastify.workspaceManager.getWorkspaceById(id)
+    if (!workspace) return reply.status(404).send({ error: 'workspace not found' })
+
+    await execa('git', ['init'], { cwd: workspace.path })
+
+    // 仅在不存在时创建 .gitignore；写失败不影响已成功的 git init，记 warn 继续
+    const gitignorePath = join(workspace.path, '.gitignore')
+    await access(gitignorePath, constants.F_OK).catch(async () => {
+      await writeFile(gitignorePath, GITIGNORE_CONTENT, 'utf8').catch((err: unknown) => {
+        fastify.log.warn({ err, workspaceId: id }, 'git-init: failed to write .gitignore, continuing')
+      })
+    })
+
+    // 重探测 git 根并更新 DB
+    const gitRoot = await getGitRoot(workspace.path)
+    const repoRoot = gitRoot ?? workspace.path
+    const updated = fastify.workspaceManager.updateGitState(id, repoRoot, gitRoot !== null)
+    if (!updated) return reply.status(404).send({ error: 'workspace not found' })
+
+    // 同步运行时状态：翻转 isGitWorkspace + 主会话 git 接线（manager 未创建时会以新状态创建）
+    const manager = await fastify.getOrCreateSessionManager(id)
+    await manager.enableGitWorkspace(repoRoot)
+
+    fastify.broadcast({ event: 'workspace:list', payload: fastify.workspaceManager.listWorkspaces() })
+    fastify.broadcast({ event: 'workspace:activated', payload: updated }, id)
+    return updated
   })
 
   fastify.delete<{ Params: { id: string } }>('/workspaces/:id', async (request, reply) => {

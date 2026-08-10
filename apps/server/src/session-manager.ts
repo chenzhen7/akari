@@ -132,6 +132,12 @@ export class SessionManager {
     // A full rebuild is left as follow-up if hot workspace switching becomes necessary.
   }
 
+  /** git init / 外部初始化后把工作区升级为 git 工作区（幂等）。 */
+  async enableGitWorkspace(repoRoot: string): Promise<void> {
+    this.guardDisposed()
+    await this.sessionLifecycle.enableGitWorkspace(repoRoot)
+  }
+
   getSettings(): { worktreeBaseDir: string } {
     return this.sessionLifecycle.getSettings()
   }

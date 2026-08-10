@@ -2,6 +2,7 @@ import { memo, useCallback, useState } from 'react'
 import { cn } from '@/shared/lib/utils'
 import { useSessionStore } from '@/features/session/stores/session-store'
 import { useNavigationStore } from '@/shared/stores/navigation-store'
+import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { Button } from '@/shared/components/ui/button'
 import {
   GitBranch,
@@ -188,6 +189,8 @@ export const MainSessionItem = memo(function MainSessionItem({
   onClick,
 }: MainSessionItemProps) {
   const selectSession = useNavigationStore(s => s.selectSession)
+  const initGit = useWorkspaceStore(s => s.initGit)
+  const [initializingGit, setInitializingGit] = useState(false)
   const additions = session.diffSummary?.additions ?? 0
   const deletions = session.diffSummary?.deletions ?? 0
 
@@ -195,6 +198,14 @@ export const MainSessionItem = memo(function MainSessionItem({
     e.preventDefault()
     onContextMenu(e, session.id)
   }, [onContextMenu, session.id])
+
+  /** 非 git 主会话：点击直接初始化（git init，不自动提交），初始化中阻止重复触发 */
+  const handleInitGit = useCallback((e: React.SyntheticEvent) => {
+    e.stopPropagation()
+    if (!session.workspaceId || initializingGit) return
+    setInitializingGit(true)
+    initGit(session.workspaceId).finally(() => setInitializingGit(false))
+  }, [initGit, session.workspaceId, initializingGit])
 
   return (
     <button
@@ -219,7 +230,28 @@ export const MainSessionItem = memo(function MainSessionItem({
       <div className="flex items-center justify-between gap-1 pl-4">
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground min-w-0">
           <GitBranch className="h-2.5 w-2.5 shrink-0" />
-          <span className="truncate">{session.branchName || '没有初始化git仓库'}</span>
+          {session.branchName ? (
+            <span className="truncate">{session.branchName}</span>
+          ) : (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={handleInitGit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  handleInitGit(e)
+                }
+              }}
+              title="初始化 Git 仓库（仅执行 git init，不自动提交）"
+              className={cn(
+                'truncate font-medium text-sky-600 hover:underline dark:text-sky-400',
+                initializingGit && 'cursor-default opacity-60',
+              )}
+            >
+              {initializingGit ? '初始化 Git 仓库…' : '初始化 Git 仓库'}
+            </span>
+          )}
         </div>
         <div className="h-6 shrink-0" />
       </div>

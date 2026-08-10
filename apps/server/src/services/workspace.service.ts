@@ -53,6 +53,10 @@ export class WorkspaceService {
     return { ...target, pinned }
   }
 
+  updateGitState(id: string, repoRoot: string, isGit: boolean): Workspace | null {
+    return this.repository.updateGitState(id, repoRoot, isGit)
+  }
+
   deleteWorkspace(id: string): boolean {
     return this.repository.delete(id)
   }
