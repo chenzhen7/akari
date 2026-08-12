@@ -134,6 +134,53 @@ describe('GitRepository', () => {
     expect(diff.summary.files).toBe(MAX_CHANGE_FILES)
   })
 
+  it('returns diff lines for an untracked file via --no-index exit-1 stdout', async () => {
+    // 未跟踪文件：diff HEAD 为空 → cat-file 失败（exit 128）→ 回退 --no-index（exit 1 = 有差异）
+    const diffOut =
+      'diff --git a/new.txt b/new.txt\n' +
+      'new file mode 100644\n' +
+      '--- /dev/null\n' +
+      '+++ b/new.txt\n' +
+      '@@ -0,0 +1 @@\n' +
+      '+hello\n'
+    const reject = (code: number, stdout = '') => {
+      const err = Object.assign(new Error(`exit ${code}`), { exitCode: code, stdout })
+      return Promise.reject(err)
+    }
+    runRead.mockImplementation((args: string[]) => {
+      if (args[0] === 'cat-file') return reject(128)
+      if (args[0] === 'diff' && args.includes('--no-index')) return reject(1, diffOut)
+      return Promise.resolve('')
+    })
+    const repo = new GitRepository('/repo', runner)
+    const lines = await repo.getFileDiffLines('new.txt')
+    expect(lines).toEqual([{ type: 'added', lineNumber: 1 }])
+  })
+
+  it('returns hunks for an untracked file via --no-index exit-1 stdout', async () => {
+    const diffOut =
+      'diff --git a/new.txt b/new.txt\n' +
+      'new file mode 100644\n' +
+      '--- /dev/null\n' +
+      '+++ b/new.txt\n' +
+      '@@ -0,0 +1 @@\n' +
+      '+hello\n'
+    const reject = (code: number, stdout = '') => {
+      const err = Object.assign(new Error(`exit ${code}`), { exitCode: code, stdout })
+      return Promise.reject(err)
+    }
+    runRead.mockImplementation((args: string[]) => {
+      if (args[0] === 'cat-file') return reject(128)
+      if (args[0] === 'diff' && args.includes('--no-index')) return reject(1, diffOut)
+      return Promise.resolve('')
+    })
+    const repo = new GitRepository('/repo', runner)
+    const hunks = await repo.getFileDiffHunks('new.txt')
+    expect(hunks).toHaveLength(1)
+    expect(hunks[0]!.additions).toBe(1)
+    expect(hunks[0]!.lines).toEqual([{ type: 'added', content: 'hello', newLineNumber: 1 }])
+  })
+
   it('returns original file content from HEAD', async () => {
     runRead.mockResolvedValueOnce('original content')
     const repo = new GitRepository('/repo', runner)

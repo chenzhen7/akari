@@ -84,6 +84,20 @@ describe('GitCommandRunner', () => {
     expect(err.code).toBe('MERGE_CONFLICT')
   })
 
+  it('preserves exitCode and stdout on GitError (diff --no-index exit 1)', async () => {
+    // `git diff --no-index` 退出码 1 = 存在差异（未跟踪文件的正常结果），stdout 携带完整 diff
+    const failed = Object.assign(new Error('Command failed with exit code 1'), {
+      exitCode: 1,
+      stdout: 'diff --git a/new.txt b/new.txt\n--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+hello\n',
+    })
+    execa.mockRejectedValueOnce(failed)
+    const runner = new GitCommandRunner()
+    const err = await runner.run(['diff', '--no-index', '--', '/dev/null', 'new.txt'], '/repo').catch((e) => e)
+    expect(err).toBeInstanceOf(GitError)
+    expect(err.exitCode).toBe(1)
+    expect(err.stdout).toContain('+hello')
+  })
+
   it('uses custom timeout', async () => {
     execa.mockResolvedValueOnce({ stdout: '' })
     const runner = new GitCommandRunner()

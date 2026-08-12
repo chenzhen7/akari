@@ -19,6 +19,13 @@ export class GitError extends Error {
     public readonly code: GitErrorCode,
     public readonly args: string[],
     public readonly cwd: string,
+    /**
+     * 保留底层 execa 错误的退出码/stdout：`git diff --no-index` 以退出码 1 表示
+     * 「存在差异」（未跟踪文件对比 /dev/null 的正常结果），stdout 里带着完整 diff，
+     * 调用方需要读取它们而不是当作失败丢弃。
+     */
+    public readonly exitCode?: number,
+    public readonly stdout?: string,
   ) {
     super(message)
     this.name = 'GitError'
@@ -123,7 +130,12 @@ export class GitCommandRunner {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       const firstLine = message.split(/\r?\n/)[0] ?? message
-      console.error(`[git] command failed: git ${args.join(' ')} in ${cwd}: ${firstLine}`)
+      const exitCode = (err as { exitCode?: number }).exitCode
+      // `git diff --no-index` 以退出码 1 表示「存在差异」（未跟踪文件的正常结果），
+      // 不是命令失败，不应误报日志；stdout 里的 diff 由调用方通过 GitError 读取。
+      if (!(args[0] === 'diff' && args.includes('--no-index') && exitCode === 1)) {
+        console.error(`[git] command failed: git ${args.join(' ')} in ${cwd}: ${firstLine}`)
+      }
       throw this.classifyError(firstLine, args, cwd, err)
     }
   }
@@ -145,35 +157,32 @@ export class GitCommandRunner {
 
   private classifyError(message: string, args: string[], cwd: string, original: unknown): GitError {
     const lower = message.toLowerCase()
+    const originalErr = original as { exitCode?: number; stdout?: string }
+    let code: GitErrorCode
     if (lower.includes('not a git repository')) {
-      return new GitError(message, 'NOT_A_GIT_REPO', args, cwd)
-    }
-    if (lower.includes('nothing to commit')) {
-      return new GitError(message, 'NOTHING_TO_COMMIT', args, cwd)
-    }
-    if (lower.includes('merge conflict') || lower.includes('conflict')) {
-      return new GitError(message, 'MERGE_CONFLICT', args, cwd)
-    }
-    if (lower.includes('could not resolve host') || lower.includes('failed to connect')) {
-      return new GitError(message, 'NETWORK_ERROR', args, cwd)
-    }
-    if (lower.includes('authentication failed') || lower.includes('could not read username')) {
-      return new GitError(message, 'AUTHENTICATION_FAILED', args, cwd)
-    }
-    if (lower.includes('unable to create') && lower.includes('lock file')) {
-      return new GitError(message, 'LOCKED', args, cwd)
-    }
-    if (
+      code = 'NOT_A_GIT_REPO'
+    } else if (lower.includes('nothing to commit')) {
+      code = 'NOTHING_TO_COMMIT'
+    } else if (lower.includes('merge conflict') || lower.includes('conflict')) {
+      code = 'MERGE_CONFLICT'
+    } else if (lower.includes('could not resolve host') || lower.includes('failed to connect')) {
+      code = 'NETWORK_ERROR'
+    } else if (lower.includes('authentication failed') || lower.includes('could not read username')) {
+      code = 'AUTHENTICATION_FAILED'
+    } else if (lower.includes('unable to create') && lower.includes('lock file')) {
+      code = 'LOCKED'
+    } else if (
       lower.includes('does not appear to be a git repository') ||
       lower.includes('no such remote') ||
       lower.includes('could not read from remote repository') ||
       lower.includes('no remote repository specified')
     ) {
-      return new GitError(message, 'NO_REMOTE', args, cwd)
+      code = 'NO_REMOTE'
+    } else if (lower.includes('no tracking information') || lower.includes('no upstream branch')) {
+      code = 'NO_UPSTREAM'
+    } else {
+      code = 'UNKNOWN'
     }
-    if (lower.includes('no tracking information') || lower.includes('no upstream branch')) {
-      return new GitError(message, 'NO_UPSTREAM', args, cwd)
-    }
-    return new GitError(message, 'UNKNOWN', args, cwd)
+    return new GitError(message, code, args, cwd, originalErr.exitCode, originalErr.stdout)
   }
 }
