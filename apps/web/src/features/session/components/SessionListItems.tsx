@@ -126,7 +126,7 @@ export const SessionItem = memo(function SessionItem({
         </div>
 
         <div className="flex items-center justify-between gap-1 pl-4">
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground min-w-0">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground min-w-0">
             <GitBranch className="h-2.5 w-2.5 shrink-0" />
             <span className="truncate">{session.branchName}</span>
             <span className="opacity-50 shrink-0">→</span>
@@ -237,7 +237,7 @@ export const MainSessionItem = memo(function MainSessionItem({
       </div>
 
       <div className="flex items-center justify-between gap-1 pl-4">
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground min-w-0">
+        <div className="flex items-center gap-1 text-xs text-muted-foreground min-w-0">
           <GitBranch className="h-2.5 w-2.5 shrink-0" />
           {session.branchName ? (
             <span className="truncate">{session.branchName}</span>
