@@ -20,15 +20,22 @@ export class GitRepositoryRegistry {
   /**
    * Get an existing or new repository for a path, but only if the detector
    * considers the path a Git repository.
+   *
+   * 仓库实例归一到 git 根（detector.findRepositoryRoot）：当传入路径是 git 根的
+   * 子目录时（如主会话工作区在仓库内），git 命令以根为 cwd 执行，根相对的
+   * pathspec（`git status`/`numstat` 输出）才能正确匹配。磁盘读取与前端绝对路径
+   * 已各自处理 workspaceOffset，此处补齐 Git 侧的一致性。
    */
   get(path: string): GitRepository | null {
     const resolved = resolve(path)
-    if (!this.detector.isGitRepository(resolved)) return null
+    const found = this.detector.findRepositoryRoot(resolved)
+    if (!found) return null
+    const root = resolve(found)
 
-    let repo = this.repositories.get(resolved)
+    let repo = this.repositories.get(root)
     if (!repo) {
-      repo = new GitRepository(resolved, this.runner)
-      this.repositories.set(resolved, repo)
+      repo = new GitRepository(root, this.runner)
+      this.repositories.set(root, repo)
     }
     return repo
   }
