@@ -6,8 +6,12 @@ import {
   getFileTreePathsForSession,
   useFileTreeChildren,
 } from '@/features/explorer/lib/file-tree-store'
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+} from '@/shared/components/ui/context-menu'
 import { ArboristFileTree } from './ArboristFileTree'
-import { FileTreeContextMenu } from './FileTreeContextMenu'
+import { FileTreeContextMenuContent } from './FileTreeContextMenuContent'
 import { FileMutationDialog, type FileMutation } from './FileMutationDialog'
 
 interface ExplorerPanelProps {
@@ -31,7 +35,9 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | undefined>()
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null)
+  const [menuNode, setMenuNode] = useState<FileNode | null>(null)
+  // 每次右键递增，作为 ContextMenuContent 的 key，强制重挂载以让 floating 在新坐标重新定位
+  const [menuSeq, setMenuSeq] = useState(0)
   const [mutation, setMutation] = useState<FileMutation | null>(null)
   const lastSessionIdRef = useRef<string | null>(null)
 
@@ -92,11 +98,19 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
     onOpenFile(path)
   }, [onOpenFile])
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
-    setContextMenu({ x: e.clientX, y: e.clientY, node })
+  // 由 ContextMenuTrigger 的 onContextMenu 触发：命中行读取 data-path 得到目标节点，
+  // 空白处（行外）视为根目录；不自行记录坐标，定位交给 Radix。
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    setMenuSeq(n => n + 1)
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-path]')
+    if (el) {
+      const path = el.dataset.path ?? ''
+      const type = (el.dataset.type as FileNode['type'] | undefined) ?? 'file'
+      setMenuNode({ path, type, name: path.split(/[/\\]/).pop() ?? path })
+    } else {
+      setMenuNode({ path: '', type: 'directory', name: '' })
+    }
   }, [])
-
-  const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
@@ -152,30 +166,30 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
       )}
 
       {rootChildren !== undefined && (
-        <ArboristFileTree
-          sessionId={session.id}
-          rootName={getRootFolderName(session.worktreePath)}
-          selectedPath={selectedPath}
-          onOpenFile={handleOpenFile}
-          onContextMenu={handleContextMenu}
-          onRefresh={handleRefresh}
-          isRefreshing={isRefreshing}
-          onCreateFile={parentPath => setMutation({ type: 'create-file', parentPath })}
-          onCreateFolder={parentPath => setMutation({ type: 'create-folder', parentPath })}
-        />
-      )}
-
-      {contextMenu && (
-        <FileTreeContextMenu
-          sessionId={session.id}
-          terminalId={session.terminalId}
-          worktreePath={session.worktreePath}
-          node={contextMenu.node}
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onClose={closeContextMenu}
-          onMutation={setMutation}
-        />
+        <ContextMenu modal={false}>
+          <ContextMenuTrigger asChild onContextMenu={handleContextMenu}>
+            <div className="min-h-0 flex-1">
+              <ArboristFileTree
+                sessionId={session.id}
+                rootName={getRootFolderName(session.worktreePath)}
+                selectedPath={selectedPath}
+                onOpenFile={handleOpenFile}
+                onRefresh={handleRefresh}
+                isRefreshing={isRefreshing}
+                onCreateFile={parentPath => setMutation({ type: 'create-file', parentPath })}
+                onCreateFolder={parentPath => setMutation({ type: 'create-folder', parentPath })}
+              />
+            </div>
+          </ContextMenuTrigger>
+          <FileTreeContextMenuContent
+            key={menuSeq}
+            sessionId={session.id}
+            terminalId={session.terminalId}
+            worktreePath={session.worktreePath}
+            node={menuNode}
+            onMutation={setMutation}
+          />
+        </ContextMenu>
       )}
 
       {mutation && (

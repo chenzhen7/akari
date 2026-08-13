@@ -42,7 +42,6 @@ interface ArboristFileTreeProps {
   rootName: string
   selectedPath?: string
   onOpenFile: (path: string) => void
-  onContextMenu?: (e: React.MouseEvent, node: FileNode) => void
   onRefresh?: () => void
   isRefreshing?: boolean
   onCreateFile?: (parentPath: string) => void
@@ -79,24 +78,18 @@ function NodeRenderer({
   node,
   style,
   onOpenFile,
-  onContextMenu,
 }: NodeRendererProps<ArboristFileNode> & {
   onOpenFile: (path: string) => void
-  onContextMenu?: (e: React.MouseEvent, node: FileNode) => void
 }) {
   const isDirectory = node.data.type === 'directory'
   const isSelected = node.isSelected
 
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
+  // 不阻止冒泡、不 preventDefault：若 preventDefault，Radix 的
+  // composeEventHandlers 会因 defaultPrevented 跳过打开逻辑，导致菜单打不开。
+  // 原生菜单的抑制交给外层 ContextMenuTrigger（其内部会 preventDefault）。
+  const handleContextMenu = useCallback(() => {
     node.select()
-    onContextMenu?.(e, {
-      name: node.data.name,
-      path: node.data.path,
-      type: node.data.type,
-    })
-  }, [node, onContextMenu])
+  }, [node])
 
   const handleClick = useCallback(() => {
     node.select()
@@ -118,6 +111,8 @@ function NodeRenderer({
       style={style}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
+      data-path={node.data.path}
+      data-type={node.data.type}
       className={cn(
         'flex cursor-pointer items-center gap-1 rounded-md border py-0.5 pr-2 text-xs select-none',
         isSelected
@@ -153,7 +148,6 @@ export function ArboristFileTree({
   rootName,
   selectedPath,
   onOpenFile,
-  onContextMenu,
   onRefresh,
   isRefreshing,
   onCreateFile,
@@ -249,8 +243,8 @@ export function ArboristFileTree({
   }, [sessionId, loadChain])
 
   const CustomNodeRenderer = useCallback((props: NodeRendererProps<ArboristFileNode>) => (
-    <NodeRenderer {...props} onOpenFile={onOpenFile} onContextMenu={onContextMenu} />
-  ), [onOpenFile, onContextMenu])
+    <NodeRenderer {...props} onOpenFile={onOpenFile} />
+  ), [onOpenFile])
 
   return (
     <div ref={containerRef} className="flex h-full flex-col overflow-hidden">
@@ -299,13 +293,7 @@ export function ArboristFileTree({
           )}
         </div>
       </div>
-      <div
-        className="flex-1 overflow-hidden"
-        onContextMenu={e => {
-          e.preventDefault()
-          onContextMenu?.(e, { name: rootName, path: '', type: 'directory' })
-        }}
-      >
+      <div className="flex-1 overflow-hidden">
         <Tree
           ref={treeRef}
           data={treeData}

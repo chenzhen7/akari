@@ -1,47 +1,24 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useCallback } from 'react'
 import { FolderOpen, Copy, Check, Terminal, FilePlus, FolderPlus, Pencil, Trash2 } from 'lucide-react'
 import { toast, toastError } from '@/shared/lib/toast'
-import { cn } from '@/shared/lib/utils'
 import { findSession } from '@/features/session/stores/session-store'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { useConnectionStore } from '@/features/terminal/stores/connection-store'
 import { dirnameRelPath } from '@/features/explorer/lib/path-utils'
+import {
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from '@/shared/components/ui/context-menu'
 import type { FileNode } from '@akari/shared-types'
 import type { FileMutation } from './FileMutationDialog'
 
-interface FileTreeContextMenuProps {
+interface FileTreeContextMenuContentProps {
   sessionId: string
   terminalId: string
   worktreePath: string
-  node: FileNode
-  x: number
-  y: number
-  onClose: () => void
+  node: FileNode | null
   onMutation?: (m: FileMutation) => void
-}
-
-interface MenuItemProps {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  onClick: () => void | Promise<void>
-  danger?: boolean
-}
-
-function MenuItem({ icon: Icon, label, onClick, danger }: MenuItemProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors',
-        danger
-          ? 'text-red-500 hover:bg-destructive/10 hover:text-red-500'
-          : 'hover:bg-accent hover:text-accent-foreground',
-      )}
-    >
-      <Icon className="h-3.5 w-3.5 shrink-0" />
-      {label}
-    </button>
-  )
 }
 
 function normalizePath(p: string): string {
@@ -60,17 +37,13 @@ function getFolderPath(fullPath: string, type: FileNode['type']): string {
   return lastSlash > 0 ? fullPath.slice(0, lastSlash) : fullPath
 }
 
-export function FileTreeContextMenu({
+export function FileTreeContextMenuContent({
   sessionId,
   terminalId,
   worktreePath,
   node,
-  x,
-  y,
-  onClose,
   onMutation,
-}: FileTreeContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null)
+}: FileTreeContextMenuContentProps) {
   const sendTerminalInput = useConnectionStore(s => s.sendTerminalInput)
   const activeTab = useWorkspaceStore(
     useCallback(
@@ -83,23 +56,8 @@ export function FileTreeContextMenu({
     ),
   )
 
-  useEffect(() => {
-    const handleMouse = (e: MouseEvent) => {
-      if (!(e.target instanceof Node)) return
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        onClose()
-      }
-    }
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('mousedown', handleMouse)
-    document.addEventListener('keydown', handleKey)
-    return () => {
-      document.removeEventListener('mousedown', handleMouse)
-      document.removeEventListener('keydown', handleKey)
-    }
-  }, [onClose])
+  // 菜单仅在右键触发后打开，此时 node 必非空；null 时渲染空内容占位
+  if (!node) return <ContextMenuContent className="min-w-45" />
 
   const fullPath = getFullPath(worktreePath, node.path)
   const folderPath = getFolderPath(fullPath, node.type)
@@ -107,55 +65,33 @@ export function FileTreeContextMenu({
   const isRoot = node.path === ''
   const parentPath = node.type === 'directory' ? node.path : dirnameRelPath(node.path)
 
-  const handleNewFile = () => {
-    onMutation?.({ type: 'create-file', parentPath })
-    onClose()
-  }
-
-  const handleNewFolder = () => {
-    onMutation?.({ type: 'create-folder', parentPath })
-    onClose()
-  }
-
-  const handleRename = () => {
-    onMutation?.({ type: 'rename', node })
-    onClose()
-  }
-
-  const handleDelete = () => {
-    onMutation?.({ type: 'delete', node })
-    onClose()
-  }
+  const handleNewFile = () => onMutation?.({ type: 'create-file', parentPath })
+  const handleNewFolder = () => onMutation?.({ type: 'create-folder', parentPath })
+  const handleRename = () => onMutation?.({ type: 'rename', node })
+  const handleDelete = () => onMutation?.({ type: 'delete', node })
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      toast.success(`${label} 已复制`, { icon: <Check className="h-3.5 w-3.5" /> })
+      toast.success(`${label} 已复制`, { icon: <Check className="size-3.5" /> })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`[copy ${label}] failed:`, err)
       toastError(`复制 ${label} 失败：${msg}`)
     }
-    onClose()
   }
 
   const handleOpenFolder = async () => {
     const openPath = window.electron?.shell?.openPath
-    if (!openPath) {
-      onClose()
-      return
-    }
+    if (!openPath) return
     try {
       const error = await openPath(folderPath)
-      if (error) {
-        throw new Error(error)
-      }
+      if (error) throw new Error(error)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[openFolder] failed:', err)
       toastError(`打开文件夹失败：${msg}`)
     }
-    onClose()
   }
 
   const handleCopyPath = () => {
@@ -164,10 +100,7 @@ export function FileTreeContextMenu({
 
   const handleSendToTerminal = () => {
     const activeTabType = activeTab?.type
-    if (activeTabType !== 'terminal' && activeTabType !== 'agent') {
-      onClose()
-      return
-    }
+    if (activeTabType !== 'terminal' && activeTabType !== 'agent') return
     const targetTerminalId = activeTabType === 'terminal' && activeTab?.terminalId
       ? activeTab.terminalId
       : terminalId
@@ -177,30 +110,48 @@ export function FileTreeContextMenu({
     } else {
       toastError('终端未连接，无法添加路径')
     }
-    onClose()
   }
 
   const canOpenFolder = typeof window !== 'undefined' && !!window.electron?.shell?.openPath
 
   return (
-    <div
-      ref={menuRef}
-      className="fixed z-50 min-w-[180px] rounded-md border border-border bg-popover py-1 shadow-lg"
-      style={{ left: x, top: y }}
-    >
-      <MenuItem icon={FilePlus} label="新建文件" onClick={handleNewFile} />
-      <MenuItem icon={FolderPlus} label="新建文件夹" onClick={handleNewFolder} />
+    <ContextMenuContent className="min-w-45">
+      <ContextMenuItem onSelect={handleNewFile}>
+        <FilePlus className="size-3.5" />
+        新建文件
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={handleNewFolder}>
+        <FolderPlus className="size-3.5" />
+        新建文件夹
+      </ContextMenuItem>
       {!isRoot && (
         <>
-          <MenuItem icon={Pencil} label="重命名" onClick={handleRename} />
-          <MenuItem icon={Trash2} label="删除" onClick={handleDelete} danger />
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={handleRename}>
+            <Pencil className="size-3.5" />
+            重命名
+          </ContextMenuItem>
+          <ContextMenuItem variant="destructive" onSelect={handleDelete}>
+            <Trash2 className="size-3.5" />
+            删除
+          </ContextMenuItem>
         </>
       )}
       {canOpenFolder && (
-        <MenuItem icon={FolderOpen} label="打开文件夹" onClick={handleOpenFolder} />
+        <ContextMenuItem onSelect={handleOpenFolder}>
+          <FolderOpen className="size-3.5" />
+          打开文件夹
+        </ContextMenuItem>
       )}
-      <MenuItem icon={Copy} label="复制路径" onClick={handleCopyPath} />
-      <MenuItem icon={Terminal} label="添加路径到终端" onClick={handleSendToTerminal} />
-    </div>
+      <ContextMenuSeparator />
+      <ContextMenuItem onSelect={handleCopyPath}>
+        <Copy className="size-3.5" />
+        复制路径
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={handleSendToTerminal}>
+        <Terminal className="size-3.5" />
+        添加路径到终端
+      </ContextMenuItem>
+    </ContextMenuContent>
   )
 }
