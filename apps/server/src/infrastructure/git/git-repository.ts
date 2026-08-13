@@ -325,6 +325,53 @@ export class GitRepository {
     }
   }
 
+  /**
+   * 某历史提交改动的文件列表（状态 + 增删行数），供 Git 图行内展开。
+   * `git show --format=` 抑制 commit 头；merge commit 默认走 `--cc` 合并 diff，
+   * 文件列表与 VS Code 一致。numstat 对合并 diff 的计数是近似值，失败降级为 0。
+   */
+  async getCommitFiles(hash: string): Promise<DiffFile[]> {
+    const t0 = perfNow()
+    try {
+      const [statusRaw, numstatRaw] = await Promise.all([
+        this.runner.runRead(['show', '--format=', '--name-status', '-M', '-r', '-z', hash], this.repoPath),
+        this.runner.runRead(['show', '--format=', '--numstat', '-r', '-z', hash], this.repoPath).catch(() => ''),
+      ])
+      const numstat = parseCommitNumstatZ(numstatRaw)
+      return parseNameStatusZ(statusRaw).map(({ path, status }) => {
+        const stats = numstat.get(path)
+        return { path, status, additions: stats?.additions ?? 0, deletions: stats?.deletions ?? 0 }
+      })
+    } catch {
+      return []
+    } finally {
+      perfLog(`[getCommitFiles] ${hash} @ ${this.repoPath}`, t0)
+    }
+  }
+
+  /**
+   * 历史提交中某文件的内容对：original=父提交版本，modified=该提交版本。
+   * 文件在某侧不存在（新增/删除）时对应侧为空字符串；根提交无父版本。
+   */
+  async getCommitFileDiff(hash: string, filePath: string): Promise<{ original: string; modified: string }> {
+    const t0 = perfNow()
+    try {
+      const [modified, hasParent] = await Promise.all([
+        this.runner.runRead(['show', `${hash}:${filePath}`], this.repoPath).catch(() => ''),
+        this.runner
+          .runRead(['rev-parse', `${hash}^`], this.repoPath)
+          .then(() => true)
+          .catch(() => false),
+      ])
+      const original = hasParent
+        ? await this.runner.runRead(['show', `${hash}^:${filePath}`], this.repoPath).catch(() => '')
+        : ''
+      return { original, modified }
+    } finally {
+      perfLog(`[getCommitFileDiff] ${hash}:${filePath} @ ${this.repoPath}`, t0)
+    }
+  }
+
   async commitAll(message: string): Promise<void> {
     await this.runner.run(['add', '-A'], this.repoPath)
     await this.runner.run(['commit', '-m', message], this.repoPath)
@@ -595,6 +642,70 @@ function parseNumstatZ(raw: string): Map<string, { additions: number; deletions:
       additions: Number.isNaN(additions) ? 0 : additions,
       deletions: Number.isNaN(deletions) ? 0 : deletions,
     })
+  }
+  return map
+}
+
+/**
+ * 解析 `git show --name-status -M -r -z` 输出：`M\0path\0`，rename/copy 为 `R100\0new\0old\0`
+ * （status 与路径各为 NUL token，R/C 多一个 old path token）。实测自 `git show -z`。
+ * T/U/X/B 等非 A/D/R 状态一律归为 M（DiffFile 只支持 A/M/D/R）。
+ */
+function parseNameStatusZ(raw: string): Array<{ path: string; status: DiffFile['status'] }> {
+  const tokens = raw.split('\0')
+  const result: Array<{ path: string; status: DiffFile['status'] }> = []
+  let i = 0
+  while (i < tokens.length) {
+    const statusToken = tokens[i]
+    i++
+    if (!statusToken) continue
+    const code = statusToken.charAt(0)
+    if (code === 'R' || code === 'C') {
+      const newPath = tokens[i] ?? ''
+      i += 2 // 跳过 old path token
+      if (!newPath || newPath.endsWith('/')) continue
+      result.push({ path: newPath, status: 'R' })
+    } else {
+      const path = tokens[i] ?? ''
+      i++
+      if (!path || path.endsWith('/')) continue
+      const status: DiffFile['status'] = code === 'A' ? 'A' : code === 'D' ? 'D' : 'M'
+      result.push({ path, status })
+    }
+  }
+  return result
+}
+
+/**
+ * 解析 `git show --numstat -r -z` 输出（区别于工作区用的 parseNumstatZ：后者恒 `--no-renames`，
+ * 这里 `git show` 会做 rename 检测）。普通条目 `adds\tdels\tpath`；rename 条目为
+ * `adds\tdels\t\0new\0old`（counts 属于 new path，后续两个 NUL token 是 new/old）。二进制为 `-\t-\tpath`。
+ */
+function parseCommitNumstatZ(raw: string): Map<string, { additions: number; deletions: number }> {
+  const map = new Map<string, { additions: number; deletions: number }>()
+  const tokens = raw.split('\0')
+  let i = 0
+  while (i < tokens.length) {
+    const token = tokens[i]
+    i++
+    if (!token) continue
+    const parts = token.split('\t')
+    if (parts.length < 2) continue
+    const additions = parseInt(parts[0]!, 10)
+    const deletions = parseInt(parts[1]!, 10)
+    const path = parts.slice(2).join('\t')
+    const stats = {
+      additions: Number.isNaN(additions) ? 0 : additions,
+      deletions: Number.isNaN(deletions) ? 0 : deletions,
+    }
+    if (path) {
+      map.set(path, stats)
+    } else {
+      // rename：counts 属于紧随其后的 new path token
+      const newPath = tokens[i]
+      if (newPath) map.set(newPath, stats)
+      i++ // 跳过 old path token
+    }
   }
   return map
 }

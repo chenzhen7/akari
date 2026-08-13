@@ -9,7 +9,7 @@ import { isTerminalLikeTab } from './tab-utils.js'
 import { launchAgentInTerminal } from './agent-launcher.js'
 
 export interface ITabService {
-  createTab(sessionId: string, type: 'terminal' | 'agent' | 'diff' | 'file' | 'review', filePath?: string, agentType?: AgentType, launchOptions?: AgentLaunchOptions): SessionTab
+  createTab(sessionId: string, type: 'terminal' | 'agent' | 'diff' | 'file' | 'review', filePath?: string, agentType?: AgentType, launchOptions?: AgentLaunchOptions, commitHash?: string): SessionTab
   closeTab(sessionId: string, tabId: string): void
   activateTab(sessionId: string, tabId: string): void
   reorderTabs(sessionId: string, orderedTabIds: string[]): void
@@ -31,6 +31,7 @@ export class TabService implements ITabService {
     filePath?: string,
     agentType?: AgentType,
     launchOptions?: AgentLaunchOptions,
+    commitHash?: string,
   ): SessionTab {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
@@ -56,7 +57,7 @@ export class TabService implements ITabService {
       label = filePath ? path.basename(filePath) : (type === 'file' ? 'File' : 'Diff')
     }
 
-    const tab: SessionTab = { id: tabId, type: resolvedType, label, filePath, terminalId, agentType }
+    const tab: SessionTab = { id: tabId, type: resolvedType, label, filePath, terminalId, agentType, commitHash }
     let updatedTabs = [...session.tabs, tab]
     const activeTabId = tabId
 

@@ -187,9 +187,10 @@ export class SessionManager {
     filePath?: string,
     agentType?: AgentType,
     launchOptions?: import('./agent-adapters/base.js').AgentLaunchOptions,
+    commitHash?: string,
   ): SessionTab {
     this.guardDisposed()
-    return this.tabService.createTab(sessionId, type, filePath, agentType, launchOptions)
+    return this.tabService.createTab(sessionId, type, filePath, agentType, launchOptions, commitHash)
   }
 
   closeTab(sessionId: string, tabId: string): void {
@@ -251,6 +252,18 @@ export class SessionManager {
     const session = this.getSession(sessionId)
     if (!session?.worktreePath) return []
     return this.worktreeService.getGitBranches(session.worktreePath)
+  }
+
+  async getCommitFiles(sessionId: string, hash: string): Promise<GitDiff['files']> {
+    const session = this.getSession(sessionId)
+    if (!session?.worktreePath) return []
+    return this.worktreeService.getCommitFiles(session.worktreePath, hash)
+  }
+
+  async getCommitFileDiff(sessionId: string, hash: string, filePath: string): Promise<{ original: string; modified: string }> {
+    const session = this.getSession(sessionId)
+    if (!session?.worktreePath) return { original: '', modified: '' }
+    return this.worktreeService.getCommitFileDiff(session.worktreePath, hash, filePath)
   }
 
   async getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]> {

@@ -1,5 +1,5 @@
 import type { GitCommit } from '@akari/shared-types'
-import { GitBranch, GitMerge, Tag, Globe, CircleDot } from 'lucide-react'
+import { GitBranch, GitMerge, Tag, Globe, CircleDot, ChevronRight } from 'lucide-react'
 import { Badge } from '@/shared/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
 import {
@@ -51,6 +51,8 @@ interface GitGraphRowProps {
   node: IdeaGraphNode | undefined
   isSelected: boolean
   isHead: boolean
+  /** 该提交的文件列表是否已行内展开（控制 chevron 旋转） */
+  isExpanded?: boolean
   /** 本行图形列宽度（逐行动态，VS Code 风格），消息从此处起排 */
   graphWidth: number
   localBranchNames: Set<string>
@@ -65,6 +67,7 @@ export function GitGraphRow({
   node,
   isSelected,
   isHead,
+  isExpanded,
   graphWidth,
   localBranchNames,
   onSelect,
@@ -100,6 +103,12 @@ export function GitGraphRow({
 
             {/* Message + Refs inline */}
             <div className="flex min-w-0 items-center gap-1.5 overflow-hidden pl-1 pr-2">
+              <ChevronRight
+                className={cn(
+                  'h-3 w-3 shrink-0 text-muted-foreground transition-transform',
+                  isExpanded && 'rotate-90',
+                )}
+              />
               <span
                 className={cn(
                   'min-w-0 truncate',

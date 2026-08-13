@@ -35,10 +35,12 @@ export interface IdeaGraphResult {
   positions: Map<string, IdeaGraphNode>
   edges: OrthogonalEdge[]
   graphWidth: number
-  /** 逐行图形宽度（VS Code 风格）：只有实际占用多 lane 的行才变宽 */
+  /** 逐行图形宽度（VS Code 风格）：只有实际占用多 lane 的行才变宽。长度 = 视觉行数（提交行 + 展开的文件行） */
   rowWidths: number[]
   svgHeight: number
   maxLane: number
+  /** 每个提交的 dot 所在视觉行索引（提交 i 若展开 N 个文件行，则其下方提交整体下移） */
+  commitVisualRows: number[]
 }
 
 function collectBranchNames(commits: GitCommit[]): Set<string> {
@@ -122,11 +124,11 @@ function assignLanes(commits: GitCommit[]): Map<string, number> {
   return laneOf
 }
 
-function buildBranchPath(fromRow: number, toRow: number, fromLane: number, toLane: number): string {
+function buildBranchPath(fromY: number, toY: number, fromLane: number, toLane: number): string {
   const x1 = cx(fromLane)
-  const y1 = cy(fromRow)
+  const y1 = fromY
   const x2 = cx(toLane)
-  const y2 = cy(toRow)
+  const y2 = toY
 
   if (fromLane === toLane) {
     return `M ${x1} ${y1} L ${x2} ${y2}`
@@ -142,10 +144,22 @@ export function computeIdeaGraphLayout(
   commits: GitCommit[],
   _head: string,
   baseBranch?: string,
+  /** expandedRows[i] = 提交 i 下方预留的文件行数（0 = 折叠）。行内展开后后续提交整体下移。 */
+  expandedRows?: number[],
 ): IdeaGraphResult {
   const colors = assignBranchColors(commits, baseBranch)
   const primary = computePrimaryBranches(commits, colors)
   const laneOf = assignLanes(commits)
+
+  // 视觉行映射：提交 i 的 dot 在第 commitVisualRows[i] 行，占 1 提交行 + expandedRows[i] 个文件行
+  const exp = expandedRows ?? commits.map(() => 0)
+  const commitVisualRows: number[] = new Array(commits.length)
+  let visual = 0
+  for (let i = 0; i < commits.length; i++) {
+    commitVisualRows[i] = visual
+    visual += 1 + (exp[i] ?? 0)
+  }
+  const totalVisualRows = visual
 
   const positions = new Map<string, IdeaGraphNode>()
   let maxLane = 0
@@ -155,7 +169,7 @@ export function computeIdeaGraphLayout(
     const lane = laneOf.get(commit.hash) ?? 0
     const branch = primary.get(commit.hash) ?? null
     const color = branch ? (colors.get(branch) ?? LANE_COLORS[0]!) : LANE_COLORS[lane % LANE_COLORS.length]!
-    positions.set(commit.hash, { lane, color, branch, row, x: cx(lane), y: cy(row) })
+    positions.set(commit.hash, { lane, color, branch, row, x: cx(lane), y: cy(commitVisualRows[row]!) })
     maxLane = Math.max(maxLane, lane)
   }
 
@@ -179,32 +193,45 @@ export function computeIdeaGraphLayout(
         branch = primary.get(parentHash) ?? null
       }
       const color = branch ? (colors.get(branch) ?? LANE_COLORS[toLane % LANE_COLORS.length]!) : LANE_COLORS[toLane % LANE_COLORS.length]!
-      const d = buildBranchPath(row, toRow, fromLane, toLane)
+      // 父提交不在列表时 toRow === row+1（原语义：edge 延伸至 svg 底部）
+      const fromY = cy(commitVisualRows[row]!)
+      const toVisualRow = toRow < commits.length ? commitVisualRows[toRow]! : totalVisualRows
+      const toY = cy(toVisualRow)
+      const d = buildBranchPath(fromY, toY, fromLane, toLane)
 
       edges.push({ fromRow: row, toRow, fromLane, toLane, color, branch, d })
     }
   }
 
   const graphWidth = Math.max(PAD_LEFT + (maxLane + 1) * LANE_W + DOT_R + 8, 80)
-  const svgHeight = commits.length * ROW_H
+  const svgHeight = totalVisualRows * ROW_H
 
   // VS Code 风格：逐行计算图形宽度。某一行只占一根线时，消息紧跟其右侧；
   // 仅当该行实际有多 lane 的线（commit 自身 lane 或贯穿该行的边）时才变宽。
-  const rowMaxLane = new Array<number>(commits.length).fill(0)
-  for (let row = 0; row < commits.length; row++) {
-    rowMaxLane[row] = laneOf.get(commits[row]!.hash) ?? 0
+  // 展开的文件行也占视觉行：初值取所属提交 lane，边贯穿区间扩张，文件行回填所属提交宽度。
+  const rowMaxLane = new Array<number>(totalVisualRows).fill(0)
+  for (let i = 0; i < commits.length; i++) {
+    rowMaxLane[commitVisualRows[i]!] = laneOf.get(commits[i]!.hash) ?? 0
   }
   for (const edge of edges) {
-    const lo = Math.min(edge.fromRow, edge.toRow)
-    const hi = Math.max(edge.fromRow, edge.toRow)
+    const lo = commitVisualRows[edge.fromRow]!
+    const hi = edge.toRow < commits.length ? commitVisualRows[edge.toRow]! : totalVisualRows - 1
     const ext = Math.max(edge.fromLane, edge.toLane)
     for (let r = lo; r <= hi; r++) {
       if (ext > rowMaxLane[r]!) rowMaxLane[r] = ext
     }
   }
+  for (let i = 0; i < commits.length; i++) {
+    const base = rowMaxLane[commitVisualRows[i]!]!
+    const extra = exp[i] ?? 0
+    for (let f = 1; f <= extra; f++) {
+      const idx = commitVisualRows[i]! + f
+      if (base > rowMaxLane[idx]!) rowMaxLane[idx] = base
+    }
+  }
   const rowWidths = rowMaxLane.map(rowGraphWidth)
 
-  return { positions, edges, graphWidth, rowWidths, svgHeight, maxLane }
+  return { positions, edges, graphWidth, rowWidths, svgHeight, maxLane, commitVisualRows }
 }
 
 /** 单行图形宽度：紧贴该行最右侧 lane 的圆点右缘 + 少量间距，无全局最小值约束 */

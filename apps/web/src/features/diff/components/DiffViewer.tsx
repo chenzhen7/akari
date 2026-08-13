@@ -17,6 +17,8 @@ interface DiffViewerProps {
   workspaceId: string
   worktreePath: string
   isActive?: boolean
+  /** 存在时展示该历史提交的 diff（parent vs commit），而非工作区未提交 diff */
+  commitHash?: string
 }
 
 export const DiffViewer = memo(function DiffViewer({
@@ -26,6 +28,7 @@ export const DiffViewer = memo(function DiffViewer({
   workspaceId,
   worktreePath,
   isActive,
+  commitHash,
 }: DiffViewerProps) {
   const [mode, setMode] = useState<'split' | 'unified'>('split')
   const [content, setContent] = useState<{ original: string; modified: string } | null>(null)
@@ -43,9 +46,13 @@ export const DiffViewer = memo(function DiffViewer({
     setError(null)
     setContent(null)
     const controller = new AbortController()
+    const url = commitHash
+      ? `/sessions/${sessionId}/git-commit-diff`
+      : `/sessions/${sessionId}/diff-content`
+    const params = commitHash ? { hash: commitHash, file: filePath } : { file: filePath }
     apiClient
-      .get<{ original: string; modified: string }>(`/sessions/${sessionId}/diff-content`, {
-        params: { file: filePath },
+      .get<{ original: string; modified: string }>(url, {
+        params,
         signal: controller.signal,
         toast: false,
       })
@@ -57,9 +64,11 @@ export const DiffViewer = memo(function DiffViewer({
       .finally(() => setLoading(false))
 
     return () => controller.abort()
-  }, [filePath, sessionId])
+  }, [filePath, sessionId, commitHash])
 
   useEffect(() => {
+    // 历史提交 diff 是固定内容，不随工作区文件变化实时重拉
+    if (commitHash) return
     return fileUpdateBus.on(sessionId, (event) => {
       if (event.filePath !== filePath) return
       apiClient
@@ -70,7 +79,7 @@ export const DiffViewer = memo(function DiffViewer({
         .then((data) => setContent(data))
         .catch((e: unknown) => console.error('[DiffViewer] reload content failed:', e))
     })
-  }, [sessionId, filePath])
+  }, [sessionId, filePath, commitHash])
 
   useEffect(() => {
     if (!isActive) return

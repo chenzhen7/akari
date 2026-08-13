@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef, Fragment } from 'react'
 import { GitBranch, RefreshCw, ChevronDown } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
 import { Badge } from '@/shared/components/ui/badge'
@@ -11,14 +11,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/components/ui/dialog'
-import type { GitCommit, GitLogResponse } from '@akari/shared-types'
+import type { DiffFile, GitCommit, GitLogResponse } from '@akari/shared-types'
 import { useSessionStore, findSession } from '@/features/session/stores/session-store'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { useShallow } from 'zustand/react/shallow'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
-import { computeIdeaGraphLayout } from '@/features/git/lib/git-graph-utils'
+import { computeIdeaGraphLayout, ROW_H } from '@/features/git/lib/git-graph-utils'
+import { useTabStore } from '@/features/session/stores/tab-store'
 import { GitGraphSvg } from './GitGraphSvg'
 import { GitGraphRow } from './GitGraphRow'
+import { CommitFileRow, CommitFilePlaceholderRow } from './CommitFileRow'
 import { cn } from '@/shared/lib/utils'
 import { apiClient } from '@/shared/lib/api-client'
 
@@ -157,6 +159,46 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   const search = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS)
   const [newBranch, setNewBranch] = useState<NewBranchDialogState>({ open: false, hash: '', name: '' })
 
+  // ── 行内展开状态：展开的提交（Set，多提交可同时展开）+ 文件列表缓存 + 加载状态 ──
+  const [expandedCommits, setExpandedCommits] = useState<Set<string>>(new Set())
+  const [commitFiles, setCommitFiles] = useState<Record<string, DiffFile[]>>({})
+  const [commitFilesStatus, setCommitFilesStatus] = useState<Record<string, 'loading' | 'error' | 'loaded'>>({})
+  const inFlightRef = useRef<Set<string>>(new Set())
+
+  // 切换会话时清空展开状态，避免残留上一个会话的缓存
+  useEffect(() => {
+    setExpandedCommits(new Set())
+    setCommitFiles({})
+    setCommitFilesStatus({})
+  }, [sessionId])
+
+  const fetchCommitFiles = useCallback((hash: string) => {
+    const st = commitFilesStatus[hash]
+    if (st === 'loading' || st === 'loaded') return
+    if (inFlightRef.current.has(hash)) return
+    inFlightRef.current.add(hash)
+    setCommitFilesStatus(prev => ({ ...prev, [hash]: 'loading' }))
+    apiClient.get<DiffFile[]>(`/sessions/${sessionId}/git-commit-files`, {
+      params: { hash },
+      toast: '加载提交文件失败',
+    })
+      .then(files => {
+        setCommitFiles(prev => ({ ...prev, [hash]: files }))
+        setCommitFilesStatus(prev => ({ ...prev, [hash]: 'loaded' }))
+      })
+      .catch(() => {
+        setCommitFilesStatus(prev => ({ ...prev, [hash]: 'error' }))
+      })
+      .finally(() => {
+        inFlightRef.current.delete(hash)
+      })
+  }, [sessionId, commitFilesStatus])
+
+  // 展开状态变化时按需拉取文件列表
+  useEffect(() => {
+    for (const hash of expandedCommits) fetchCommitFiles(hash)
+  }, [expandedCommits, fetchCommitFiles])
+
   // 默认选中当前分支
   useEffect(() => {
     if (branchName && branchFilter === '__all__') {
@@ -218,9 +260,19 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
     )
   }, [commits, search])
 
+  /** 展开的提交在布局里占几行：loading/error 占 1 占位行，loaded 占文件数（至少 1 行） */
+  const expandedRows = useMemo(() => {
+    return filteredCommits.map(c => {
+      if (!expandedCommits.has(c.hash)) return 0
+      const st = commitFilesStatus[c.hash]
+      if (st === 'loaded') return Math.max(commitFiles[c.hash]?.length ?? 0, 1)
+      return 1
+    })
+  }, [filteredCommits, expandedCommits, commitFiles, commitFilesStatus])
+
   const layout = useMemo(
-    () => computeIdeaGraphLayout(filteredCommits, logData?.head ?? '', baseBranch),
-    [filteredCommits, logData?.head, baseBranch],
+    () => computeIdeaGraphLayout(filteredCommits, logData?.head ?? '', baseBranch, expandedRows),
+    [filteredCommits, logData?.head, baseBranch, expandedRows],
   )
 
   const localBranchNames = useMemo(
@@ -236,6 +288,22 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   const handleCreateBranch = (hash: string) => {
     setNewBranch({ open: true, hash, name: '' })
   }
+
+  /** 点击提交行：维持「选中 → 底部详情面板」，并切换行内文件列表展开 */
+  const handleCommitRowClick = (hash: string) => {
+    setSelectedHash(sessionId, selectedHash === hash ? null : hash)
+    setExpandedCommits(prev => {
+      const next = new Set(prev)
+      if (next.has(hash)) next.delete(hash)
+      else next.add(hash)
+      return next
+    })
+  }
+
+  /** 点击展开的文件行 → 打开该文件在此提交中的 diff tab */
+  const openCommitDiff = useCallback((hash: string, filePath: string) => {
+    useTabStore.getState().createTab(sessionId, 'diff', filePath, hash)
+  }, [sessionId])
 
   const submitNewBranch = () => {
     if (!newBranch.name.trim()) return
@@ -318,21 +386,52 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
             head={logData?.head ?? ''}
           />
 
-          {filteredCommits.map((commit, row) => (
-            <GitGraphRow
-              key={commit.hash}
-              commit={commit}
-              row={row}
-              node={layout.positions.get(commit.hash)}
-              isSelected={commit.hash === selectedHash}
-              isHead={commit.hash === logData?.head}
-              graphWidth={layout.rowWidths[row] ?? graphWidth}
-              localBranchNames={localBranchNames}
-              onSelect={() => setSelectedHash(sessionId, selectedHash === commit.hash ? null : commit.hash)}
-              onCheckout={handleCheckout}
-              onCreateBranch={handleCreateBranch}
-            />
-          ))}
+          {filteredCommits.map((commit, i) => {
+            const v = layout.commitVisualRows[i] ?? 0
+            const w = (rv: number) => layout.rowWidths[rv] ?? graphWidth
+            const expanded = expandedCommits.has(commit.hash)
+            const st = commitFilesStatus[commit.hash]
+            const files = commitFiles[commit.hash]
+            return (
+              <Fragment key={commit.hash}>
+                <GitGraphRow
+                  commit={commit}
+                  row={v}
+                  node={layout.positions.get(commit.hash)}
+                  isSelected={commit.hash === selectedHash}
+                  isExpanded={expanded}
+                  isHead={commit.hash === logData?.head}
+                  graphWidth={w(v)}
+                  localBranchNames={localBranchNames}
+                  onSelect={() => handleCommitRowClick(commit.hash)}
+                  onCheckout={handleCheckout}
+                  onCreateBranch={handleCreateBranch}
+                />
+                {expanded && (
+                  st === 'loading' || st === 'error' ? (
+                    <CommitFilePlaceholderRow
+                      top={(v + 1) * ROW_H}
+                      graphWidth={w(v + 1)}
+                      status={st === 'loading' ? 'loading' : 'error'}
+                      onRetry={st === 'error' ? () => fetchCommitFiles(commit.hash) : undefined}
+                    />
+                  ) : files && files.length > 0 ? (
+                    files.map((file, f) => (
+                      <CommitFileRow
+                        key={file.path}
+                        file={file}
+                        top={(v + 1 + f) * ROW_H}
+                        graphWidth={w(v + 1 + f)}
+                        onOpen={(path) => openCommitDiff(commit.hash, path)}
+                      />
+                    ))
+                  ) : (
+                    <CommitFilePlaceholderRow top={(v + 1) * ROW_H} graphWidth={w(v + 1)} status="empty" />
+                  )
+                )}
+              </Fragment>
+            )
+          })}
         </div>
 
         {loading && commits.length === 0 && (

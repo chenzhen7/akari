@@ -104,7 +104,7 @@ function collectFilePaths(node: FileTreeNode): string[] {
   return paths
 }
 
-function statusBadgeClass(status?: DiffFile['status']): string {
+export function statusBadgeClass(status?: DiffFile['status']): string {
   if (status === 'A') return 'bg-green-500/15 text-green-500'
   if (status === 'D') return 'bg-red-500/15 text-red-500'
   if (status === 'R') return 'bg-blue-500/15 text-blue-400'

@@ -29,6 +29,8 @@ export interface IWorktreeService {
   getCurrentDiff(cwd: string): Promise<GitDiff>
   getGitLog(cwd: string, limit?: number, offset?: number, branch?: string): Promise<GitLogResponse>
   getGitBranches(cwd: string): Promise<GitBranch[]>
+  getCommitFiles(cwd: string, hash: string): Promise<GitDiff['files']>
+  getCommitFileDiff(cwd: string, hash: string, filePath: string): Promise<{ original: string; modified: string }>
   getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]>
   watchDiff(sessionId: string, callbacks: {
     onChanged: () => void
@@ -250,6 +252,14 @@ export class WorktreeService implements IWorktreeService {
 
   async getGitBranches(cwd: string): Promise<GitBranch[]> {
     return this.gitQuery.getGitBranches(cwd)
+  }
+
+  async getCommitFiles(cwd: string, hash: string): Promise<GitDiff['files']> {
+    return this.gitQuery.getCommitFiles(cwd, hash)
+  }
+
+  async getCommitFileDiff(cwd: string, hash: string, filePath: string): Promise<{ original: string; modified: string }> {
+    return this.gitQuery.getCommitFileDiff(cwd, hash, filePath)
   }
 
   async getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]> {

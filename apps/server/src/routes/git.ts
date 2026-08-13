@@ -175,4 +175,27 @@ export default async function gitRoutes(fastify: FastifyInstance) {
       }
     },
   )
+
+  fastify.get<{ Params: { id: string }; Querystring: { hash?: string } }>(
+    '/sessions/:id/git-commit-files',
+    async (request, reply) => {
+      const { id } = request.params
+      const { hash } = request.query
+      if (!hash?.trim()) return reply.status(400).send({ error: 'hash query param is required' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      return request.sessionManager.getCommitFiles(id, hash.trim())
+    },
+  )
+
+  fastify.get<{ Params: { id: string }; Querystring: { hash?: string; file?: string } }>(
+    '/sessions/:id/git-commit-diff',
+    async (request, reply) => {
+      const { id } = request.params
+      const { hash, file } = request.query
+      if (!hash?.trim()) return reply.status(400).send({ error: 'hash query param is required' })
+      if (!file?.trim()) return reply.status(400).send({ error: 'file query param is required' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      return request.sessionManager.getCommitFileDiff(id, hash.trim(), file.trim())
+    },
+  )
 }

@@ -22,6 +22,7 @@ interface TabPaneProps {
   type: SessionTab['type']
   terminalId?: string
   filePath?: string
+  commitHash?: string
   isActive: boolean
   send: (msg: ClientMessage) => void
   diffFiles?: DiffFile[]
@@ -34,6 +35,7 @@ const TabPane = memo(function TabPane({
   type,
   terminalId,
   filePath,
+  commitHash,
   isActive,
   send,
   diffFiles,
@@ -63,6 +65,7 @@ const TabPane = memo(function TabPane({
           workspaceId={workspaceId}
           worktreePath={worktreePath}
           isActive={isActive}
+          commitHash={commitHash}
         />
       )}
       {type === 'review' && (
@@ -169,6 +172,7 @@ export const TabContent = memo(function TabContent({ sessionId, send }: TabConte
             type={tab.type}
             terminalId={tab.terminalId}
             filePath={tab.filePath}
+            commitHash={tab.commitHash}
             isActive={tab.id === activeTabId}
             send={send}
             diffFiles={tab.type === 'diff' || tab.type === 'review' ? diffFiles : undefined}

@@ -4,15 +4,21 @@ import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { findSession } from '@/features/session/stores/session-store'
 
 interface TabStore {
-  createTab: (sessionId: string, type: 'terminal' | 'agent' | 'diff' | 'file' | 'review', filePath?: string) => void
+  createTab: (
+    sessionId: string,
+    type: 'terminal' | 'agent' | 'diff' | 'file' | 'review',
+    filePath?: string,
+    /** diff tab 指向的历史提交：存在时 DiffViewer 展示该提交的 diff */
+    commitHash?: string,
+  ) => void
   closeTab: (sessionId: string, tabId: string) => void
   activateTab: (sessionId: string, tabId: string) => void
   reorderTabs: (sessionId: string, orderedTabIds: string[]) => void
 }
 
 export const useTabStore = create<TabStore>(() => ({
-  createTab: (sessionId, type, filePath) => {
-    sendWsMessage('tab:create', { sessionId, type, filePath })
+  createTab: (sessionId, type, filePath, commitHash) => {
+    sendWsMessage('tab:create', { sessionId, type, filePath, commitHash })
   },
 
   closeTab: (sessionId, tabId) => {

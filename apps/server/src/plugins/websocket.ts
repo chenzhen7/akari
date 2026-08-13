@@ -81,9 +81,9 @@ async function handleClientMessage(msg: ClientMessage, socket: WebSocket, fastif
       break
     }
     case 'tab:create': {
-      const { sessionId, type, filePath } = msg.payload
+      const { sessionId, type, filePath, commitHash } = msg.payload
       try {
-        sessionManager.createTab(sessionId, type, filePath)
+        sessionManager.createTab(sessionId, type, filePath, undefined, undefined, commitHash)
       } catch (err) {
         fastify.log.warn({ err, sessionId }, 'tab:create failed')
       }

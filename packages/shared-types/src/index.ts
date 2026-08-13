@@ -88,6 +88,8 @@ export interface SessionTab {
   filePath?: string
   terminalId?: string
   agentType?: AgentType
+  /** diff tab 指向的历史提交：存在时 DiffViewer 拉取该提交的 diff（parent vs commit），而非工作区 diff */
+  commitHash?: string
   /** PTY shell/TUI 通过 OSC 0/1/2 上报的实时标题（净化后），显示优先级高于 label */
   titleFromShell?: string
 }
@@ -189,7 +191,7 @@ export type ClientMessage =
   | { event: 'terminal:input'; payload: { sessionId: string; terminalId: string; data: string } }
   | { event: 'terminal:resize'; payload: { sessionId: string; terminalId: string; cols: number; rows: number } }
   | { event: 'broadcast:send'; payload: { message: string; targets?: string[] } }
-  | { event: 'tab:create'; payload: { sessionId: string; type: 'terminal' | 'agent' | 'diff' | 'file' | 'review'; filePath?: string } }
+  | { event: 'tab:create'; payload: { sessionId: string; type: 'terminal' | 'agent' | 'diff' | 'file' | 'review'; filePath?: string; commitHash?: string } }
   | { event: 'tab:close'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:activate'; payload: { sessionId: string; tabId: string } }
   | { event: 'tab:reorder'; payload: { sessionId: string; orderedTabIds: string[] } }

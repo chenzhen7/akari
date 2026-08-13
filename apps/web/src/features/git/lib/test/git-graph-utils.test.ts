@@ -92,6 +92,35 @@ describe('computeIdeaGraphLayout', () => {
     const result = computeIdeaGraphLayout(commits, 'a')
     expect(result.svgHeight).toBe(2 * ROW_H)
   })
+
+  it('expands file rows below a commit, shifting later commits down', () => {
+    const commits = [
+      makeCommit({ hash: 'c1', parents: ['c2'] }),
+      makeCommit({ hash: 'c2', parents: ['c3'] }),
+      makeCommit({ hash: 'c3', parents: [] }),
+    ]
+    const result = computeIdeaGraphLayout(commits, 'c1', undefined, [2, 0, 0])
+    // c1 占 1 提交行 + 2 文件行，c2/c3 整体下移
+    expect(result.commitVisualRows).toEqual([0, 3, 4])
+    expect(result.positions.get('c1')!.y).toBe(cy(0))
+    expect(result.positions.get('c2')!.y).toBe(cy(3))
+    expect(result.positions.get('c3')!.y).toBe(cy(4))
+    expect(result.svgHeight).toBe(5 * ROW_H)
+    // 展开的文件行复用所属提交的图形宽度（消息列对齐）
+    expect(result.rowWidths.length).toBe(5)
+    expect(result.rowWidths[1]).toBe(result.rowWidths[0])
+    expect(result.rowWidths[2]).toBe(result.rowWidths[0])
+  })
+
+  it('keeps row layout when nothing is expanded', () => {
+    const commits = [
+      makeCommit({ hash: 'a', parents: ['b'] }),
+      makeCommit({ hash: 'b', parents: [] }),
+    ]
+    const result = computeIdeaGraphLayout(commits, 'a')
+    expect(result.commitVisualRows).toEqual([0, 1])
+    expect(result.svgHeight).toBe(2 * ROW_H)
+  })
 })
 
 describe('geometry helpers', () => {

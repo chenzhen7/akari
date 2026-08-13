@@ -7,6 +7,8 @@ export interface IGitQueryService {
   getCurrentDiff(cwd: string): Promise<GitDiff>
   getGitLog(cwd: string, limit?: number, offset?: number, branch?: string): Promise<GitLogResponse>
   getGitBranches(cwd: string): Promise<GitBranch[]>
+  getCommitFiles(cwd: string, hash: string): Promise<GitDiff['files']>
+  getCommitFileDiff(cwd: string, hash: string, filePath: string): Promise<{ original: string; modified: string }>
   getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]>
   watchDiff(cwd: string, callbacks: {
     onChanged: () => void
@@ -36,6 +38,14 @@ export class GitQueryService implements IGitQueryService {
 
   async getGitBranches(cwd: string): Promise<GitBranch[]> {
     return (await this.registry.get(cwd)?.getGitBranches()) ?? []
+  }
+
+  async getCommitFiles(cwd: string, hash: string): Promise<GitDiff['files']> {
+    return (await this.registry.get(cwd)?.getCommitFiles(hash)) ?? []
+  }
+
+  async getCommitFileDiff(cwd: string, hash: string, filePath: string): Promise<{ original: string; modified: string }> {
+    return (await this.registry.get(cwd)?.getCommitFileDiff(hash, filePath)) ?? { original: '', modified: '' }
   }
 
   async getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]> {
