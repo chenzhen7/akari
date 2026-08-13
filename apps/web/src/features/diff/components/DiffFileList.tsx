@@ -185,8 +185,20 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
     })
   }, [])
 
-  const totalAdditions = diffFiles.reduce((s, f) => s + f.additions, 0)
-  const totalDeletions = diffFiles.reduce((s, f) => s + f.deletions, 0)
+  // 与会话列表 badge 同源：diffFiles 已加载时按文件求和；未加载（sessions:list 整表替换后）
+  // 回退 diffSummary，保证两处显示的 +n/-n 始终一致
+  const totalAdditions =
+    session.diffFiles !== undefined
+      ? diffFiles.reduce((s, f) => s + f.additions, 0)
+      : session.diffSummary.additions
+  const totalDeletions =
+    session.diffFiles !== undefined
+      ? diffFiles.reduce((s, f) => s + f.deletions, 0)
+      : session.diffSummary.deletions
+  // diffFiles 未加载但 DB 显示有变更 → 正在等 diff-refresh 回包，正文显示加载中而非「暂无变更」
+  const diffPending =
+    session.diffFiles === undefined &&
+    (session.diffSummary.additions > 0 || session.diffSummary.deletions > 0)
 
   const activeTab = session.tabs.find((t) => t.id === session.activeTabId)
   const scrollTarget = useDiffReviewStore((s) => s.scrollTargets[session.id])
@@ -229,12 +241,12 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
               <TooltipTrigger asChild>
                 <span className="inline-flex" tabIndex={0}>
                   <Button
-                    size="icon-xs"
+                    size="icon-sm"
                     variant="ghost"
                     disabled={refreshing}
                     onClick={() => void handleRefresh()}
                   >
-                    {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                   </Button>
                 </span>
               </TooltipTrigger>
@@ -244,12 +256,12 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
               <TooltipTrigger asChild>
                 <span className="inline-flex" tabIndex={0}>
                   <Button
-                    size="icon-xs"
+                    size="icon-sm"
                     variant="ghost"
                     disabled={!hasDiff}
                     onClick={() => setCommitOpen(true)}
                   >
-                    <GitCommit className="h-3.5 w-3.5" />
+                    <GitCommit className="h-4 w-4" />
                   </Button>
                 </span>
               </TooltipTrigger>
@@ -260,11 +272,11 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      size="icon-xs"
+                      size="icon-sm"
                       variant="ghost"
                       onClick={() => setUpdateOpen(true)}
                     >
-                      <Download className="h-3.5 w-3.5" />
+                      <Download className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">从远程更新（git pull --ff-only）</TooltipContent>
@@ -272,11 +284,11 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      size="icon-xs"
+                      size="icon-sm"
                       variant="ghost"
                       onClick={() => setMergeOpen(true)}
                     >
-                      <Upload className="h-3.5 w-3.5" />
+                      <Upload className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">推送当前分支到远程（git push -u origin HEAD）</TooltipContent>
@@ -287,11 +299,11 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      size="icon-xs"
+                      size="icon-sm"
                       variant="ghost"
                       onClick={() => setUpdateOpen(true)}
                     >
-                      <GitPullRequest className="h-3.5 w-3.5" />
+                      <GitPullRequest className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">从主会话当前分支更新</TooltipContent>
@@ -299,11 +311,11 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      size="icon-xs"
+                      size="icon-sm"
                       variant="ghost"
                       onClick={() => setMergeOpen(true)}
                     >
-                      <GitMerge className="h-3.5 w-3.5" />
+                      <GitMerge className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">合并到主会话当前分支</TooltipContent>
@@ -314,13 +326,13 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
               <TooltipTrigger asChild>
                 <span className="inline-flex" tabIndex={0}>
                   <Button
-                    size="icon-xs"
+                    size="icon-sm"
                     variant="ghost"
                     className="text-red-400 hover:text-red-400"
                     disabled={!hasDiff}
                     onClick={() => setDiscardOpen(true)}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </span>
               </TooltipTrigger>
@@ -335,7 +347,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
         <div className="px-1 py-1">
           {diffFiles.length === 0 && (
             <div className="flex h-full items-center justify-center py-6 text-xs text-muted-foreground">
-              暂无变更
+              {diffPending ? '加载变更中…' : '暂无变更'}
             </div>
           )}
           {tree.children.map((child) => (
@@ -399,7 +411,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
               onClick={() => void handleCommit()}
               disabled={!commitMsg.trim() || committing || (commitScope === 'viewed' && viewedFileCount === 0)}
             >
-              {committing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '提交'}
+              {committing ? <Loader2 className="h-4 w-4 animate-spin" /> : '提交'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -419,7 +431,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDiscardOpen(false)} disabled={discarding}>取消</Button>
             <Button variant="destructive" onClick={() => void handleDiscard()} disabled={discarding}>
-              {discarding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '确认丢弃'}
+              {discarding ? <Loader2 className="h-4 w-4 animate-spin" /> : '确认丢弃'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -450,7 +462,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setMergeOpen(false)} disabled={merging}>取消</Button>
             <Button onClick={() => void (session.isMain ? handlePush() : handleMerge())} disabled={merging}>
-              {merging ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (session.isMain ? '确认推送' : '确认合并')}
+              {merging ? <Loader2 className="h-4 w-4 animate-spin" /> : (session.isMain ? '确认推送' : '确认合并')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -480,7 +492,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setUpdateOpen(false)} disabled={updating}>取消</Button>
             <Button onClick={() => void (session.isMain ? handlePull() : handleUpdateFromBase())} disabled={updating}>
-              {updating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '确认更新'}
+              {updating ? <Loader2 className="h-4 w-4 animate-spin" /> : '确认更新'}
             </Button>
           </DialogFooter>
         </DialogContent>

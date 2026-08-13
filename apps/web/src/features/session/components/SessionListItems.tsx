@@ -21,6 +21,17 @@ import {
 import type { AgentSession } from '@/shared/types'
 import { DeleteSessionDialog } from '@/features/session/components/DeleteSessionDialog'
 
+/** 会话 diff 合计：优先按 diffFiles 求和（与变更列表同源），未加载时回退 DB 里的 diffSummary */
+function sessionDiffTotals(session: AgentSession): { additions: number; deletions: number } {
+  if (session.diffFiles) {
+    return session.diffFiles.reduce(
+      (acc, f) => ({ additions: acc.additions + f.additions, deletions: acc.deletions + f.deletions }),
+      { additions: 0, deletions: 0 },
+    )
+  }
+  return { additions: session.diffSummary?.additions ?? 0, deletions: session.diffSummary?.deletions ?? 0 }
+}
+
 const statusIconMap: Record<string, { Icon: LucideIcon; color: string }> = {
   running: { Icon: Loader2, color: 'text-green-500' },
   idle: { Icon: Coffee, color: 'text-sky-500' },
@@ -72,8 +83,7 @@ export const SessionItem = memo(function SessionItem({
   const isPending = useSessionStore(s => s.pendingOps.has(session.id))
   const [confirmDelete, setConfirmDelete] = useState(false)
   const isTerminal = ['archived', 'merged'].includes(session.status)
-  const additions = session.diffSummary?.additions ?? 0
-  const deletions = session.diffSummary?.deletions ?? 0
+  const { additions, deletions } = sessionDiffTotals(session)
 
   const handleArchive = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -191,8 +201,7 @@ export const MainSessionItem = memo(function MainSessionItem({
   const selectSession = useNavigationStore(s => s.selectSession)
   const initGit = useWorkspaceStore(s => s.initGit)
   const [initializingGit, setInitializingGit] = useState(false)
-  const additions = session.diffSummary?.additions ?? 0
-  const deletions = session.diffSummary?.deletions ?? 0
+  const { additions, deletions } = sessionDiffTotals(session)
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
