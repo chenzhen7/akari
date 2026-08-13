@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { readFile, writeFile, readdir } from 'node:fs/promises'
-import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 
@@ -9,9 +8,8 @@ process.chdir(resolve(__dirname, '..'))
 
 function parseArgs(argv) {
   const type = argv.find((arg) => /^(patch|minor|major)$/.test(arg)) ?? 'patch'
-  const push = argv.includes('--push') || argv.includes('-p')
   const dryRun = argv.includes('--dry-run') || argv.includes('-d')
-  return { type, push, dryRun }
+  return { type, dryRun }
 }
 
 function incVersion(version, type) {
@@ -26,11 +24,6 @@ function incVersion(version, type) {
     return `${parts[0]}.${parts[1] + 1}.0`
   }
   return `${parts[0]}.${parts[1]}.${parts[2] + 1}`
-}
-
-function run(command) {
-  console.log(`$ ${command}`)
-  execSync(command, { stdio: 'inherit' })
 }
 
 async function findPackageJsonFiles() {
@@ -50,7 +43,7 @@ async function findPackageJsonFiles() {
 }
 
 async function bump() {
-  const { type, push, dryRun } = parseArgs(process.argv.slice(2))
+  const { type, dryRun } = parseArgs(process.argv.slice(2))
 
   const rootPkgRaw = await readFile('package.json', 'utf8')
   const rootPkg = JSON.parse(rootPkgRaw)
@@ -73,19 +66,13 @@ async function bump() {
   }
 
   if (dryRun) {
-    console.log('Dry run: no commit/tag/push')
-    return
-  }
-
-  run('git add -A')
-  run(`git commit -m "chore: bump version to ${nextVersion}" -m "🤖 Generated with [Claude Code](https://claude.com/claude-code)"`)
-  run(`git tag v${nextVersion}`)
-
-  if (push) {
-    run('git push origin master')
-    run(`git push origin v${nextVersion}`)
+    console.log('Dry run: no files written')
   } else {
-    console.log('Run with --push to push commit and tag.')
+    console.log(`\nVersion bumped to ${nextVersion}. Review the changes, then commit/tag manually:`)
+    console.log('  git add -A')
+    console.log(`  git commit -m "chore: bump version to ${nextVersion}"`)
+    console.log(`  git tag v${nextVersion}`)
+    console.log('  git push origin master --tags')
   }
 }
 
