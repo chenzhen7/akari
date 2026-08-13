@@ -321,7 +321,21 @@ function createTerminal(
   })
 
   // Keystrokes → backend PTY
+  //
+  // xterm.js 会自动应答终端查询（Device Attributes / DECID），应答经 onData 抛出，
+  // 与真实按键混在一起。若转发回真实 PTY 会被 shell 回显成垃圾字符——恢复会话重放
+  // 历史时最明显：历史里的 ESC[c 查询被重新解析 → 再次应答 → 回显，屏幕多出
+  // "[?1;2c"。真实 PTY（ConPTY）负责能力协商，xterm 的 DA 应答必须丢弃。
+  // （注意：CPR 等光标应答不能过滤，Claude Code 依赖它读光标位置。）
+  const XTERM_DA_RESPONSES = new Set([
+    '\x1b[?1;2c', // 主 DA（xterm / DECID）
+    '\x1b[?6c', // 主 DA（linux）
+    '\x1b[>0;276;0c', // 二级 DA（xterm）
+    '\x1b[>83;40003;0c', // 二级 DA（rxvt-unicode）
+    '\x1b[>85;95;0c', // 二级 DA（linux）
+  ])
   term.onData(data => {
+    if (XTERM_DA_RESPONSES.has(data)) return
     send({ event: 'terminal:input', payload: { sessionId, terminalId, data } })
   })
 
