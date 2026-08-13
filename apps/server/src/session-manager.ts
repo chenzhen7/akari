@@ -409,6 +409,13 @@ export class SessionManager {
     return this.fileService.readFileContent(session.worktreePath, filePath)
   }
 
+  /** 二进制读取（markdown 预览相对图片等），供 raw-file 路由使用 */
+  async readRawFile(sessionId: string, filePath: string): Promise<Buffer> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    return this.fileService.readRawFile(session.worktreePath, filePath)
+  }
+
   async writeFileContent(sessionId: string, filePath: string, content: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)

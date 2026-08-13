@@ -1,6 +1,24 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { perfLog, perfNow } from '../perf-log.js'
 
+const IMAGE_MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  ico: 'image/x-icon',
+  bmp: 'image/bmp',
+  avif: 'image/avif',
+}
+
+/** 按扩展名返回 MIME，未知类型回退到二进制流 */
+function mimeForPath(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
+  return IMAGE_MIME[ext] ?? 'application/octet-stream'
+}
+
 export default async function filesRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { id: string }; Querystring: { path?: string } }>(
     '/sessions/:id/files',
@@ -33,6 +51,25 @@ export default async function filesRoutes(fastify: FastifyInstance) {
         return { content }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        return reply.status(404).send({ error: msg })
+      }
+    },
+  )
+
+  // 二进制原始文件（markdown 预览的相对图片等）。路径经 assertPathInWorktree 校验防穿越。
+  fastify.get<{ Params: { id: string }; Querystring: { path?: string } }>(
+    '/sessions/:id/raw-file',
+    async (request, reply) => {
+      const { id } = request.params
+      const { path: filePath } = request.query
+      if (!filePath) return reply.status(400).send({ error: 'path query param is required' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      try {
+        const data = await request.sessionManager.readRawFile(id, filePath)
+        return reply.type(mimeForPath(filePath)).send(data)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.warn({ err: msg, sessionId: id, filePath }, 'readRawFile failed')
         return reply.status(404).send({ error: msg })
       }
     },

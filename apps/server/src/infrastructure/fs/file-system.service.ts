@@ -6,6 +6,8 @@ import { splitCopyName, buildCopyName } from './copy-name.js'
 export interface IFileSystemService {
   listFiles(cwd: string, relativePath: string): Promise<FileNode[]>
   readFileContent(cwd: string, filePath: string): Promise<string>
+  /** 二进制读取（markdown 预览里的相对图片等），路径同样经工作区边界校验 */
+  readRawFile(cwd: string, filePath: string): Promise<Buffer>
   writeFileContent(cwd: string, filePath: string, content: string): Promise<void>
   createDirectory(cwd: string, dirPath: string): Promise<void>
   createFile(cwd: string, filePath: string): Promise<void>
@@ -116,6 +118,18 @@ export class FileSystemService implements IFileSystemService {
     if (!stats) throw new Error(`File not found: ${filePath}`)
 
     return readFile(fullPath, 'utf8')
+  }
+
+  async readRawFile(cwd: string, filePath: string): Promise<Buffer> {
+    const fullPath = await this.resolveFilePath(filePath, cwd)
+    this.assertPathInWorktree(cwd, fullPath)
+
+    const stats = await access(fullPath, constants.F_OK)
+      .then(() => true)
+      .catch(() => false)
+    if (!stats) throw new Error(`File not found: ${filePath}`)
+
+    return readFile(fullPath)
   }
 
   async writeFileContent(cwd: string, filePath: string, content: string): Promise<void> {

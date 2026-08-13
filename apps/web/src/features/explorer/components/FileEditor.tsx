@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { Editor as MonacoEditor } from '@monaco-editor/react'
+import { Eye, FileText } from 'lucide-react'
 import { toast } from '@/shared/lib/toast'
 import type { FileDiffLine } from '@akari/shared-types'
 import type { editor } from 'monaco-editor'
@@ -9,9 +10,13 @@ import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
 import { useMonacoTheme } from '@/shared/hooks/useMonacoTheme'
 import { useAbsoluteFilePath } from '@/shared/hooks/useAbsoluteFilePath'
 import { EditorContainer } from '@/shared/components/EditorContainer'
+import { Button } from '@/shared/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
+import { cn } from '@/shared/lib/utils'
 import { perfMark, perfMeasure } from '@/shared/lib/perf-log'
 import { buildQuickDiffChanges, getGlyphClassName, getGutterTooltip, GUTTER_COLORS } from '../lib/diff-gutter'
 import { QuickDiffPeek } from './QuickDiffPeek'
+import { MarkdownPreview, type MarkdownPreviewHandle } from '@/features/markdown/components/MarkdownPreview'
 
 const AUTO_SAVE_DELAY = 800
 
@@ -30,6 +35,12 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [diffLines, setDiffLines] = useState<FileDiffLine[] | null>(null)
+  /** 'source'：Monaco 编辑；'preview'：markdown 渲染预览（仅 .md 文件可用） */
+  const [mode, setMode] = useState<'source' | 'preview'>('source')
+  const markdownRef = useRef<MarkdownPreviewHandle>(null)
+  /** 切换瞬间捕获的源码顶部行 / 预览顶部标题行，供 mode effect 恢复滚动 */
+  const pendingSourceLineRef = useRef<number | null>(null)
+  const pendingPreviewLineRef = useRef<number | null>(null)
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null)
@@ -116,6 +127,7 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     setOriginalContent('')
     setDiffLines(null)
     setPeek(null)
+    setMode('source')
     decorationsRef.current?.clear()
 
     const clickKey = `file:${filePath}`
@@ -250,6 +262,49 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     } catch { /* ignore */ }
   }, [isActive])
 
+  // 切换前先捕获位置（旧视图此刻仍可见），再交给对应 mode effect 恢复滚动
+  const handleToggleMode = useCallback(() => {
+    if (mode === 'source') {
+      // source → preview：记录 Monaco 当前顶部可见行
+      pendingSourceLineRef.current = editorRef.current?.getVisibleRanges()[0]?.startLineNumber ?? 1
+      pendingPreviewLineRef.current = null
+    } else {
+      // preview → source：记录预览顶部对应的源码行（精确到小数）
+      pendingPreviewLineRef.current = markdownRef.current?.getCurrentSourceLine() ?? null
+      pendingSourceLineRef.current = null
+    }
+    setMode(m => (m === 'source' ? 'preview' : 'source'))
+  }, [mode])
+
+  // 切到预览：定位到源码顶部行对应的内容
+  useEffect(() => {
+    if (mode !== 'preview') return
+    const line = pendingSourceLineRef.current
+    if (line == null) return
+    const raf = requestAnimationFrame(() => {
+      markdownRef.current?.scrollToSourceLine(line)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [mode])
+
+  // 从预览切回源码：Monaco 刚恢复显示需 relayout，并把对应行精确置顶
+  useEffect(() => {
+    if (mode !== 'source') return
+    const editor = editorRef.current
+    if (!editor) return
+    const line = pendingPreviewLineRef.current
+    const raf = requestAnimationFrame(() => {
+      try {
+        editor.focus()
+        editor.layout()
+        if (line != null) {
+          editor.setScrollPosition({ scrollTop: editor.getTopForLineNumber(line) })
+        }
+      } catch { /* ignore */ }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [mode])
+
   useEffect(() => {
     if (!isDirty || loading || error) return
 
@@ -367,40 +422,70 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   }, [doSave, diffLines, applyDiffDecorations, filePath, handleEditorMouseDown, handleEditorMouseUp])
 
   const absoluteFilePath = useAbsoluteFilePath(worktreePath, filePath, workspaceId)
+  const isMarkdown = detectLanguage(filePath) === 'markdown'
+
+  const headerExtra = isMarkdown ? (
+    <Tooltip delayDuration={500}>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+          onClick={handleToggleMode}
+          aria-label={mode === 'source' ? '预览 markdown' : '编辑源码'}
+        >
+          {mode === 'source' ? <Eye className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{mode === 'source' ? '预览' : '编辑源码'}</TooltipContent>
+    </Tooltip>
+  ) : undefined
 
   return (
-    <EditorContainer filePath={absoluteFilePath} loading={loading} error={error}>
-      <MonacoEditor
-        height="100%"
-        language={detectLanguage(filePath)}
-        value={content}
-        theme={monacoTheme}
-        onChange={(value) => {
-          setContent(value ?? '')
-          scheduleDiffRefresh()
-        }}
-        onMount={handleEditorMount}
-        options={{
-          minimap: { enabled: false },
-          scrollBeyondLastLine: false,
-          fontSize: 13,
-          lineNumbers: 'on',
-          padding: { top: 8, bottom: 8 },
-          wordWrap: 'on',
-          automaticLayout: true,
-        }}
-      />
-      {peek && changes.length > 0 && editorRef.current && (
-        <QuickDiffPeek
-          sessionId={sessionId}
+    <EditorContainer filePath={absoluteFilePath} loading={loading} error={error} headerExtra={headerExtra}>
+      {/* 预览模式下 Monaco 仍保持挂载（display:none），切回源码无需重新挂载 */}
+      <div className={cn('h-full', mode === 'preview' && 'hidden')}>
+        <MonacoEditor
+          height="100%"
+          language={detectLanguage(filePath)}
+          value={content}
+          theme={monacoTheme}
+          onChange={(value) => {
+            setContent(value ?? '')
+            scheduleDiffRefresh()
+          }}
+          onMount={handleEditorMount}
+          options={{
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            fontSize: 13,
+            lineNumbers: 'on',
+            padding: { top: 8, bottom: 8 },
+            wordWrap: 'on',
+            automaticLayout: true,
+          }}
+        />
+        {peek && changes.length > 0 && editorRef.current && (
+          <QuickDiffPeek
+            sessionId={sessionId}
+            filePath={filePath}
+            changes={changes}
+            currentIndex={peek.index}
+            anchorLine={peek.anchorLine}
+            hostEditor={editorRef.current}
+            onClose={() => setPeek(null)}
+            onNavigate={handlePeekNavigate}
+            onRevertSuccess={handleReverted}
+          />
+        )}
+      </div>
+      {mode === 'preview' && (
+        <MarkdownPreview
+          ref={markdownRef}
+          content={content}
           filePath={filePath}
-          changes={changes}
-          currentIndex={peek.index}
-          anchorLine={peek.anchorLine}
-          hostEditor={editorRef.current}
-          onClose={() => setPeek(null)}
-          onNavigate={handlePeekNavigate}
-          onRevertSuccess={handleReverted}
+          sessionId={sessionId}
+          workspaceId={workspaceId}
         />
       )}
     </EditorContainer>
