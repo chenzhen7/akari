@@ -1,9 +1,16 @@
 import { memo } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Copy, FileCode, Trash2 } from 'lucide-react'
 import type { DiffFile } from '@akari/shared-types'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/components/ui/button'
 import { Checkbox } from '@/shared/components/ui/checkbox'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/shared/components/ui/context-menu'
 import { FileTypeIcon } from '@/shared/components/file-icon'
 import { useDiffReviewStore } from '../stores/diff-review-store'
 
@@ -87,6 +94,16 @@ function computeFileCounts(node: FileTreeNode): number {
   return count
 }
 
+/** 收集目录节点下所有文件路径（用于目录级丢弃） */
+function collectFilePaths(node: FileTreeNode): string[] {
+  if (node.type === 'file') return [node.path]
+  const paths: string[] = []
+  for (const child of node.children) {
+    paths.push(...collectFilePaths(child))
+  }
+  return paths
+}
+
 function statusBadgeClass(status?: DiffFile['status']): string {
   if (status === 'A') return 'bg-green-500/15 text-green-500'
   if (status === 'D') return 'bg-red-500/15 text-red-500'
@@ -102,6 +119,9 @@ interface DiffFileTreeNodeProps {
   expandedPaths: Set<string>
   onToggleExpand: (path: string) => void
   onSelectFile: (path: string) => void
+  onOpenFile: (path: string) => void
+  onDiscardFiles: (paths: string[], label: string) => void
+  onCopyPath: (path: string) => void
 }
 
 export const DiffFileTreeNode = memo(function DiffFileTreeNode({
@@ -112,6 +132,9 @@ export const DiffFileTreeNode = memo(function DiffFileTreeNode({
   expandedPaths,
   onToggleExpand,
   onSelectFile,
+  onOpenFile,
+  onDiscardFiles,
+  onCopyPath,
 }: DiffFileTreeNodeProps) {
   const isExpanded = expandedPaths.has(node.path)
   const isSelected = selectedPath === node.path
@@ -213,11 +236,54 @@ export const DiffFileTreeNode = memo(function DiffFileTreeNode({
     </div>
   )
 
-  if (!isDirectory) return row
+  const filePaths = isDirectory ? collectFilePaths(node) : [node.path]
+
+  const contextMenu = (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuContent className="min-w-44">
+        {isDirectory ? (
+          <>
+            <ContextMenuItem onSelect={() => onToggleExpand(node.path)}>
+              {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+              {isExpanded ? '折叠全部' : '展开全部'}
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => onCopyPath(node.path)}>
+              <Copy className="size-4" />
+              复制路径
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem variant="destructive" onSelect={() => onDiscardFiles(filePaths, node.path)}>
+              <Trash2 className="size-4" />
+              丢弃目录内所有变更
+            </ContextMenuItem>
+          </>
+        ) : (
+          <>
+            <ContextMenuItem onSelect={() => onOpenFile(node.path)}>
+              <FileCode className="size-4" />
+              打开文件
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => onCopyPath(node.path)}>
+              <Copy className="size-4" />
+              复制路径
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem variant="destructive" onSelect={() => onDiscardFiles(filePaths, node.path)}>
+              <Trash2 className="size-4" />
+              丢弃此文件变更
+            </ContextMenuItem>
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
+  )
+
+  if (!isDirectory) return contextMenu
 
   return (
     <div>
-      {row}
+      {contextMenu}
       {isExpanded && (
         <div>
           {node.children.map((child) => (
@@ -230,6 +296,9 @@ export const DiffFileTreeNode = memo(function DiffFileTreeNode({
               expandedPaths={expandedPaths}
               onToggleExpand={onToggleExpand}
               onSelectFile={onSelectFile}
+              onOpenFile={onOpenFile}
+              onDiscardFiles={onDiscardFiles}
+              onCopyPath={onCopyPath}
             />
           ))}
         </div>

@@ -121,6 +121,7 @@ export function RightSidebar({ sessionId }: RightSidebarProps) {
                 <DiffFileList
                   session={session}
                   onSelectFile={handleSelectFile}
+                  onOpenFile={handleOpenFile}
                 />
               </div>
             )}

@@ -17,7 +17,14 @@ import { ScrollArea } from '@/shared/components/ui/scroll-area'
 interface DiffFileListProps {
   session: AgentSession
   onSelectFile: (path: string) => void
+  onOpenFile?: (path: string) => void
 }
+
+/** 丢弃操作的作用范围：全部变更 / 指定文件（单个或目录下多个） */
+type DiscardTarget =
+  | { kind: 'all' }
+  | { kind: 'files'; paths: string[]; label: string }
+  | null
 
 function collectAllPaths(node: FileTreeNode): string[] {
   const paths = [node.path]
@@ -29,7 +36,7 @@ function collectAllPaths(node: FileTreeNode): string[] {
   return paths
 }
 
-export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
+export function DiffFileList({ session, onSelectFile, onOpenFile }: DiffFileListProps) {
   const diffFiles = session.diffFiles ?? []
   const hasDiff = diffFiles.length > 0
   const initialRefreshSessionRef = useRef<string | null>(null)
@@ -60,6 +67,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   const [commitOpen, setCommitOpen] = useState(false)
   const [commitMsg, setCommitMsg] = useState('')
   const [committing, setCommitting] = useState(false)
+  const [commitPushing, setCommitPushing] = useState(false)
   const [commitScope, setCommitScope] = useState<'all' | 'viewed'>('all')
 
   const sessionReviewState = useDiffReviewStore((s) => s.states[session.id])
@@ -69,8 +77,8 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   )
   const viewedFileCount = viewedFiles.length
 
-  // Discard dialog
-  const [discardOpen, setDiscardOpen] = useState(false)
+  // Discard dialog（全部 / 单文件 / 目录）
+  const [discardTarget, setDiscardTarget] = useState<DiscardTarget>(null)
   const [discarding, setDiscarding] = useState(false)
 
   // Merge dialog
@@ -84,19 +92,25 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
   // Refresh diff
   const [refreshing, setRefreshing] = useState(false)
 
+  function buildCommitPayload(): { message: string; scope?: 'all' | 'viewed'; filePaths?: string[] } {
+    const payload: { message: string; scope?: 'all' | 'viewed'; filePaths?: string[] } = {
+      message: commitMsg.trim(),
+    }
+    if (commitScope === 'viewed') {
+      payload.scope = 'viewed'
+      payload.filePaths = viewedFiles
+    }
+    return payload
+  }
+
+  const commitDisabled =
+    !commitMsg.trim() || committing || commitPushing || (commitScope === 'viewed' && viewedFileCount === 0)
+
   async function handleCommit() {
-    if (!commitMsg.trim()) return
-    if (commitScope === 'viewed' && viewedFileCount === 0) return
+    if (commitDisabled) return
     setCommitting(true)
     try {
-      const payload: { message: string; scope?: 'all' | 'viewed'; filePaths?: string[] } = {
-        message: commitMsg.trim(),
-      }
-      if (commitScope === 'viewed') {
-        payload.scope = 'viewed'
-        payload.filePaths = viewedFiles
-      }
-      await apiClient.post(`/sessions/${session.id}/git/commit`, payload, { toast: '提交失败' })
+      await apiClient.post(`/sessions/${session.id}/git/commit`, buildCommitPayload(), { toast: '提交失败' })
       toast.success(commitScope === 'viewed' ? `已提交 ${viewedFileCount} 个已查看文件` : '已提交')
       resetSession(session.id)
       setCommitMsg('')
@@ -106,16 +120,66 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
     }
   }
 
-  async function handleDiscard() {
+  // 提交并推送（仅主会话）：先提交，再 git push -u origin HEAD
+  async function handleCommitAndPush() {
+    if (commitDisabled) return
+    setCommitPushing(true)
+    try {
+      await apiClient.post(`/sessions/${session.id}/git/commit`, buildCommitPayload(), { toast: '提交失败' })
+      await apiClient.post(`/sessions/${session.id}/git/push`, undefined, { toast: '推送失败' })
+      toast.success('已提交并推送')
+      resetSession(session.id)
+      setCommitMsg('')
+      setCommitOpen(false)
+    } finally {
+      setCommitPushing(false)
+    }
+  }
+
+  // 打开丢弃确认弹窗（全部 / 指定文件集）
+  function handleDiscardFiles(paths: string[], label: string) {
+    setDiscardTarget({ kind: 'files', paths, label })
+  }
+
+  async function handleDiscardConfirm() {
+    if (!discardTarget) return
     setDiscarding(true)
     try {
-      await apiClient.post(`/sessions/${session.id}/git/discard`, undefined, { toast: '丢弃失败' })
-      toast.success('已丢弃所有变更')
+      if (discardTarget.kind === 'all') {
+        await apiClient.post(`/sessions/${session.id}/git/discard`, undefined, { toast: '丢弃失败' })
+        toast.success('已丢弃所有变更')
+      } else {
+        await Promise.all(
+          discardTarget.paths.map((path) =>
+            apiClient.post(`/sessions/${session.id}/git/discard-file`, { filePath: path }, { toast: '丢弃失败' }),
+          ),
+        )
+        toast.success(discardTarget.paths.length > 1 ? `已丢弃 ${discardTarget.paths.length} 个文件的变更` : '已丢弃该文件变更')
+      }
       resetSession(session.id)
-      setDiscardOpen(false)
+      setDiscardTarget(null)
     } finally {
       setDiscarding(false)
     }
+  }
+
+  async function handleCopyPath(path: string) {
+    try {
+      await navigator.clipboard.writeText(path)
+      toast.success('已复制路径')
+    } catch (err) {
+      console.error('[DiffFileList] copy path failed:', err)
+      toast.error(`复制路径失败：${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  function handleOpenFile(path: string) {
+    if (!onOpenFile) {
+      console.warn('[DiffFileList] onOpenFile 未提供，回退到 Diff 视图')
+      onSelectFile(path)
+      return
+    }
+    onOpenFile(path)
   }
 
   async function handleRefresh() {
@@ -330,7 +394,7 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
                     variant="ghost"
                     className="text-red-400 hover:text-red-400"
                     disabled={!hasDiff}
-                    onClick={() => setDiscardOpen(true)}
+                    onClick={() => setDiscardTarget({ kind: 'all' })}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -359,6 +423,9 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
               expandedPaths={expandedPaths}
               onToggleExpand={handleToggleExpand}
               onSelectFile={onSelectFile}
+              onOpenFile={handleOpenFile}
+              onDiscardFiles={handleDiscardFiles}
+              onCopyPath={handleCopyPath}
             />
           ))}
         </div>
@@ -406,31 +473,52 @@ export function DiffFileList({ session, onSelectFile }: DiffFileListProps) {
             }}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCommitOpen(false)} disabled={committing}>取消</Button>
-            <Button
-              onClick={() => void handleCommit()}
-              disabled={!commitMsg.trim() || committing || (commitScope === 'viewed' && viewedFileCount === 0)}
-            >
+            <Button variant="outline" onClick={() => setCommitOpen(false)} disabled={committing || commitPushing}>取消</Button>
+            <Button onClick={() => void handleCommit()} disabled={commitDisabled}>
               {committing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '提交'}
             </Button>
+            {session.isMain && (
+              <Button
+                onClick={() => void handleCommitAndPush()}
+                disabled={commitDisabled}
+              >
+                {commitPushing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '提交并推送'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Discard dialog */}
-      <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
+      {/* Discard dialog（全部 / 单文件 / 目录） */}
+      <Dialog
+        open={discardTarget !== null}
+        onOpenChange={(open) => { if (!open) setDiscardTarget(null) }}
+      >
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>丢弃所有变更</DialogTitle>
+            <DialogTitle>{discardTarget?.kind === 'all' ? '丢弃所有变更' : '丢弃变更'}</DialogTitle>
             <DialogDescription>
-              将执行 <span className="font-mono text-foreground">git checkout -- .</span> 和{' '}
-              <span className="font-mono text-foreground">git clean -fd</span>，
-              撤销所有未提交的修改并删除未跟踪文件。此操作不可恢复。
+              {discardTarget?.kind === 'all' ? (
+                <>
+                  将执行 <span className="font-mono text-foreground">git checkout -- .</span> 和{' '}
+                  <span className="font-mono text-foreground">git clean -fd</span>，
+                  撤销所有未提交的修改并删除未跟踪文件。此操作不可恢复。
+                </>
+              ) : (
+                <>
+                  将还原/删除{' '}
+                  <span className="break-all font-mono text-foreground">{discardTarget?.label}</span>
+                  {discardTarget && discardTarget.paths.length > 1
+                    ? ` 等 ${discardTarget.paths.length} 个文件`
+                    : ''}{' '}
+                  的变更。未跟踪文件将被删除，此操作不可恢复。
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDiscardOpen(false)} disabled={discarding}>取消</Button>
-            <Button variant="destructive" onClick={() => void handleDiscard()} disabled={discarding}>
+            <Button variant="outline" onClick={() => setDiscardTarget(null)} disabled={discarding}>取消</Button>
+            <Button variant="destructive" onClick={() => void handleDiscardConfirm()} disabled={discarding}>
               {discarding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '确认丢弃'}
             </Button>
           </DialogFooter>
