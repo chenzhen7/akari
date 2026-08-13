@@ -6,7 +6,8 @@ import { Tooltip as TooltipPrimitive } from "radix-ui"
 import { cn } from "@/shared/lib/utils"
 
 function TooltipProvider({
-  delayDuration = 0,
+  // 悬停延迟：500ms 避免鼠标扫过密集工具条时 tooltip 立即弹出，干扰浏览
+  delayDuration = 500,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (
