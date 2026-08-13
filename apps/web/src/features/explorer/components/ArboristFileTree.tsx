@@ -13,6 +13,7 @@ import {
 } from '@/shared/components/ui/dropdown-menu'
 import type { FileNode } from '@akari/shared-types'
 import { getFileTreeChildren, fetchFileTreeChildren, useFileTreeChildren, useFileTreeTick } from '@/features/explorer/lib/file-tree-store'
+import { useClipboardStore } from '@/features/explorer/stores/clipboard-store'
 import { perfMark } from '@/shared/lib/perf-log'
 
 const ROOT_ID = '__root__'
@@ -77,12 +78,17 @@ function buildNode(fileNode: FileNode, sessionId: string): ArboristFileNode {
 function NodeRenderer({
   node,
   style,
+  sessionId,
   onOpenFile,
 }: NodeRendererProps<ArboristFileNode> & {
+  sessionId: string
   onOpenFile: (path: string) => void
 }) {
   const isDirectory = node.data.type === 'directory'
   const isSelected = node.isSelected
+  const isCut = useClipboardStore(
+    s => s.mode === 'cut' && s.sessionId === sessionId && s.items.some(it => it.path === node.data.path),
+  )
 
   // 不阻止冒泡、不 preventDefault：若 preventDefault，Radix 的
   // composeEventHandlers 会因 defaultPrevented 跳过打开逻辑，导致菜单打不开。
@@ -118,6 +124,7 @@ function NodeRenderer({
         isSelected
           ? 'border-accent/50 bg-accent/50 text-foreground'
           : 'border-transparent text-muted-foreground hover:border-border/60 hover:bg-muted/60',
+        isCut && 'opacity-50',
       )}
     >
       {isDirectory ? (
@@ -243,8 +250,8 @@ export function ArboristFileTree({
   }, [sessionId, loadChain])
 
   const CustomNodeRenderer = useCallback((props: NodeRendererProps<ArboristFileNode>) => (
-    <NodeRenderer {...props} onOpenFile={onOpenFile} />
-  ), [onOpenFile])
+    <NodeRenderer {...props} sessionId={sessionId} onOpenFile={onOpenFile} />
+  ), [sessionId, onOpenFile])
 
   return (
     <div ref={containerRef} className="flex h-full flex-col overflow-hidden">

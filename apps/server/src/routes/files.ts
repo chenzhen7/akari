@@ -126,4 +126,40 @@ export default async function filesRoutes(fastify: FastifyInstance) {
       }
     },
   )
+
+  fastify.post<{ Params: { id: string }; Body: { source: string; targetDir: string } }>(
+    '/sessions/:id/copy',
+    async (request, reply) => {
+      const { id } = request.params
+      const { source, targetDir } = request.body ?? {}
+      if (!source || typeof targetDir !== 'string') return reply.status(400).send({ error: 'source and targetDir are required' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      try {
+        const path = await request.sessionManager.copyPath(id, source, targetDir)
+        return { path }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.warn({ err: msg, sessionId: id, source, targetDir }, 'copyPath failed')
+        return reply.status(422).send({ error: msg })
+      }
+    },
+  )
+
+  fastify.post<{ Params: { id: string }; Body: { source: string; targetDir: string } }>(
+    '/sessions/:id/move',
+    async (request, reply) => {
+      const { id } = request.params
+      const { source, targetDir } = request.body ?? {}
+      if (!source || typeof targetDir !== 'string') return reply.status(400).send({ error: 'source and targetDir are required' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      try {
+        const path = await request.sessionManager.movePath(id, source, targetDir)
+        return { path }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.warn({ err: msg, sessionId: id, source, targetDir }, 'movePath failed')
+        return reply.status(422).send({ error: msg })
+      }
+    },
+  )
 }

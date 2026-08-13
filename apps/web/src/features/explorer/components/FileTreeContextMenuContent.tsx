@@ -1,10 +1,11 @@
 import { useCallback } from 'react'
-import { FolderOpen, Copy, Check, Terminal, FilePlus, FolderPlus, Pencil, Trash2 } from 'lucide-react'
+import { FolderOpen, Copy, Check, Terminal, FilePlus, FolderPlus, Pencil, Trash2, Scissors, ClipboardPaste } from 'lucide-react'
 import { toast, toastError } from '@/shared/lib/toast'
 import { findSession } from '@/features/session/stores/session-store'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { useConnectionStore } from '@/features/terminal/stores/connection-store'
 import { dirnameRelPath } from '@/features/explorer/lib/path-utils'
+import { useClipboardStore } from '@/features/explorer/stores/clipboard-store'
 import {
   ContextMenuContent,
   ContextMenuItem,
@@ -13,12 +14,15 @@ import {
 import type { FileNode } from '@akari/shared-types'
 import type { FileMutation } from './FileMutationDialog'
 
+export type ClipboardAction = 'copy' | 'cut' | 'paste'
+
 interface FileTreeContextMenuContentProps {
   sessionId: string
   terminalId: string
   worktreePath: string
   node: FileNode | null
   onMutation?: (m: FileMutation) => void
+  onClipboardAction?: (action: ClipboardAction, node?: FileNode) => void
 }
 
 function normalizePath(p: string): string {
@@ -43,8 +47,12 @@ export function FileTreeContextMenuContent({
   worktreePath,
   node,
   onMutation,
+  onClipboardAction,
 }: FileTreeContextMenuContentProps) {
   const sendTerminalInput = useConnectionStore(s => s.sendTerminalInput)
+  const clipActive = useClipboardStore(
+    s => s.mode !== null && s.sessionId === sessionId && s.items.length > 0,
+  )
   const activeTab = useWorkspaceStore(
     useCallback(
       (s) => {
@@ -69,6 +77,10 @@ export function FileTreeContextMenuContent({
   const handleNewFolder = () => onMutation?.({ type: 'create-folder', parentPath })
   const handleRename = () => onMutation?.({ type: 'rename', node })
   const handleDelete = () => onMutation?.({ type: 'delete', node })
+
+  const handleCopy = () => onClipboardAction?.('copy', node)
+  const handleCut = () => onClipboardAction?.('cut', node)
+  const handlePaste = () => onClipboardAction?.('paste', node)
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -123,6 +135,23 @@ export function FileTreeContextMenuContent({
       <ContextMenuItem onSelect={handleNewFolder}>
         <FolderPlus className="size-3.5" />
         新建文件夹
+      </ContextMenuItem>
+      {!isRoot && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={handleCut}>
+            <Scissors className="size-3.5" />
+            剪切
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={handleCopy}>
+            <Copy className="size-3.5" />
+            复制
+          </ContextMenuItem>
+        </>
+      )}
+      <ContextMenuItem onSelect={handlePaste} disabled={!clipActive}>
+        <ClipboardPaste className="size-3.5" />
+        粘贴
       </ContextMenuItem>
       {!isRoot && (
         <>

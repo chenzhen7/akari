@@ -439,6 +439,18 @@ export class SessionManager {
     await this.fileService.deletePath(session.worktreePath, targetPath)
   }
 
+  async copyPath(sessionId: string, source: string, targetDir: string): Promise<string> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    return this.fileService.copyPath(session.worktreePath, source, targetDir)
+  }
+
+  async movePath(sessionId: string, source: string, targetDir: string): Promise<string> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    return this.fileService.movePath(session.worktreePath, source, targetDir)
+  }
+
   async restoreSessions(): Promise<void> {
     return this.sessionLifecycle.restoreSessions()
   }

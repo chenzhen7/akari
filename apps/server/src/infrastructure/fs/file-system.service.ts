@@ -1,6 +1,7 @@
-import { mkdir, access, constants, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, access, constants, cp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import type { FileNode } from '@akari/shared-types'
+import { splitCopyName, buildCopyName } from './copy-name.js'
 
 export interface IFileSystemService {
   listFiles(cwd: string, relativePath: string): Promise<FileNode[]>
@@ -10,6 +11,10 @@ export interface IFileSystemService {
   createFile(cwd: string, filePath: string): Promise<void>
   renamePath(cwd: string, fromPath: string, toPath: string): Promise<void>
   deletePath(cwd: string, targetPath: string): Promise<void>
+  /** 复制 source 到 targetDir（保留源名，冲突自动加 copy 后缀），返回消解后的相对路径 */
+  copyPath(cwd: string, source: string, targetDir: string): Promise<string>
+  /** 移动 source 到 targetDir（冲突自动加 copy 后缀；同文件夹为 no-op），返回消解后的相对路径 */
+  movePath(cwd: string, source: string, targetDir: string): Promise<string>
   resolveFilePath(filePath: string, cwd: string): Promise<string>
   resolveWritePath(filePath: string, cwd: string): string
   assertPathInWorktree(worktreePath: string, filePath: string): string
@@ -163,6 +168,62 @@ export class FileSystemService implements IFileSystemService {
     if (resolve(fullPath) === this.getAllowedBase(cwd)) throw new Error('不能删除根目录')
     if (!(await this.pathExists(fullPath))) throw new Error(`文件或文件夹不存在：${targetPath}`)
     await rm(fullPath, { recursive: true })
+  }
+
+  /** childAbs 是否等于 parentAbs 或在其内部（含自身） */
+  private isDescendantOrSelf(parentAbs: string, childAbs: string): boolean {
+    const p = resolve(parentAbs)
+    const c = resolve(childAbs)
+    return c === p || c.startsWith(p + sep)
+  }
+
+  /** 目标名已存在时循环加 copy 后缀，返回真实 FS 上不存在的目标绝对路径 */
+  private async resolveUniquePath(cwd: string, targetDir: string, sourceName: string, isDirectory: boolean): Promise<string> {
+    const targetBase = this.resolveWritePath(targetDir, cwd)
+    const candidate = (name: string) => join(targetBase, name)
+    if (!(await this.pathExists(candidate(sourceName)))) return candidate(sourceName)
+    const { stem, ext } = splitCopyName(sourceName, isDirectory)
+    let n = 1
+    for (;;) {
+      const full = candidate(buildCopyName(stem, ext, n))
+      if (!(await this.pathExists(full))) return full
+      n++
+    }
+  }
+
+  /** 返回相对 cwd 的 `/` 分隔路径，供前端 setSelectedPath 使用 */
+  private toRelPath(cwd: string, absPath: string): string {
+    return relative(cwd, absPath).replace(/\\/g, '/')
+  }
+
+  async copyPath(cwd: string, source: string, targetDir: string): Promise<string> {
+    const fullSource = this.resolveWritePath(source, cwd)
+    const fullTargetDir = this.resolveWritePath(targetDir, cwd)
+    this.assertPathInWorktree(cwd, fullSource)
+    this.assertPathInWorktree(cwd, fullTargetDir)
+    if (!(await this.pathExists(fullSource))) throw new Error(`文件或文件夹不存在：${source}`)
+    if (await this.isDescendantOrSelf(fullSource, fullTargetDir)) throw new Error('不能复制到自身或其子目录中')
+    const isDirectory = (await stat(fullSource)).isDirectory()
+    const destFull = await this.resolveUniquePath(cwd, targetDir, basename(fullSource), isDirectory)
+    await cp(fullSource, destFull, { recursive: isDirectory })
+    return this.toRelPath(cwd, destFull)
+  }
+
+  async movePath(cwd: string, source: string, targetDir: string): Promise<string> {
+    const fullSource = this.resolveWritePath(source, cwd)
+    const fullTargetDir = this.resolveWritePath(targetDir, cwd)
+    this.assertPathInWorktree(cwd, fullSource)
+    this.assertPathInWorktree(cwd, fullTargetDir)
+    if (!(await this.pathExists(fullSource))) throw new Error(`文件或文件夹不存在：${source}`)
+    if (resolve(fullSource) === resolve(cwd)) throw new Error('不能移动根目录')
+    if (await this.isDescendantOrSelf(fullSource, fullTargetDir)) throw new Error('不能移动到自身或其子目录中')
+    const sourceName = basename(fullSource)
+    // 同文件夹粘贴 → no-op（必须在 resolveUniquePath 之前判断，否则同名目标会被误改名为 copy 后缀）
+    if (resolve(join(fullTargetDir, sourceName)) === resolve(fullSource)) return this.toRelPath(cwd, fullSource)
+    const isDirectory = (await stat(fullSource)).isDirectory()
+    const destFull = await this.resolveUniquePath(cwd, targetDir, sourceName, isDirectory)
+    await rename(fullSource, destFull)
+    return this.toRelPath(cwd, destFull)
   }
 
   getWorktreePath(sessionId: string): string {

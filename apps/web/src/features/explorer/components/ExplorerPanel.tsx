@@ -6,12 +6,16 @@ import {
   getFileTreePathsForSession,
   useFileTreeChildren,
 } from '@/features/explorer/lib/file-tree-store'
+import { basenameRelPath, dirnameRelPath } from '@/features/explorer/lib/path-utils'
+import { useClipboardStore } from '@/features/explorer/stores/clipboard-store'
 import {
   ContextMenu,
   ContextMenuTrigger,
 } from '@/shared/components/ui/context-menu'
+import { apiClient } from '@/shared/lib/api-client'
+import { toast } from '@/shared/lib/toast'
 import { ArboristFileTree } from './ArboristFileTree'
-import { FileTreeContextMenuContent } from './FileTreeContextMenuContent'
+import { FileTreeContextMenuContent, type ClipboardAction } from './FileTreeContextMenuContent'
 import { FileMutationDialog, type FileMutation } from './FileMutationDialog'
 
 interface ExplorerPanelProps {
@@ -29,6 +33,39 @@ function getActiveFilePath(session: AgentSession): string | undefined {
     t => t.id === session.activeTabId && (t.type === 'file' || t.type === 'diff'),
   )
   return tab?.filePath
+}
+
+/** 从 tree-store 缓存推断路径类型（可见/选中节点其父目录必然已加载）；找不到视为文件 */
+function getNodeType(sessionId: string, path: string): FileNode['type'] {
+  const parent = dirnameRelPath(path)
+  const children = getFileTreeChildren(sessionId, parent)
+  return children?.find(c => c.path === path)?.type ?? 'file'
+}
+
+/** 由相对路径构造 FileNode，用于键盘复制/剪切；根目录/空返回 null */
+function getSelectedNode(sessionId: string, path: string | undefined): FileNode | null {
+  if (!path || path === '') return null
+  return { path, name: basenameRelPath(path), type: getNodeType(sessionId, path) }
+}
+
+/**
+ * 粘贴目标目录（VSCode 规则）：
+ * - 有 node：node 是源本身 → 其父目录；目录 → 自身；文件 → 其父目录
+ * - 无 node（键盘）：selectedPath 空 → 根('')；是源本身 → 父目录；目录 → 自身；文件 → 父目录
+ */
+function resolvePasteTargetDir(
+  sessionId: string,
+  selectedPath: string | undefined,
+  node: FileNode | null | undefined,
+  sourcePath: string,
+): string {
+  if (node) {
+    if (node.path === sourcePath) return dirnameRelPath(node.path)
+    return node.type === 'directory' ? node.path : dirnameRelPath(node.path)
+  }
+  if (!selectedPath) return ''
+  if (selectedPath === sourcePath) return dirnameRelPath(selectedPath)
+  return getNodeType(sessionId, selectedPath) === 'directory' ? selectedPath : dirnameRelPath(selectedPath)
 }
 
 export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
@@ -150,6 +187,75 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
     [handleRefresh, onOpenFile],
   )
 
+  // 复制/剪切：写入剪贴板 store；粘贴：按 VSCode 规则解析 targetDir → 调后端 copy/move → 刷新并选中
+  const handleClipboardAction = useCallback(
+    async (action: ClipboardAction, node?: FileNode) => {
+      if (action === 'copy' || action === 'cut') {
+        const source = node ?? getSelectedNode(session.id, selectedPath)
+        if (!source) return
+        useClipboardStore.getState().setClipboard(session.id, action, [
+          { path: source.path, name: source.name, type: source.type },
+        ])
+        toast.success(action === 'cut' ? '已剪切' : '已复制')
+        return
+      }
+
+      const clip = useClipboardStore.getState()
+      if (clip.mode === null || clip.sessionId !== session.id) return
+      const source = clip.items[0]
+      if (!source) return
+      const targetDir = resolvePasteTargetDir(session.id, selectedPath, node, source.path)
+      const isCut = clip.mode === 'cut'
+      try {
+        const res = await apiClient.post<{ path: string }>(
+          `/sessions/${session.id}/${isCut ? 'move' : 'copy'}`,
+          { source: source.path, targetDir },
+          { toast: isCut ? '移动失败' : '复制失败' },
+        )
+        const isNoop = isCut && res.path === source.path
+        await handleRefresh()
+        if (isNoop) {
+          // 同文件夹剪切粘贴：无实际变化，仅清空剪切态
+          useClipboardStore.getState().clearClipboard()
+          return
+        }
+        setSelectedPath(res.path)
+        if (clip.items.length === 1 && clip.items[0].type === 'file') onOpenFile(res.path)
+        // 剪切成功后清空剪贴板；复制则保留，可多次粘贴
+        if (isCut) useClipboardStore.getState().clearClipboard()
+        toast.success(isCut ? '已移动' : '已复制')
+      } catch (err) {
+        // api-client 已按前缀 toast 错误
+        console.error('[ExplorerPanel] clipboard paste failed:', err)
+      }
+    },
+    [session.id, selectedPath, handleRefresh, onOpenFile],
+  )
+
+  // 树内焦点时的快捷键：Ctrl/Cmd+C/X/V + Escape 取消剪切
+  const handleTreeKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey
+      const key = e.key.toLowerCase()
+      if (mod && key === 'c') {
+        e.preventDefault()
+        void handleClipboardAction('copy')
+      } else if (mod && key === 'x') {
+        e.preventDefault()
+        void handleClipboardAction('cut')
+      } else if (mod && key === 'v') {
+        e.preventDefault()
+        void handleClipboardAction('paste')
+      } else if (e.key === 'Escape') {
+        if (useClipboardStore.getState().mode === 'cut') {
+          useClipboardStore.getState().clearClipboard()
+          toast.success('已取消剪切')
+        }
+      }
+    },
+    [handleClipboardAction],
+  )
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {error && (
@@ -168,7 +274,7 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
       {rootChildren !== undefined && (
         <ContextMenu modal={false}>
           <ContextMenuTrigger asChild onContextMenu={handleContextMenu}>
-            <div className="min-h-0 flex-1">
+            <div className="min-h-0 flex-1" onKeyDown={handleTreeKeyDown}>
               <ArboristFileTree
                 sessionId={session.id}
                 rootName={getRootFolderName(session.worktreePath)}
@@ -188,6 +294,7 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
             worktreePath={session.worktreePath}
             node={menuNode}
             onMutation={setMutation}
+            onClipboardAction={handleClipboardAction}
           />
         </ContextMenu>
       )}
