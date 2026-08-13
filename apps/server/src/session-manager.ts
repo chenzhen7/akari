@@ -287,6 +287,14 @@ export class SessionManager {
     this.sessionLifecycle.scheduleGitRefresh(sessionId, false)
   }
 
+  async revertChange(sessionId: string, filePath: string, line: number): Promise<void> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    await this.worktreeService.revertChange(sessionId, filePath, line, session.worktreePath)
+    // 只刷变更列表，HEAD 未动图不刷
+    this.sessionLifecycle.scheduleGitRefresh(sessionId, false)
+  }
+
   async checkoutBranch(sessionId: string, branch: string, createNew = false): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)

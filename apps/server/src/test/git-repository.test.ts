@@ -207,4 +207,77 @@ describe('GitRepository', () => {
     // 3 条只读命令（log + rev-parse + branch）真并行一次，第二次命中 TTL 缓存
     expect(runRead).toHaveBeenCalledTimes(3)
   })
+
+  it('reverts the change hunk containing the given line via a reverse patch', async () => {
+    // hunk1 插入 1 行（+1 偏移）→ hunk2 的 +newStart 已是工作树真实行号 15
+    const diffOut =
+      'diff --git a/f.txt b/f.txt\n' +
+      'index a82bf91..2320cab 100644\n' +
+      '--- a/f.txt\n' +
+      '+++ b/f.txt\n' +
+      '@@ -1,7 +1,8 @@ line1\n' +
+      ' line1\n' +
+      ' line2\n' +
+      '+line2 INSERTED\n' +
+      ' line3\n' +
+      ' line4\n' +
+      ' line5\n' +
+      ' line6\n' +
+      ' line7\n' +
+      '@@ -14,13 +15,13 @@ line13\n' +
+      ' line14\n' +
+      ' line15\n' +
+      ' line16\n' +
+      ' line17\n' +
+      ' line18\n' +
+      ' line19\n' +
+      '-line20\n' +
+      '+line20 MODIFIED\n' +
+      ' line21\n' +
+      ' line22\n' +
+      ' line23\n' +
+      ' line24\n' +
+      ' line25\n' +
+      ' line26\n'
+    runRead.mockImplementation((args: string[]) => {
+      if (args[0] === 'cat-file') return Promise.resolve('')
+      if (args[0] === 'diff') return Promise.resolve(diffOut)
+      return Promise.resolve('')
+    })
+    run.mockResolvedValueOnce('')
+
+    const repo = new GitRepository('/repo', runner)
+    await repo.revertChange('f.txt', 21) // line20 MODIFIED 在工作树第 21 行
+
+    expect(run).toHaveBeenCalledTimes(1)
+    const [args, cwd, options] = run.mock.calls[0] as [string[], string, { input?: string }]
+    expect(args).toEqual(['apply', '-R', '-'])
+    expect(cwd).toBe('/repo')
+    expect(options.input).toContain('--- a/f.txt')
+    expect(options.input).toContain('+++ b/f.txt')
+    expect(options.input).toContain('@@ -14,13 +15,13 @@')
+    expect(options.input).toContain('-line20')
+    expect(options.input).toContain('+line20 MODIFIED')
+  })
+
+  it('throws for untracked files on revert-change', async () => {
+    runRead.mockImplementation((args: string[]) => {
+      if (args[0] === 'cat-file') return Promise.reject(new Error('not in HEAD'))
+      return Promise.resolve('')
+    })
+    const repo = new GitRepository('/repo', runner)
+    await expect(repo.revertChange('new.txt', 1)).rejects.toThrow('未跟踪文件')
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('throws when no hunk contains the given line', async () => {
+    runRead.mockImplementation((args: string[]) => {
+      if (args[0] === 'cat-file') return Promise.resolve('')
+      if (args[0] === 'diff') return Promise.resolve('@@ -1,2 +1,2 @@\n line1\n line2\n')
+      return Promise.resolve('')
+    })
+    const repo = new GitRepository('/repo', runner)
+    await expect(repo.revertChange('f.txt', 100)).rejects.toThrow('未找到')
+    expect(run).not.toHaveBeenCalled()
+  })
 })

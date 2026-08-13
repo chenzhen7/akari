@@ -409,6 +409,39 @@ export class GitRepository {
   }
 
   /**
+   * 回滚 line 所在的变更块（hunk）到 HEAD 版本：重建该 hunk 的补丁并 `git apply -R`
+   * 反向应用，只还原这一处改动、保留文件其他改动（对应 VSCode 的 revertChange）。
+   * 未跟踪文件（无 HEAD 版本可回滚）与找不到对应 hunk 时抛错。
+   */
+  async revertChange(filePath: string, line: number): Promise<void> {
+    const existsInHead = await this.runner
+      .runRead(['cat-file', '-e', `HEAD:${filePath}`], this.repoPath)
+      .then(() => true)
+      .catch(() => false)
+    if (!existsInHead) throw new Error('未跟踪文件暂不支持回滚变更')
+
+    const hunks = await this.getFileDiffHunks(filePath)
+    const hunk = hunks.find((h) =>
+      h.newCount > 0 ? line >= h.newStart && line < h.newStart + h.newCount : line === h.newStart,
+    )
+    if (!hunk) throw new Error(`未找到行 ${line} 对应的变更块`)
+
+    const patch = this.buildHunkPatch(filePath, hunk)
+    await this.runner.run(['apply', '-R', '-'], this.repoPath, { input: patch })
+    this.invalidateDiffCache()
+  }
+
+  /** 从解析出的 hunk 重建可被 `git apply` 消费的补丁文本（`+newStart` 已是当前工作树行号）。 */
+  private buildHunkPatch(filePath: string, hunk: DiffHunk): string {
+    const count = (n: number): string => (n === 1 ? '' : `,${n}`)
+    const header = `@@ -${hunk.oldStart}${count(hunk.oldCount)} +${hunk.newStart}${count(hunk.newCount)} @@${hunk.header}`
+    const body = hunk.lines
+      .map((l) => `${l.type === 'added' ? '+' : l.type === 'removed' ? '-' : ' '}${l.content}`)
+      .join('\n')
+    return `diff --git a/${filePath} b/${filePath}\n--- a/${filePath}\n+++ b/${filePath}\n${header}\n${body}\n`
+  }
+
+  /**
    * Watch working tree files. On any change we invalidate the change-list cache and
    * emit `onChanged`; debounce/refresh scheduling lives in the coordinator (上层).
    */

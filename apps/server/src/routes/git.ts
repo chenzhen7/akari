@@ -157,4 +157,22 @@ export default async function gitRoutes(fastify: FastifyInstance) {
       }
     },
   )
+
+  fastify.post<{ Params: { id: string }; Body: { filePath: string; line: number } }>(
+    '/sessions/:id/git/revert-change',
+    async (request, reply) => {
+      const { id } = request.params
+      const { filePath, line } = request.body
+      if (!filePath?.trim()) return reply.status(400).send({ error: 'filePath is required' })
+      if (!Number.isInteger(line) || line < 1) return reply.status(400).send({ error: 'line is required' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      try {
+        await request.sessionManager.revertChange(id, filePath.trim(), line)
+        return { ok: true }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return reply.status(422).send({ error: msg })
+      }
+    },
+  )
 }

@@ -46,6 +46,8 @@ export interface GitRunOptions {
    * false → 只注入 --no-ext-diff，保留 rename 检测（暂无用例，预留）。
    */
   renames?: boolean
+  /** 写入 git 进程 stdin 的内容（如 `git apply -R -` 的补丁文本）。 */
+  input?: string
 }
 
 /** 全局并发读池：限制同时 spawn 的只读 git 进程数，避免 IO 尖峰。 */
@@ -125,6 +127,7 @@ export class GitCommandRunner {
         cwd,
         timeout: options.timeout ?? this.defaultTimeout,
         env: { ...process.env, ...GIT_ENV },
+        input: options.input,
       })
       return result.stdout
     } catch (err) {

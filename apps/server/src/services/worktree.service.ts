@@ -17,6 +17,7 @@ export interface IWorktreeService {
   commitFiles(sessionId: string, message: string, filePaths: string[], cwd: string): Promise<void>
   discardAll(sessionId: string, cwd: string): Promise<void>
   discardFile(sessionId: string, filePath: string, cwd: string): Promise<void>
+  revertChange(sessionId: string, filePath: string, line: number, cwd: string): Promise<void>
   checkoutBranch(sessionId: string, branch: string, createNew: boolean, cwd: string): Promise<void>
   mergeIntoCurrentBranch(targetCwd: string, sourceBranch: string, strategy?: 'squash' | 'merge' | 'rebase'): Promise<void>
   updateFromBase(sessionId: string, sourceBranch: string, cwd: string): Promise<void>
@@ -177,6 +178,14 @@ export class WorktreeService implements IWorktreeService {
     const repo = this.runners.registry.get(cwd)
     if (!repo) throw new Error(`not a git repository: ${cwd}`)
     await repo.discardFile(filePath)
+  }
+
+  async revertChange(_sessionId: string, filePath: string, line: number, cwd: string): Promise<void> {
+    const absolutePath = await this.fileService.resolveFilePath(filePath, cwd)
+    this.fileService.assertPathInWorktree(cwd, absolutePath)
+    const repo = this.runners.registry.get(cwd)
+    if (!repo) throw new Error(`not a git repository: ${cwd}`)
+    await repo.revertChange(filePath, line)
   }
 
   async checkoutBranch(_sessionId: string, branch: string, createNew = false, cwd: string): Promise<void> {

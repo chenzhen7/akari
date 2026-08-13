@@ -206,35 +206,81 @@
   scrollbar-color: oklch(0.556 0 0 / 25%) transparent;
 }
 
-/* Diff gutter styles for Monaco Editor — placed between line numbers and collapse button */
-.monaco-editor .margin-line-added::after {
-  content: '';
-  position: absolute;
-  right: 20px;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background-color: rgba(46, 160, 67, 0.8);
+/* ── Diff gutter markers（VSCode QuickDiff 风格）───────────────────────────── */
+:root {
+  --diff-gutter-added: #48985d;
+  --diff-gutter-modified: #2090d3;
+  --diff-gutter-deleted: #b5200d;
+}
+.dark {
+  --diff-gutter-added: #487e02;
+  --diff-gutter-modified: #1b81a8;
+  --diff-gutter-deleted: #f14c4c;
 }
 
-.monaco-editor .margin-line-modified::after {
-  content: '';
+.monaco-editor .dirty-diff-glyph {
+  margin-left: 5px;
+  z-index: 5;
+  cursor: pointer;
+}
+.monaco-editor .dirty-diff-glyph:before {
   position: absolute;
-  right: 20px;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background-color: rgba(47, 129, 247, 0.8);
+  content: '';
+  height: 100%;
+  width: 0;
+  left: -2px;
 }
 
-.monaco-editor .margin-line-removed::after {
-  content: '\25B6';
+.monaco-editor .dirty-diff-added,
+.monaco-editor .dirty-diff-modified {
+  border-left-style: solid;
+  border-left-width: 3px;
+}
+.monaco-editor .dirty-diff-added.primary {
+  border-left-color: var(--diff-gutter-added);
+}
+.monaco-editor .dirty-diff-added.primary:before {
+  background: var(--diff-gutter-added);
+}
+.monaco-editor .dirty-diff-modified.primary {
+  border-left-color: var(--diff-gutter-modified);
+}
+.monaco-editor .dirty-diff-modified.primary:before {
+  background: var(--diff-gutter-modified);
+}
+
+.monaco-editor .dirty-diff-deleted:before {
+  background: var(--diff-gutter-deleted);
+  margin-left: 3px;
+  height: 0;
+  bottom: 0;
+}
+.monaco-editor .dirty-diff-deleted:after {
+  content: '';
   position: absolute;
-  right: 20px;
-  top: calc(100% - 4px);
-  color: rgba(248, 81, 73, 0.9);
-  font-size: 8px;
-  line-height: 1;
+  bottom: -4px;
+  box-sizing: border-box;
+  width: 4px;
+  height: 0;
+  z-index: 9;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  pointer-events: none;
+}
+.monaco-editor .dirty-diff-deleted.primary:after {
+  border-left: 4px solid var(--diff-gutter-deleted);
+}
+
+/* hover 加宽 + 指针（提示可点击对比） */
+.monaco-editor .margin-view-overlays .dirty-diff-glyph:hover::before {
+  height: 100%;
+  width: 6px;
+  left: -6px;
+}
+.monaco-editor .margin-view-overlays .dirty-diff-deleted:hover::after {
+  bottom: 0;
+  border-top-width: 0;
+  border-bottom-width: 0;
 }
 
 /* Electron window drag regions */
