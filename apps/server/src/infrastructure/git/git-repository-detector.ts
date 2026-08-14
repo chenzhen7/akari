@@ -20,8 +20,12 @@ export class GitRepositoryDetector {
     private readonly workspacePath: string,
     worktreeBaseDir?: string,
   ) {
+    // 只以 repoRoot（getGitRoot 的 git rev-parse --show-toplevel 结果）为根。
+    // 不再注册 workspacePath：当工作区是 git 根的子目录且自身带一个 git 忽略掉的
+    // .git 时（如嵌套/残留目录），注册它会让 findRepositoryRoot 归一化到工作区，
+    // 导致 git diff -- <pathspec> 按 cwd 解析与 status/cat-file 的根相对路径错位。
+    // 工作区自身若真是 git 根，getGitRoot 返回的 repoRoot 即等于它，无需重复注册。
     this.registerIfGit(this.repoRoot)
-    this.registerIfGit(this.workspacePath)
     if (worktreeBaseDir) {
       this.discoverWorktrees(worktreeBaseDir)
     }

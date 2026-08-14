@@ -1,6 +1,6 @@
 import { watch, type FSWatcher } from 'chokidar'
 import { mkdir, symlink, rm, access, constants } from 'node:fs/promises'
-import { join, resolve, basename } from 'node:path'
+import { join, resolve, basename, relative } from 'node:path'
 import type { GitBranch, GitDiff, DiffHunk, FileDiffLine, GitLogResponse } from '@akari/shared-types'
 import { GitCommandRunner } from '../infrastructure/git/git-command-runner.js'
 import { GitRepositoryDetector } from '../infrastructure/git/git-repository-detector.js'
@@ -165,7 +165,8 @@ export class WorktreeService implements IWorktreeService {
   async commitFiles(_sessionId: string, message: string, filePaths: string[], cwd: string): Promise<void> {
     const repo = this.runners.registry.get(cwd)
     if (!repo) throw new Error(`not a git repository: ${cwd}`)
-    await repo.commitFiles(message, filePaths)
+    const gitRelPaths = await Promise.all(filePaths.map((p) => this.toGitRelPath(cwd, repo.path, p)))
+    await repo.commitFiles(message, gitRelPaths)
   }
 
   async discardAll(_sessionId: string, cwd: string): Promise<void> {
@@ -179,7 +180,7 @@ export class WorktreeService implements IWorktreeService {
     this.fileService.assertPathInWorktree(cwd, absolutePath)
     const repo = this.runners.registry.get(cwd)
     if (!repo) throw new Error(`not a git repository: ${cwd}`)
-    await repo.discardFile(filePath)
+    await repo.discardFile(relative(repo.path, absolutePath).replace(/\\/g, '/'))
   }
 
   async revertChange(_sessionId: string, filePath: string, line: number, cwd: string): Promise<void> {
@@ -187,7 +188,7 @@ export class WorktreeService implements IWorktreeService {
     this.fileService.assertPathInWorktree(cwd, absolutePath)
     const repo = this.runners.registry.get(cwd)
     if (!repo) throw new Error(`not a git repository: ${cwd}`)
-    await repo.revertChange(filePath, line)
+    await repo.revertChange(relative(repo.path, absolutePath).replace(/\\/g, '/'), line)
   }
 
   async checkoutBranch(_sessionId: string, branch: string, createNew = false, cwd: string): Promise<void> {
@@ -224,22 +225,40 @@ export class WorktreeService implements IWorktreeService {
     return repo.pushMain()
   }
 
+  /**
+   * 把前端传入的 filePath（变更列表=根相对 / 文件树=工作区相对，混合）归一化为
+   * git 命令所需的 repoPath 相对 pathspec。等价 VS Code git.ts 的 sanitizeRelativePath：
+   * 先 resolveFilePath 转绝对路径（该函数已兼容两种约定 + worktree），再 relative(repoPath, abs)。
+   * 变更列表路径转换后幂等，文件树路径补上 workspaceOffset 前缀，agent worktree 恒为原样。
+   */
+  private async toGitRelPath(cwd: string, repoPath: string, filePath: string): Promise<string> {
+    const absolutePath = await this.fileService.resolveFilePath(filePath, cwd)
+    return relative(repoPath, absolutePath).replace(/\\/g, '/')
+  }
+
   async getFileDiffContent(cwd: string, filePath: string): Promise<{ original: string; modified: string }> {
     const modified = await this.fileService.resolveFilePath(filePath, cwd)
       .then((p) => import('node:fs/promises').then(m => m.readFile(p, 'utf8')))
       .catch(() => '')
     const repo = this.runners.registry.get(cwd)
     if (!repo) return { original: '', modified }
-    const { original } = await repo.getFileDiffContent(filePath)
+    const gitRelPath = await this.toGitRelPath(cwd, repo.path, filePath)
+    const { original } = await repo.getFileDiffContent(gitRelPath)
     return { original, modified }
   }
 
   async getFileDiffLines(cwd: string, filePath: string): Promise<FileDiffLine[]> {
-    return (await this.runners.registry.get(cwd)?.getFileDiffLines(filePath)) ?? []
+    const repo = this.runners.registry.get(cwd)
+    if (!repo) return []
+    const gitRelPath = await this.toGitRelPath(cwd, repo.path, filePath)
+    return repo.getFileDiffLines(gitRelPath)
   }
 
   async getFileDiffHunks(cwd: string, filePath: string): Promise<DiffHunk[]> {
-    return (await this.runners.registry.get(cwd)?.getFileDiffHunks(filePath)) ?? []
+    const repo = this.runners.registry.get(cwd)
+    if (!repo) return []
+    const gitRelPath = await this.toGitRelPath(cwd, repo.path, filePath)
+    return repo.getFileDiffHunks(gitRelPath)
   }
 
   async getCurrentDiff(cwd: string): Promise<GitDiff> {

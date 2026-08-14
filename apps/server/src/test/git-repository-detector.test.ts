@@ -32,7 +32,10 @@ describe('GitRepositoryDetector', () => {
     vi.mocked(watchEmitter.close).mockClear()
   })
 
-  it('registers repoRoot and workspacePath when they contain .git', () => {
+  it('registers only repoRoot; workspacePath is not registered as a root', () => {
+    // 即使 workspacePath 目录里有 .git，也不再单独注册为根：根一律以 git toplevel
+    // （repoRoot = git rev-parse --show-toplevel）为准。残留/被 git 忽略的 .git 会
+    // 让 findRepositoryRoot 归一化到工作区，导致 pathspec 与 status/cat-file 错位。
     vi.mocked(existsSync).mockImplementation((p: string) => {
       return p === gitPath('/repo') || p === gitPath('/workspace')
     })
@@ -40,8 +43,23 @@ describe('GitRepositoryDetector', () => {
     const detector = new GitRepositoryDetector('/repo', '/workspace')
 
     expect(detector.isGitRepository('/repo')).toBe(true)
-    expect(detector.isGitRepository('/workspace')).toBe(true)
+    expect(detector.isGitRepository('/workspace')).toBe(false)
     expect(detector.isGitRepository('/other')).toBe(false)
+  })
+
+  it('normalizes a workspace subdir (even with stray .git) to the parent git root', () => {
+    // 回归：工作区是 git 根的子目录且自身带 .git 时，findRepositoryRoot 必须返回父级
+    // git 根（与 git rev-parse --show-toplevel 一致），否则 git diff -- <pathspec>
+    // 按 cwd 解析与 status/cat-file 的根相对路径错位、diff 静默为空。
+    vi.mocked(existsSync).mockImplementation((p: string) => {
+      return p === gitPath('/repo') || p === gitPath('/repo/sub')
+    })
+
+    const detector = new GitRepositoryDetector('/repo', '/repo/sub')
+
+    expect(detector.findRepositoryRoot('/repo/sub')).toBe(resolve('/repo'))
+    expect(detector.findRepositoryRoot('/repo/sub/docs')).toBe(resolve('/repo'))
+    expect(detector.findRepositoryRoot('/repo/sub/file.ts')).toBe(resolve('/repo'))
   })
 
   it('finds repository root by walking up from child paths', () => {
