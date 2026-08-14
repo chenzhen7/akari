@@ -34,27 +34,6 @@ jobs:
       - name: Build desktop
         run: pnpm build:desktop
 
-      - name: Generate release notes
-        shell: bash
-        run: |
-          TAG="${{ github.ref_name }}"
-          PREV_TAG=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || echo "")
-
-          {
-            echo "## Release $TAG"
-            echo ""
-            echo "### 🚀 Changes"
-            echo ""
-            if [ -n "$PREV_TAG" ]; then
-              git log --no-merges --pretty=format:'- %s' "$PREV_TAG..$TAG"
-            else
-              git log --no-merges --pretty=format:'- %s'
-            fi
-            echo ""
-          } > RELEASE_BODY.md
-
-          cat RELEASE_BODY.md
-
       - name: Release to GitHub
         uses: softprops/action-gh-release@v2
         with:
