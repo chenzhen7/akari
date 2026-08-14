@@ -42,8 +42,8 @@ export function collectCodeLineElements(container: HTMLElement): CodeLineEntry[]
   return entries
 }
 
-/** 元素在容器内容坐标中的 top */
-function getElementTopInContainer(entry: CodeLineEntry, container: HTMLElement): number {
+/** 元素在容器内容坐标中的 top（只读 element，允许传入不含 line 的临时对象） */
+function getElementTopInContainer(entry: Pick<CodeLineEntry, 'element'>, container: HTMLElement): number {
   const containerRect = container.getBoundingClientRect()
   const elRect = entry.element.getBoundingClientRect()
   return container.scrollTop + (elRect.top - containerRect.top)

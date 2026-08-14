@@ -48,7 +48,8 @@ function extractHastText(node: HastNodeLike | undefined): string {
 function extractCodeTextFromPre(preNode: HastNodeLike | undefined): string {
   const firstChild = Array.isArray(preNode?.children) ? preNode.children[0] : undefined
   const codeNode = isHastNode(firstChild) ? firstChild : undefined
-  return extractHastText(codeNode?.children)
+  // extractHastText 接受单个节点并递归拼接其 children；codeNode 即 <code> 元素
+  return extractHastText(codeNode)
 }
 
 /**
@@ -91,7 +92,6 @@ export const MarkdownPreview = memo(
             select-text 覆盖 AppShell 根容器的 select-none，保证内容可选中 */}
         <div className="markdown-body min-h-full select-text px-8 py-6">
           <ReactMarkdown
-            passNode
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeHighlight, rehypeDataLine]}
             components={{
