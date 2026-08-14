@@ -38,6 +38,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: apps/desktop/dist-electron/*.exe
-          body_path: RELEASE_BODY.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
