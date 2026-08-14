@@ -18,13 +18,13 @@ function AheadBehindBadge({ ab }: { ab: AheadBehind | null | undefined }) {
   return (
     <div className="flex shrink-0 items-center gap-1 text-xs leading-none text-muted-foreground">
       {ab.behind > 0 && (
-        <span className="flex items-center gap-0.5">
+        <span className="flex items-center ">
           <ArrowDown className="h-3 w-3" strokeWidth={1.5} />
           {ab.behind}
         </span>
       )}
       {ab.ahead > 0 && (
-        <span className="flex items-center gap-0.5">
+        <span className="flex items-center ">
           <ArrowUp className="h-3 w-3" strokeWidth={1.5} />
           {ab.ahead}
         </span>
