@@ -43,23 +43,23 @@ export const SessionHoverCard = memo(function SessionHoverCard({ session }: Sess
 
       {/* 领先/落后 */}
       {hasUpstream && (
-        <div className="flex items-center gap-2 text-[11px]">
+        <div className="flex items-center gap-2 text-xs">
           {synced ? (
             <span className="flex items-center gap-1 text-muted-foreground">
-              <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
               已与上游同步
             </span>
           ) : (
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-2 text-muted-foreground">
               {ab!.behind > 0 && (
-                <span className="flex items-center gap-0.5 text-amber-500">
-                  <ArrowDown className="h-3 w-3" />
+                <span className="flex items-center gap-0.5">
+                  <ArrowDown className="h-3 w-3" strokeWidth={1.5} />
                   {ab!.behind}
                 </span>
               )}
               {ab!.ahead > 0 && (
-                <span className="flex items-center gap-0.5 text-sky-500">
-                  <ArrowUp className="h-3 w-3" />
+                <span className="flex items-center gap-0.5">
+                  <ArrowUp className="h-3 w-3" strokeWidth={1.5} />
                   {ab!.ahead}
                 </span>
               )}

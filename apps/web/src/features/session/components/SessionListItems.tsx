@@ -8,17 +8,27 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/shared/componen
 import { sessionDiffTotals } from '@/features/session/lib/session-ui'
 import { StatusIcon } from '@/features/session/components/SessionStatusIcon'
 import { SessionHoverCard } from '@/features/session/components/SessionHoverCard'
-import { GitBranch, Archive, Trash2, RotateCcw, Loader2 } from 'lucide-react'
+import { GitBranch, Archive, Trash2, RotateCcw, Loader2, ArrowDown, ArrowUp } from 'lucide-react'
 import type { AgentSession, AheadBehind } from '@/shared/types'
 import { DeleteSessionDialog } from '@/features/session/components/DeleteSessionDialog'
 
-/** 领先/落后徽标：仅在有上游且 ahead/behind 非全零时显示 `↓behind ↑ahead`（对齐 VS Code 语义） */
+/** 领先/落后徽标：仅在有上游且 ahead/behind 非全零时显示（对齐 VS Code 语义） */
 function AheadBehindBadge({ ab }: { ab: AheadBehind | null | undefined }) {
   if (!ab || (ab.ahead === 0 && ab.behind === 0)) return null
   return (
-    <div className="flex shrink-0 items-center gap-1 text-[10px] font-mono">
-      {ab.behind > 0 && <span className="text-amber-500">↓{ab.behind}</span>}
-      {ab.ahead > 0 && <span className="text-sky-500">↑{ab.ahead}</span>}
+    <div className="flex shrink-0 items-center gap-1 text-xs leading-none text-muted-foreground">
+      {ab.behind > 0 && (
+        <span className="flex items-center gap-0.5">
+          <ArrowDown className="h-3 w-3" strokeWidth={1.5} />
+          {ab.behind}
+        </span>
+      )}
+      {ab.ahead > 0 && (
+        <span className="flex items-center gap-0.5">
+          <ArrowUp className="h-3 w-3" strokeWidth={1.5} />
+          {ab.ahead}
+        </span>
+      )}
     </div>
   )
 }
