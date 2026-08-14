@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFile, writeFile, readdir } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 
@@ -42,8 +43,23 @@ async function findPackageJsonFiles() {
   return files
 }
 
+function git(args) {
+  return execFileSync('git', args, { encoding: 'utf8' }).trim()
+}
+
+function ensureCleanWorktree() {
+  const status = git(['status', '--porcelain'])
+  if (status) {
+    console.error('工作区有未提交的改动，请先提交或 stash 再 bump：')
+    console.error(status)
+    process.exit(1)
+  }
+}
+
 async function bump() {
   const { type, dryRun } = parseArgs(process.argv.slice(2))
+
+  if (!dryRun) ensureCleanWorktree()
 
   const rootPkgRaw = await readFile('package.json', 'utf8')
   const rootPkg = JSON.parse(rootPkgRaw)
@@ -67,13 +83,17 @@ async function bump() {
 
   if (dryRun) {
     console.log('Dry run: no files written')
-  } else {
-    console.log(`\nVersion bumped to ${nextVersion}. Review the changes, then commit/tag manually:`)
-    console.log('  git add -A')
-    console.log(`  git commit -m "chore: bump version to ${nextVersion}"`)
-    console.log(`  git tag v${nextVersion}`)
-    console.log('  git push origin master --tags')
+    return
   }
+
+  // 提交 + 打 tag + 推送（含 tag）
+  git(['add', ...files])
+  git(['commit', '-m', `chore: bump version to ${nextVersion}`])
+  git(['tag', `v${nextVersion}`])
+  const branch = git(['rev-parse', '--abbrev-ref', 'HEAD'])
+  git(['push', 'origin', branch, '--tags'])
+
+  console.log(`\nDone: committed, tagged v${nextVersion}, pushed to origin/${branch}`)
 }
 
 bump().catch((err) => {
