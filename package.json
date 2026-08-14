@@ -1,7 +1,7 @@
 {
   "name": "akari-root",
   "private": true,
-  "version": "0.8.1",
+  "version": "0.9.0",
   "scripts": {
     "dev": "cross-env VITE_API_URL=http://localhost:3001 pnpm --filter @akari/web dev -- --port 5173 --strictPort",
     "dev:server": "pnpm --filter @akari/server dev",
