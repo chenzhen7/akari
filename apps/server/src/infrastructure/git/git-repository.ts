@@ -413,7 +413,9 @@ export class GitRepository {
   async commitFiles(message: string, filePaths: string[]): Promise<void> {
     if (filePaths.length === 0) throw new Error('no files to commit')
     await this.runner.run(['add', '--', ...filePaths], this.repoPath)
-    await this.runner.run(['commit', '-m', message], this.repoPath)
+    // 必须带 pathspec：裸 `git commit` 会提交整个索引区，
+    // 把此前已被暂存（如 agent 执行过 git add）的未审查文件一并提交
+    await this.runner.run(['commit', '-m', message, '--', ...filePaths], this.repoPath)
     this.invalidateRepoCache()
   }
 
