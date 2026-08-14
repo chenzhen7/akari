@@ -86,8 +86,14 @@ export function parseDiffHunks(diffOutput: string): DiffHunk[] {
         i++
         continue
       }
-      if (isHunkTerminator(dline) || isNoNewlineMarker(dline)) {
+      if (isHunkTerminator(dline)) {
         break
+      }
+      // `\ No newline at end of file` 是前一行「无结尾换行」的元数据，可能出现在
+      // hunk 中间（如末尾 `}` 被改动时），必须跳过并继续，不能当作 hunk 结束
+      if (isNoNewlineMarker(dline)) {
+        i++
+        continue
       }
 
       const prefix = dline.charAt(0)
@@ -173,8 +179,13 @@ export function parseDiffLines(diffOutput: string): FileDiffLine[] {
         i++
         continue
       }
-      if (isHunkTerminator(dline) || isNoNewlineMarker(dline)) {
+      if (isHunkTerminator(dline)) {
         break
+      }
+      // 同 parseDiffHunks：no-newline 标记是元数据，跳过继续
+      if (isNoNewlineMarker(dline)) {
+        i++
+        continue
       }
 
       const prefix = dline.charAt(0)
