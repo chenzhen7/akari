@@ -1,7 +1,7 @@
 import { watch, type FSWatcher } from 'chokidar'
 import { mkdir, symlink, rm, access, constants } from 'node:fs/promises'
 import { join, resolve, basename, relative } from 'node:path'
-import type { GitBranch, GitDiff, DiffHunk, FileDiffLine, GitLogResponse } from '@akari/shared-types'
+import type { AheadBehind, GitBranch, GitDiff, DiffHunk, FileDiffLine, GitLogResponse } from '@akari/shared-types'
 import { GitCommandRunner } from '../infrastructure/git/git-command-runner.js'
 import { GitRepositoryDetector } from '../infrastructure/git/git-repository-detector.js'
 import { GitRepositoryRegistry } from '../infrastructure/git/git-repository-registry.js'
@@ -29,6 +29,7 @@ export interface IWorktreeService {
   getCurrentDiff(cwd: string): Promise<GitDiff>
   getGitLog(cwd: string, limit?: number, offset?: number, branch?: string): Promise<GitLogResponse>
   getGitBranches(cwd: string): Promise<GitBranch[]>
+  getTrackingStatus(cwd: string): Promise<AheadBehind | null>
   getCommitFiles(cwd: string, hash: string): Promise<GitDiff['files']>
   getCommitFileDiff(cwd: string, hash: string, filePath: string): Promise<{ original: string; modified: string }>
   getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]>
@@ -271,6 +272,10 @@ export class WorktreeService implements IWorktreeService {
 
   async getGitBranches(cwd: string): Promise<GitBranch[]> {
     return this.gitQuery.getGitBranches(cwd)
+  }
+
+  async getTrackingStatus(cwd: string): Promise<AheadBehind | null> {
+    return this.gitQuery.getTrackingStatus(cwd)
   }
 
   async getCommitFiles(cwd: string, hash: string): Promise<GitDiff['files']> {

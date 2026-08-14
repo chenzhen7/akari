@@ -116,6 +116,7 @@ export interface AgentSession {
   lastAiMessage: string
   diffSummary: { additions: number; deletions: number }
   diffFiles?: DiffFile[]
+  aheadBehind?: AheadBehind | null
 
   createdAt: Date
   tags: string[]
@@ -148,6 +149,13 @@ export interface GitBranch {
   isRemote: boolean
 }
 
+/** 相对分支上游的领先/落后提交数（无上游时为 null）。ref 为上游分支名，如 'origin/main' */
+export interface AheadBehind {
+  ahead: number
+  behind: number
+  ref: string
+}
+
 export interface GitLogResponse {
   commits: GitCommit[]
   branches: GitBranch[]
@@ -174,6 +182,7 @@ export type ServerMessage =
   | { event: 'terminal:ready'; payload: { sessionId: string; terminalId: string } }
   | { event: 'terminal:resized'; payload: { sessionId: string; terminalId: string } }
   | { event: 'diff:update'; payload: { sessionId: string; diff: GitDiff } }
+  | { event: 'git:ahead-behind'; payload: { sessionId: string; aheadBehind: AheadBehind | null } }
   | { event: 'file:update'; payload: FileChangeEvent }
   | { event: 'sessions:list'; payload: AgentSession[] }
   | { event: 'git:log-updated'; payload: { sessionId: string } & GitLogResponse }

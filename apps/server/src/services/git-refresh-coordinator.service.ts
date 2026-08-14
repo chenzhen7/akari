@@ -1,9 +1,9 @@
 import { resolve } from 'node:path'
-import type { ServerMessage } from '@akari/shared-types'
+import type { AheadBehind, ServerMessage } from '@akari/shared-types'
 import { perfLog, perfNow } from '../perf-log.js'
 import { IWorktreeService } from './worktree.service.js'
 
-type RefreshKind = 'changeList' | 'gitLog'
+type RefreshKind = 'changeList' | 'gitLog' | 'aheadBehind'
 
 interface RefreshEntry {
   sessionId: string
@@ -34,6 +34,7 @@ export class GitRefreshCoordinator {
     private readonly worktreeService: IWorktreeService,
     private readonly persistDiffSummary: (sessionId: string, summary: { additions: number; deletions: number }) => void,
     private readonly broadcast: (msg: ServerMessage) => void,
+    private readonly persistAheadBehind: (sessionId: string, info: AheadBehind | null) => void,
   ) {}
 
   /** 只重算变更列表并广播 diff:update（不动 git log，图不闪） */
@@ -46,9 +47,14 @@ export class GitRefreshCoordinator {
     this.schedule(sessionId, path, 'gitLog')
   }
 
-  /** 变更列表 + git log 一起刷（HEAD/refs 变化，图也要动） */
+  /** 只重算领先/落后并广播 git:ahead-behind */
+  scheduleAheadBehind(sessionId: string, path: string): void {
+    this.schedule(sessionId, path, 'aheadBehind')
+  }
+
+  /** 变更列表 + git log + 领先/落后一起刷（HEAD/refs 变化，图与徽标都要动） */
   scheduleFullRefresh(sessionId: string, path: string): void {
-    this.schedule(sessionId, path, 'changeList', 'gitLog')
+    this.schedule(sessionId, path, 'changeList', 'gitLog', 'aheadBehind')
   }
 
   private schedule(sessionId: string, path: string, ...kinds: RefreshKind[]): void {
@@ -93,6 +99,9 @@ export class GitRefreshCoordinator {
     if (kinds.includes('gitLog')) {
       await this.runGitLog(sessionId, path)
     }
+    if (kinds.includes('aheadBehind')) {
+      await this.runAheadBehind(sessionId, path)
+    }
   }
 
   private async runChangeList(sessionId: string, path: string): Promise<void> {
@@ -121,6 +130,19 @@ export class GitRefreshCoordinator {
       console.warn(`[GitRefreshCoordinator] git log refresh failed for ${sessionId} @ ${path}:`, err)
     } finally {
       perfLog(`[GitRefreshCoordinator] git log refresh @ ${path}`, t0)
+    }
+  }
+
+  private async runAheadBehind(sessionId: string, path: string): Promise<void> {
+    const t0 = perfNow()
+    try {
+      const info = await this.worktreeService.getTrackingStatus(path)
+      this.persistAheadBehind(sessionId, info)
+      this.broadcast({ event: 'git:ahead-behind', payload: { sessionId, aheadBehind: info } })
+    } catch (err) {
+      console.warn(`[GitRefreshCoordinator] ahead-behind refresh failed for ${sessionId} @ ${path}:`, err)
+    } finally {
+      perfLog(`[GitRefreshCoordinator] ahead-behind refresh @ ${path}`, t0)
     }
   }
 

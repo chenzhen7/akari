@@ -62,6 +62,11 @@ export function handleServerMessage(msg: ServerMessage): void {
         diffFiles: msg.payload.diff.files,
       })
       break
+    case 'git:ahead-behind':
+      useWorkspaceStore.getState().updateSession(msg.payload.sessionId, {
+        aheadBehind: msg.payload.aheadBehind,
+      })
+      break
     case 'file:update': {
       const { sessionId } = msg.payload
       fileUpdateBus.emit(sessionId, msg.payload)

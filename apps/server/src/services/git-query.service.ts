@@ -1,5 +1,5 @@
 import type { FSWatcher } from 'chokidar'
-import type { GitBranch, GitDiff, GitLogResponse } from '@akari/shared-types'
+import type { AheadBehind, GitBranch, GitDiff, GitLogResponse } from '@akari/shared-types'
 import { GitRepositoryRegistry } from '../infrastructure/git/git-repository-registry.js'
 
 export interface IGitQueryService {
@@ -7,6 +7,7 @@ export interface IGitQueryService {
   getCurrentDiff(cwd: string): Promise<GitDiff>
   getGitLog(cwd: string, limit?: number, offset?: number, branch?: string): Promise<GitLogResponse>
   getGitBranches(cwd: string): Promise<GitBranch[]>
+  getTrackingStatus(cwd: string): Promise<AheadBehind | null>
   getCommitFiles(cwd: string, hash: string): Promise<GitDiff['files']>
   getCommitFileDiff(cwd: string, hash: string, filePath: string): Promise<{ original: string; modified: string }>
   getRepoBranches(): Promise<{ name: string; isCurrent: boolean }[]>
@@ -38,6 +39,10 @@ export class GitQueryService implements IGitQueryService {
 
   async getGitBranches(cwd: string): Promise<GitBranch[]> {
     return (await this.registry.get(cwd)?.getGitBranches()) ?? []
+  }
+
+  async getTrackingStatus(cwd: string): Promise<AheadBehind | null> {
+    return (await this.registry.get(cwd)?.getTrackingStatus()) ?? null
   }
 
   async getCommitFiles(cwd: string, hash: string): Promise<GitDiff['files']> {

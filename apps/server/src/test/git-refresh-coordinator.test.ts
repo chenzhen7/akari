@@ -8,16 +8,19 @@ const REPO = resolve('/repo')
 
 const getCurrentDiff = vi.fn()
 const getGitLog = vi.fn()
+const getTrackingStatus = vi.fn()
 const invalidateDiffCache = vi.fn()
 const invalidateGitLogCache = vi.fn()
 const worktreeService = {
   getCurrentDiff,
   getGitLog,
+  getTrackingStatus,
   invalidateDiffCache,
   invalidateGitLogCache,
 } as unknown as IWorktreeService
 
 const persistDiffSummary = vi.fn()
+const persistAheadBehind = vi.fn()
 const broadcast = vi.fn()
 
 const EMPTY_DIFF: GitDiff = { files: [], summary: { additions: 0, deletions: 0, files: 0 } }
@@ -29,13 +32,16 @@ describe('GitRefreshCoordinator', () => {
     vi.useFakeTimers()
     getCurrentDiff.mockReset()
     getGitLog.mockReset()
+    getTrackingStatus.mockReset()
     invalidateDiffCache.mockReset()
     invalidateGitLogCache.mockReset()
     persistDiffSummary.mockReset()
+    persistAheadBehind.mockReset()
     broadcast.mockReset()
     getCurrentDiff.mockResolvedValue(EMPTY_DIFF)
     getGitLog.mockResolvedValue({ commits: [], branches: [], head: '' })
-    coordinator = new GitRefreshCoordinator(worktreeService, persistDiffSummary, broadcast)
+    getTrackingStatus.mockResolvedValue(null)
+    coordinator = new GitRefreshCoordinator(worktreeService, persistDiffSummary, broadcast, persistAheadBehind)
   })
 
   afterEach(() => {
@@ -65,15 +71,21 @@ describe('GitRefreshCoordinator', () => {
     expect(getGitLog).not.toHaveBeenCalled()
   })
 
-  it('scheduleFullRefresh runs changeList then git log', async () => {
+  it('scheduleFullRefresh runs changeList, git log and ahead-behind', async () => {
     coordinator.scheduleFullRefresh('s1', REPO)
     await vi.advanceTimersByTimeAsync(250)
     expect(getCurrentDiff).toHaveBeenCalledTimes(1)
     expect(invalidateGitLogCache).toHaveBeenCalledWith(REPO)
     expect(getGitLog).toHaveBeenCalledTimes(1)
     expect(getGitLog).toHaveBeenCalledWith(REPO, 100, 0)
-    // diff:update + git:log-updated 各一次
-    expect(broadcast).toHaveBeenCalledTimes(2)
+    // 领先/落后：无上游 → 持久化并广播 null
+    expect(getTrackingStatus).toHaveBeenCalledWith(REPO)
+    expect(persistAheadBehind).toHaveBeenCalledWith('s1', null)
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'git:ahead-behind', payload: { sessionId: 's1', aheadBehind: null } }),
+    )
+    // diff:update + git:log-updated + git:ahead-behind 各一次
+    expect(broadcast).toHaveBeenCalledTimes(3)
     expect(broadcast).toHaveBeenCalledWith(expect.objectContaining({ event: 'diff:update' }))
     expect(broadcast).toHaveBeenCalledWith(
       expect.objectContaining({ event: 'git:log-updated', payload: { sessionId: 's1', commits: [], branches: [], head: '' } }),

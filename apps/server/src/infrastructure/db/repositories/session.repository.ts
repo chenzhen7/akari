@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3'
 import type {
+  AheadBehind,
   AgentSession,
   AgentType,
   CanvasEdge,
@@ -27,6 +28,7 @@ interface SessionDbRow {
   terminal_id: string
   progress: number
   diff_summary: string
+  ahead_behind: string | null
   created_at: string
   tags: string
   collaboration_role: string | null
@@ -53,6 +55,19 @@ function parseDiffSummary(raw: string): { additions: number; deletions: number }
   return { additions, deletions }
 }
 
+function parseAheadBehind(raw: string | null): AheadBehind | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    if (typeof parsed.ahead === 'number' && typeof parsed.behind === 'number' && typeof parsed.ref === 'string') {
+      return parsed
+    }
+  } catch {
+    // 非法 JSON，视为无领先/落后数据
+  }
+  return null
+}
+
 function rowToSession(r: SessionDbRow): AgentSession {
   return {
     id: r.id,
@@ -69,6 +84,7 @@ function rowToSession(r: SessionDbRow): AgentSession {
     terminalId: r.terminal_id,
     progress: r.progress,
     diffSummary: parseDiffSummary(r.diff_summary),
+    aheadBehind: parseAheadBehind(r.ahead_behind),
     lastAiMessage: r.last_ai_message,
     terminalOutput: [],
     createdAt: new Date(r.created_at),
@@ -110,6 +126,7 @@ export class SessionRepository {
         terminal_id         TEXT NOT NULL,
         progress            INTEGER NOT NULL DEFAULT 0,
         diff_summary        TEXT NOT NULL DEFAULT '{"additions":0,"deletions":0}',
+        ahead_behind        TEXT,
         created_at          TEXT NOT NULL,
         tags                TEXT NOT NULL DEFAULT '[]',
         pending_approval    TEXT,
@@ -143,6 +160,9 @@ export class SessionRepository {
     }
     if (!cols.includes('is_main')) {
       this.db.exec('ALTER TABLE sessions ADD COLUMN is_main INTEGER NOT NULL DEFAULT 0')
+    }
+    if (!cols.includes('ahead_behind')) {
+      this.db.exec('ALTER TABLE sessions ADD COLUMN ahead_behind TEXT')
     }
 
     // Migration: 把旧数据中 type 为 'claude' 的标签页统一改为通用 'agent'
@@ -192,9 +212,9 @@ export class SessionRepository {
         `INSERT INTO sessions (
           id, name, task, status, agent_type, worktree_path, branch_name, base_branch,
           canvas_x, canvas_y, canvas_width, canvas_height,
-          kanban_column, terminal_id, progress, diff_summary, last_ai_message, created_at, tags,
+          kanban_column, terminal_id, progress, diff_summary, ahead_behind, last_ai_message, created_at, tags,
           collaboration_role, parent_session_id, child_session_ids, tabs, active_tab_id, workspace_id, is_main
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         s.id,
@@ -213,6 +233,7 @@ export class SessionRepository {
         s.terminalId,
         s.progress,
         JSON.stringify(s.diffSummary),
+        s.aheadBehind ? JSON.stringify(s.aheadBehind) : null,
         s.lastAiMessage,
         s.createdAt instanceof Date ? s.createdAt.toISOString() : String(s.createdAt),
         JSON.stringify(s.tags),
@@ -278,6 +299,10 @@ export class SessionRepository {
 
   updateDiffSummary(id: string, summary: { additions: number; deletions: number; files?: number }): void {
     this.db.prepare('UPDATE sessions SET diff_summary = ? WHERE id = ?').run(JSON.stringify(summary), id)
+  }
+
+  updateAheadBehind(id: string, info: AheadBehind | null): void {
+    this.db.prepare('UPDATE sessions SET ahead_behind = ? WHERE id = ?').run(info ? JSON.stringify(info) : null, id)
   }
 
   updateTerminalIdAndTabs(id: string, tabs: SessionTab[], activeTabId: string | null, terminalId: string): void {

@@ -6,6 +6,7 @@ export type {
   SessionTab,
   DiffFile,
   GitDiff,
+  AheadBehind,
   ServerMessage,
   ClientMessage,
 } from '@akari/shared-types'

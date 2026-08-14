@@ -76,6 +76,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
       worktreeService,
       (sessionId, summary) => this.sessionRepository.updateDiffSummary(sessionId, summary),
       broadcast,
+      (sessionId, info) => this.sessionRepository.updateAheadBehind(sessionId, info),
     )
   }
 
@@ -113,6 +114,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
       }
     }
     this.gitRefresh.scheduleChangeList(main.id, main.worktreePath)
+    this.gitRefresh.scheduleAheadBehind(main.id, main.worktreePath)
   }
 
   getSession(sessionId: string): AgentSession | null {
@@ -244,6 +246,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
       )
       this.watchMainBranch(session.id, this.repoRoot)
       this.gitRefresh.scheduleChangeList(session.id, session.worktreePath)
+      this.gitRefresh.scheduleAheadBehind(session.id, session.worktreePath)
     }
 
     return session
@@ -401,6 +404,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
         this.worktreeService.watchDiff(session.id, this.createDiffCallbacks(session.id))
         this.watchSessionGitMetadata(session.id)
         this.gitRefresh.scheduleChangeList(session.id, session.worktreePath)
+        this.gitRefresh.scheduleAheadBehind(session.id, session.worktreePath)
       }
 
       perfLog(`[restoreSessions] 会话 ${session.id}（isMain=${session.isMain}）恢复完成`, tSession)
@@ -502,6 +506,7 @@ export class SessionLifecycleService implements ISessionLifecycleService {
       this.worktreeService.watchDiff(id, this.createDiffCallbacks(id))
       this.watchSessionGitMetadata(id)
       this.gitRefresh.scheduleChangeList(id, worktreePath)
+      this.gitRefresh.scheduleAheadBehind(id, worktreePath)
       this.updateStatus(id, 'idle')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

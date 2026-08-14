@@ -1,7 +1,7 @@
 import { watch, type FSWatcher } from 'chokidar'
 import { join, relative, resolve } from 'node:path'
 import { open, stat as fsStat } from 'node:fs/promises'
-import type { GitDiff, DiffFile, DiffHunk, GitCommit, GitBranch, GitLogResponse, FileDiffLine } from '@akari/shared-types'
+import type { GitDiff, DiffFile, DiffHunk, GitCommit, GitBranch, GitLogResponse, FileDiffLine, AheadBehind } from '@akari/shared-types'
 import { GitCommandRunner } from './git-command-runner.js'
 import { loadGitignoreFilter } from '../fs/gitignore-loader.js'
 import { parseDiffHunks, parseDiffLines } from './diff-parser.js'
@@ -66,6 +66,38 @@ export class GitRepository {
       return this.branch
     } catch {
       return 'main'
+    }
+  }
+
+  /**
+   * 当前分支相对上游（@{upstream}）的领先/落后提交数，对齐 VS Code：
+   * 无上游或 ref 无法解析（detached HEAD / 远程已删）返回 null，不显示徽标。
+   * `git rev-list --left-right --count <upstream>...HEAD` 输出 `left<TAB>right`，
+   * left = 上游有而 HEAD 没有（behind），right = HEAD 有而上游没有（ahead）。
+   */
+  async getTrackingStatus(): Promise<AheadBehind | null> {
+    const upstream = await this.resolveUpstream()
+    if (!upstream) return null
+    try {
+      const out = await this.runner.runRead(['rev-list', '--left-right', '--count', `${upstream}...HEAD`], this.repoPath)
+      const [left, right] = out.trim().split('\t')
+      return { ahead: Number(right) || 0, behind: Number(left) || 0, ref: upstream }
+    } catch {
+      // 上游 ref 无法解析（如远端分支已删除），视为无对比对象
+      return null
+    }
+  }
+
+  private async resolveUpstream(): Promise<string | null> {
+    try {
+      const result = await this.runner.runRead(
+        ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+        this.repoPath,
+      )
+      const ref = result.trim()
+      return ref || null
+    } catch {
+      return null // 无上游追踪分支
     }
   }
 
