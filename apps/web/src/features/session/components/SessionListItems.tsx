@@ -156,7 +156,7 @@ export const SessionItem = memo(function SessionItem({
             </div>
           </button>
         </HoverCardTrigger>
-        <HoverCardContent side="right" align="start" className="w-80">
+        <HoverCardContent side="right" align="start">
           <SessionHoverCard session={session} />
         </HoverCardContent>
       </HoverCard>
@@ -259,7 +259,7 @@ export const MainSessionItem = memo(function MainSessionItem({
           </div>
         </button>
       </HoverCardTrigger>
-      <HoverCardContent side="right" align="start" className="w-80">
+      <HoverCardContent side="right" align="start">
         <SessionHoverCard session={session} />
       </HoverCardContent>
     </HoverCard>
