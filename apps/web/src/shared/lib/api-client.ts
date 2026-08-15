@@ -7,6 +7,8 @@ export interface ApiRequestOptions {
   params?: Record<string, string | number | boolean | undefined | null>
   /** 额外 headers */
   headers?: Record<string, string>
+  /** 原始 body（如 Blob/File），跳过 JSON 序列化，Content-Type 由调用方通过 headers 指定 */
+  rawBody?: BodyInit
   /** AbortSignal，用于取消 */
   signal?: AbortSignal
   /**
@@ -44,7 +46,9 @@ async function request<T>(
     ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
   }
   const init: RequestInit = { method, headers, signal: opts.signal }
-  if (body !== undefined) {
+  if (opts.rawBody !== undefined) {
+    init.body = opts.rawBody
+  } else if (body !== undefined) {
     headers['Content-Type'] = 'application/json'
     init.body = JSON.stringify(body)
   }
@@ -92,6 +96,15 @@ export const apiClient = {
 
   delete<T = void>(path: string, opts?: ApiRequestOptions): Promise<T> {
     return request<T>('DELETE', path, undefined, opts).catch(err => handleError(err, opts ?? {}))
+  },
+
+  /** 原始二进制上传（外部文件粘贴/拖入），Content-Type 固定为 application/octet-stream */
+  upload<T>(path: string, file: Blob, opts?: ApiRequestOptions): Promise<T> {
+    return request<T>('POST', path, undefined, {
+      ...opts,
+      rawBody: file,
+      headers: { 'Content-Type': 'application/octet-stream', ...opts?.headers },
+    }).catch(err => handleError(err, opts ?? {}))
   },
 
   /** 需要原始 Response 的特殊场景使用 */

@@ -33,6 +33,8 @@ interface ArboristFileTreeProps {
   rootName: string
   selectedPath?: string
   onOpenFile: (path: string) => void
+  /** 树内选中节点变化时回调（用于剪切/删除等快捷键定位目标） */
+  onSelect?: (node: FileNode | null) => void
   onRefresh?: () => void
   isRefreshing?: boolean
   onCreateFile?: (parentPath: string) => void
@@ -146,6 +148,7 @@ export function ArboristFileTree({
   rootName,
   selectedPath,
   onOpenFile,
+  onSelect,
   onRefresh,
   isRefreshing,
   onCreateFile,
@@ -295,6 +298,10 @@ export function ArboristFileTree({
           indent={12}
           openByDefault={false}
           selection={selectedPath}
+          onSelect={nodes => {
+            const n = nodes[0]
+            onSelect?.(n ? { path: n.data.path, name: n.data.name, type: n.data.type } : null)
+          }}
           onToggle={handleToggle}
           childrenAccessor="children"
           idAccessor="id"

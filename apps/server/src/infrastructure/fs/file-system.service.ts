@@ -9,6 +9,8 @@ export interface IFileSystemService {
   /** 二进制读取（markdown 预览里的相对图片等），路径同样经工作区边界校验 */
   readRawFile(cwd: string, filePath: string): Promise<Buffer>
   writeFileContent(cwd: string, filePath: string, content: string): Promise<void>
+  /** 写入外部粘贴上传的二进制文件到 targetDir（重名自动加 copy 后缀），返回消解后的相对路径 */
+  writeBinaryFile(cwd: string, targetDir: string, fileName: string, data: Buffer): Promise<string>
   createDirectory(cwd: string, dirPath: string): Promise<void>
   createFile(cwd: string, filePath: string): Promise<void>
   renamePath(cwd: string, fromPath: string, toPath: string): Promise<void>
@@ -137,6 +139,14 @@ export class FileSystemService implements IFileSystemService {
 
     await mkdir(dirname(fullPath), { recursive: true })
     await writeFile(fullPath, content, 'utf8')
+  }
+
+  async writeBinaryFile(cwd: string, targetDir: string, fileName: string, data: Buffer): Promise<string> {
+    const destFull = await this.resolveUniquePath(cwd, targetDir, fileName, false)
+    this.assertPathInWorktree(cwd, destFull)
+    await mkdir(dirname(destFull), { recursive: true })
+    await writeFile(destFull, data)
+    return this.toRelPath(cwd, destFull)
   }
 
   private async pathExists(filePath: string): Promise<boolean> {

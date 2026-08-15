@@ -19,7 +19,19 @@ function mimeForPath(filePath: string): string {
   return IMAGE_MIME[ext] ?? 'application/octet-stream'
 }
 
+/** 外部文件粘贴上传单文件大小上限 */
+const UPLOAD_MAX_BYTES = 50 * 1024 * 1024
+
 export default async function filesRoutes(fastify: FastifyInstance) {
+  // 粘贴上传使用原始二进制 body（非 JSON），需为 application/octet-stream 注册 buffer parser
+  fastify.addContentTypeParser(
+    'application/octet-stream',
+    { parseAs: 'buffer', bodyLimit: UPLOAD_MAX_BYTES },
+    (_request, body, done) => {
+      done(null, body)
+    },
+  )
+
   fastify.get<{ Params: { id: string }; Querystring: { path?: string } }>(
     '/sessions/:id/files',
     async (request, reply) => {
@@ -195,6 +207,29 @@ export default async function filesRoutes(fastify: FastifyInstance) {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         fastify.log.warn({ err: msg, sessionId: id, source, targetDir }, 'movePath failed')
+        return reply.status(422).send({ error: msg })
+      }
+    },
+  )
+
+  // 外部文件粘贴上传：query 传 targetDir / name，body 为原始二进制（application/octet-stream）
+  fastify.post<{ Params: { id: string }; Querystring: { targetDir?: string; name?: string } }>(
+    '/sessions/:id/upload-file',
+    async (request, reply) => {
+      const { id } = request.params
+      const { targetDir = '', name } = request.query
+      if (!name) return reply.status(400).send({ error: 'name query param is required' })
+      if (!request.sessionManager.getSession(id)) return reply.status(404).send({ error: 'session not found' })
+      const body = request.body
+      if (!(body instanceof Buffer)) {
+        return reply.status(400).send({ error: 'expected application/octet-stream body' })
+      }
+      try {
+        const path = await request.sessionManager.uploadFile(id, targetDir, name, body)
+        return { path }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        fastify.log.warn({ err: msg, sessionId: id, targetDir, name }, 'uploadFile failed')
         return reply.status(422).send({ error: msg })
       }
     },

@@ -6,7 +6,7 @@ import {
   getFileTreePathsForSession,
   useFileTreeChildren,
 } from '@/features/explorer/lib/file-tree-store'
-import { basenameRelPath, dirnameRelPath } from '@/features/explorer/lib/path-utils'
+import { dirnameRelPath } from '@/features/explorer/lib/path-utils'
 import { useClipboardStore } from '@/features/explorer/stores/clipboard-store'
 import {
   ContextMenu,
@@ -14,6 +14,7 @@ import {
 } from '@/shared/components/ui/context-menu'
 import { apiClient } from '@/shared/lib/api-client'
 import { toast } from '@/shared/lib/toast'
+import { cn } from '@/shared/lib/utils'
 import { ArboristFileTree } from './ArboristFileTree'
 import { FileTreeContextMenuContent, type ClipboardAction } from './FileTreeContextMenuContent'
 import { FileMutationDialog, type FileMutation } from './FileMutationDialog'
@@ -42,12 +43,6 @@ function getNodeType(sessionId: string, path: string): FileNode['type'] {
   return children?.find(c => c.path === path)?.type ?? 'file'
 }
 
-/** 由相对路径构造 FileNode，用于键盘复制/剪切；根目录/空返回 null */
-function getSelectedNode(sessionId: string, path: string | undefined): FileNode | null {
-  if (!path || path === '') return null
-  return { path, name: basenameRelPath(path), type: getNodeType(sessionId, path) }
-}
-
 /**
  * 粘贴目标目录（VSCode 规则）：
  * - 有 node：node 是源本身 → 其父目录；目录 → 自身；文件 → 其父目录
@@ -68,15 +63,38 @@ function resolvePasteTargetDir(
   return getNodeType(sessionId, selectedPath) === 'directory' ? selectedPath : dirnameRelPath(selectedPath)
 }
 
+/** 拖拽上传目标目录：命中目录节点 → 该目录；命中文件节点 → 其父目录；空白处 → 沿用选中路径规则 */
+function resolveDropTargetDir(
+  sessionId: string,
+  selectedPath: string | undefined,
+  dropTarget: HTMLElement | null,
+): string {
+  const el = dropTarget?.closest('[data-path]') as HTMLElement | null
+  if (el) {
+    const path = el.dataset.path ?? ''
+    const type = (el.dataset.type as FileNode['type'] | undefined) ?? 'file'
+    return type === 'directory' ? path : dirnameRelPath(path)
+  }
+  if (!selectedPath) return ''
+  return getNodeType(sessionId, selectedPath) === 'directory' ? selectedPath : dirnameRelPath(selectedPath)
+}
+
 export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | undefined>()
+  // 树内实际选中的节点（由 react-arborist onSelect 同步），用于剪切/删除快捷键定位目标。
+  // 与 selectedPath（"当前打开的编辑文件"）解耦：点目录不会打开文件，但仍应能剪切/删除。
+  const [selectedNode, setSelectedNode] = useState<FileNode | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [menuNode, setMenuNode] = useState<FileNode | null>(null)
   // 每次右键递增，作为 ContextMenuContent 的 key，强制重挂载以让 floating 在新坐标重新定位
   const [menuSeq, setMenuSeq] = useState(0)
   const [mutation, setMutation] = useState<FileMutation | null>(null)
+  const [dragOver, setDragOver] = useState(false)
   const lastSessionIdRef = useRef<string | null>(null)
+  const treeContainerRef = useRef<HTMLDivElement>(null)
+  // dragenter/dragleave 计数器：避免在子元素间移动时高亮闪烁
+  const dragDepthRef = useRef(0)
 
   const activeFilePath = useMemo(() => getActiveFilePath(session), [session])
 
@@ -133,6 +151,11 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
   const handleOpenFile = useCallback((path: string) => {
     setSelectedPath(path)
     onOpenFile(path)
+    // Monaco 激活/挂载时会自行 focus（抢走焦点），这里把焦点夺回文件树，
+    // 保证紧接着的 Ctrl+X / Delete 等树内快捷键可用。
+    window.setTimeout(() => {
+      treeContainerRef.current?.focus({ preventScroll: true })
+    }, 0)
   }, [onOpenFile])
 
   // 由 ContextMenuTrigger 的 onContextMenu 触发：命中行读取 data-path 得到目标节点，
@@ -179,6 +202,9 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
         setSelectedPath(prev =>
           prev === result.path || prev?.startsWith(result.path + '/') ? undefined : prev,
         )
+        setSelectedNode(prev =>
+          prev && (prev.path === result.path || prev.path.startsWith(result.path + '/')) ? null : prev,
+        )
       } else if (result.action === 'create-file') {
         setSelectedPath(result.path)
         onOpenFile(result.path)
@@ -191,7 +217,7 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
   const handleClipboardAction = useCallback(
     async (action: ClipboardAction, node?: FileNode) => {
       if (action === 'copy' || action === 'cut') {
-        const source = node ?? getSelectedNode(session.id, selectedPath)
+        const source = node ?? selectedNode
         if (!source) return
         useClipboardStore.getState().setClipboard(session.id, action, [
           { path: source.path, name: source.name, type: source.type },
@@ -204,7 +230,7 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
       if (clip.mode === null || clip.sessionId !== session.id) return
       const source = clip.items[0]
       if (!source) return
-      const targetDir = resolvePasteTargetDir(session.id, selectedPath, node, source.path)
+      const targetDir = resolvePasteTargetDir(session.id, selectedPath, node ?? selectedNode, source.path)
       const isCut = clip.mode === 'cut'
       try {
         const res = await apiClient.post<{ path: string }>(
@@ -229,10 +255,108 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
         console.error('[ExplorerPanel] clipboard paste failed:', err)
       }
     },
-    [session.id, selectedPath, handleRefresh, onOpenFile],
+    [session.id, selectedPath, selectedNode, handleRefresh, onOpenFile],
   )
 
-  // 树内焦点时的快捷键：Ctrl/Cmd+C/X/V + Escape 取消剪切
+  // 逐个上传粘贴的外部文件（重名由后端自动加 copy 后缀），完成后刷新并选中最后上传的路径
+  const uploadFiles = useCallback(
+    async (files: File[], targetDir: string) => {
+      let uploaded = 0
+      let lastName = ''
+      for (const file of files) {
+        try {
+          const res = await apiClient.upload<{ path: string }>(
+            `/sessions/${session.id}/upload-file`,
+            file,
+            { params: { targetDir, name: file.name }, toast: `上传 ${file.name} 失败` },
+          )
+          uploaded++
+          lastName = file.name
+          setSelectedPath(res.path)
+        } catch (err) {
+          // api-client 已按前缀 toast 错误
+          console.error(`[ExplorerPanel] upload "${file.name}" failed:`, err)
+        }
+      }
+      await handleRefresh()
+      if (uploaded > 0) {
+        toast.success(uploaded === 1 ? `已粘贴 ${lastName}` : `已粘贴 ${uploaded} 个文件`)
+      }
+    },
+    [session.id, handleRefresh],
+  )
+
+  // 粘贴外部文件（OS 剪贴板）：clipboardData 含文件 → 上传到选中目录；无 → 走内部复制/剪切粘贴
+  const handleTreePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLDivElement>) => {
+      const dt = e.clipboardData
+      if (!dt) return
+      const files = Array.from(dt.files ?? [])
+      if (files.length === 0) {
+        void handleClipboardAction('paste')
+        return
+      }
+      e.preventDefault()
+      const targetDir = resolvePasteTargetDir(session.id, selectedPath, selectedNode, '')
+      void uploadFiles(files, targetDir)
+    },
+    [session.id, selectedPath, selectedNode, handleClipboardAction, uploadFiles],
+  )
+
+  const hasDragFiles = useCallback((e: React.DragEvent<HTMLDivElement>): boolean => {
+    return Array.from(e.dataTransfer?.types ?? []).includes('Files')
+  }, [])
+
+  // 拖拽外部文件进入树：仅在拖的是文件时给高亮反馈
+  const handleDragEnter = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (!hasDragFiles(e)) return
+      e.preventDefault()
+      dragDepthRef.current += 1
+      setDragOver(true)
+    },
+    [hasDragFiles],
+  )
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (!hasDragFiles(e)) return
+      // 必须 preventDefault 才能让 drop 事件生效
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+    },
+    [hasDragFiles],
+  )
+
+  const handleDragLeave = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      if (!hasDragFiles(e)) return
+      dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+      if (dragDepthRef.current === 0) setDragOver(false)
+    },
+    [hasDragFiles],
+  )
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      dragDepthRef.current = 0
+      setDragOver(false)
+      const files = Array.from(e.dataTransfer?.files ?? [])
+      if (files.length === 0) return
+      const targetDir = resolveDropTargetDir(session.id, selectedPath, e.target as HTMLElement)
+      void uploadFiles(files, targetDir)
+    },
+    [session.id, selectedPath, uploadFiles],
+  )
+
+  // 树内选中节点变化时同步（点目录不打开文件，但剪切/删除需要它作为目标）
+  const handleTreeSelect = useCallback((node: FileNode | null) => {
+    setSelectedNode(node)
+  }, [])
+
+  // 树内焦点时的快捷键：Ctrl/Cmd+C/X + Delete/Backspace + Escape 取消剪切；
+  // 粘贴统一走 onPaste（内部/外部文件）
   const handleTreeKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey
@@ -243,9 +367,11 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
       } else if (mod && key === 'x') {
         e.preventDefault()
         void handleClipboardAction('cut')
-      } else if (mod && key === 'v') {
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Backspace 需 preventDefault 阻止浏览器后退导航
         e.preventDefault()
-        void handleClipboardAction('paste')
+        if (!selectedNode) return
+        setMutation({ type: 'delete', node: selectedNode })
       } else if (e.key === 'Escape') {
         if (useClipboardStore.getState().mode === 'cut') {
           useClipboardStore.getState().clearClipboard()
@@ -253,7 +379,7 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
         }
       }
     },
-    [handleClipboardAction],
+    [handleClipboardAction, selectedNode],
   )
 
   return (
@@ -274,12 +400,23 @@ export function ExplorerPanel({ session, onOpenFile }: ExplorerPanelProps) {
       {rootChildren !== undefined && (
         <ContextMenu modal={false}>
           <ContextMenuTrigger asChild onContextMenu={handleContextMenu}>
-            <div className="min-h-0 flex-1" onKeyDown={handleTreeKeyDown}>
+            <div
+              ref={treeContainerRef}
+              tabIndex={-1}
+              className={cn('min-h-0 flex-1', dragOver && 'ring-2 ring-inset ring-accent/70')}
+              onKeyDown={handleTreeKeyDown}
+              onPaste={handleTreePaste}
+              onDragEnter={handleDragEnter}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               <ArboristFileTree
                 sessionId={session.id}
                 rootName={getRootFolderName(session.worktreePath)}
                 selectedPath={selectedPath}
                 onOpenFile={handleOpenFile}
+                onSelect={handleTreeSelect}
                 onRefresh={handleRefresh}
                 isRefreshing={isRefreshing}
                 onCreateFile={parentPath => setMutation({ type: 'create-file', parentPath })}

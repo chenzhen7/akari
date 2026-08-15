@@ -435,6 +435,13 @@ export class SessionManager {
     await this.fileService.writeFileContent(session.worktreePath, filePath, content)
   }
 
+  /** 上传外部粘贴/拖入的文件（OS 剪贴板）到会话 worktree，重名自动加 copy 后缀，返回消解后的相对路径 */
+  async uploadFile(sessionId: string, targetDir: string, name: string, data: Buffer): Promise<string> {
+    const session = this.getSession(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+    return this.fileService.writeBinaryFile(session.worktreePath, targetDir, name, data)
+  }
+
   async createDirectory(sessionId: string, dirPath: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
