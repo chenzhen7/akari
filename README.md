@@ -33,7 +33,7 @@ Akari 是一个面向开发者团队的 **AI Agent 并行开发管理平台**。
 
 ## 截图
 
-![alt text0](b3bce6f7-47bd-4c1f-bf39-04e20dbfac06.png)
+![Akari 主界面](screenshots/main.png)
 
 ## 快速开始
 
@@ -120,8 +120,9 @@ akari/
 
 ## 文档
 
-- [设计文档](./docs/设计文档.md)
-- [开发计划](./docs/开发计划.md)
+- [状态变化机制](./docs/状态变化机制.md) — 基于 HTTP Hook 的状态流转机制
+- [Claude Code Hook 参考](./docs/claude%20code%20%E7%9A%84hook%E5%8F%82%E8%80%83.md)
+- [Electron 桌面端集成](./docs/electron-desktop-integration.md)
 - [异常处理规范](./.claude/rules/error-handling.md)
 
 ## 参与贡献
