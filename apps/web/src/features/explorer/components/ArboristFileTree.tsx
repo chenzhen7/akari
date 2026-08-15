@@ -16,22 +16,12 @@ import { getFileTreeChildren, fetchFileTreeChildren, useFileTreeChildren, useFil
 import { useClipboardStore } from '@/features/explorer/stores/clipboard-store'
 import { perfMark } from '@/shared/lib/perf-log'
 
-const ROOT_ID = '__root__'
-
 interface ArboristFileNode {
   id: string
   path: string
   name: string
   type: 'file' | 'directory'
   children?: ArboristFileNode[]
-}
-
-function idToPath(id: string): string {
-  return id === ROOT_ID ? '' : id
-}
-
-function pathToId(path: string): string {
-  return path === '' ? ROOT_ID : path
 }
 
 function isLoaded(sessionId: string, path: string): boolean {
@@ -58,7 +48,7 @@ function buildNode(fileNode: FileNode, sessionId: string): ArboristFileNode {
   if (fileNode.type === 'directory' && childNodes.length === 1 && childNodes[0]!.type === 'directory') {
     const compressed = childNodes[0]!
     return {
-      id: pathToId(fileNode.path),
+      id: fileNode.path,
       path: compressed.path,
       name: `${fileNode.name}/${compressed.name}`,
       type: 'directory',
@@ -67,7 +57,7 @@ function buildNode(fileNode: FileNode, sessionId: string): ArboristFileNode {
   }
 
   return {
-    id: pathToId(fileNode.path),
+    id: fileNode.path,
     path: fileNode.path,
     name: fileNode.name,
     type: fileNode.type,
@@ -114,7 +104,8 @@ function NodeRenderer({
 
   return (
     <div
-      style={style}
+      // paddingLeft 在 arborist 的缩进基础上额外 +4px，让 hover/选中的高亮左边留一点空隙（右侧已有 pr-2）
+      style={{ ...style, paddingLeft: Number(style.paddingLeft ?? 0) + 4 }}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
       data-path={node.data.path}
@@ -207,9 +198,8 @@ export function ArboristFileTree({
 
         const tree = treeRef.current
         if (!tree) return
-        const targetId = pathToId(selectedPath)
-        tree.openParents(targetId)
-        tree.select(targetId, { align: 'center', focus: false })
+        tree.openParents(selectedPath)
+        tree.select(selectedPath, { align: 'center', focus: false })
         lastRevealedRef.current = selectedPath
       } catch (err) {
         console.error(`[ArboristFileTree] reveal failed for "${selectedPath}":`, err)
@@ -219,17 +209,10 @@ export function ArboristFileTree({
     reveal()
   }, [selectedPath, sessionId])
 
-  const treeData = useMemo(() => {
-    if (!rootChildren) return []
-    const root: ArboristFileNode = {
-      id: ROOT_ID,
-      path: '',
-      name: rootName,
-      type: 'directory',
-      children: rootChildren.map(child => buildNode(child, sessionId)),
-    }
-    return [root]
-  }, [rootChildren, sessionId, rootName, treeTick])
+  const treeData = useMemo(
+    () => rootChildren?.map(child => buildNode(child, sessionId)) ?? [],
+    [rootChildren, sessionId, treeTick],
+  )
 
   const loadChain = useCallback(async (path: string): Promise<void> => {
     if (isLoaded(sessionId, path)) return
@@ -242,7 +225,7 @@ export function ArboristFileTree({
 
   const handleToggle = useCallback((id: string) => {
     const node = treeRef.current?.get(id)
-    const path = node?.data.path ?? idToPath(id)
+    const path = node?.data.path ?? id
     if (isLoaded(sessionId, path)) return
     loadChain(path).catch(err => {
       console.error(`[ArboristFileTree] lazy load chain failed path="${path}"`, err)
@@ -255,9 +238,9 @@ export function ArboristFileTree({
 
   return (
     <div ref={containerRef} className="flex h-full flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-2 py-1">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">文件</span>
-        <div className="flex items-center gap-0.5">
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-2 py-1">
+        <span className="text-xs font-semibold text-muted-foreground">{rootName}</span>
+        <div className="flex items-center ">
           {(onCreateFile || onCreateFolder) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -288,19 +271,21 @@ export function ArboristFileTree({
             </DropdownMenu>
           )}
           {onRefresh && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               onClick={onRefresh}
               disabled={isRefreshing}
               title="刷新"
-              className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+              className="text-muted-foreground hover:text-foreground"
             >
-              <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
-            </button>
+              <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
+            </Button>
           )}
         </div>
       </div>
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden px-2">
         <Tree
           ref={treeRef}
           data={treeData}
@@ -309,7 +294,6 @@ export function ArboristFileTree({
           rowHeight={26}
           indent={12}
           openByDefault={false}
-          initialOpenState={{ [ROOT_ID]: true }}
           selection={selectedPath}
           onToggle={handleToggle}
           childrenAccessor="children"

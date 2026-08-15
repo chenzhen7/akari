@@ -142,6 +142,7 @@ export function AppShell() {
           <ResizeHandle
             onMouseDown={onRightHandleMouseDown}
             disabled={rightCollapsed}
+            className="bg-foreground/15"
           />
 
           {/* Right Sidebar */}

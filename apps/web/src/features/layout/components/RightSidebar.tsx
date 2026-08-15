@@ -84,7 +84,7 @@ export function RightSidebar({ sessionId }: RightSidebarProps) {
   return (
     <div className="flex h-full w-full flex-col border-t border-border bg-[var(--terminal-background)]">
       {/* Tab bar：分段控件样式 */}
-      <div className="flex h-10 shrink-0 items-center border-b border-border/50 px-2">
+      <div className="flex h-10 shrink-0 items-center px-2">
         <div className="flex gap-0.5 rounded-lg bg-zinc-500/10 p-0.5 dark:bg-zinc-400/10">
           {TABS.map(({ id, label, icon: Icon }) => (
             <Tooltip key={id}>

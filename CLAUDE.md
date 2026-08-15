@@ -52,7 +52,7 @@ akari/
 │   │       │   ├── git-query.service.ts
 │   │       │   ├── workspace.service.ts
 │   │       │   ├── workspace-session-registry.service.ts
-│   │       │   └── hook-dispatcher.service.ts
+│   │       │   └── hook-dispatcher.service.ts 
 │   │       ├── infrastructure/        # 基础设施（实现细节）
 │   │       │   ├── db/
 │   │       │   │   ├── canvas-edge-store.ts

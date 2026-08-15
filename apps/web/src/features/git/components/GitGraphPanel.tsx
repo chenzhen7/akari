@@ -345,7 +345,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
   const svgHeight = layout.svgHeight
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-panel">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Toolbar */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
         <BranchSelector
@@ -375,7 +375,7 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
       </div>
 
       {/* Scrollable graph + rows */}
-      <div className="relative flex-1 overflow-auto py-2">
+      <div className="relative flex-1 overflow-auto px-2 py-2">
         <div
           className="relative"
           style={{ height: svgHeight, minWidth: graphWidth + 160 }}
