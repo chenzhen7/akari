@@ -1,4 +1,4 @@
-import { useState, useCallback, type FormEvent } from 'react'
+import { useState, useCallback, useRef, type FormEvent } from 'react'
 import type { FileNode } from '@akari/shared-types'
 import {
   Dialog,
@@ -49,6 +49,9 @@ export function FileMutationDialog({ sessionId, mutation, onClose, onCommitted }
   )
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // Radix Dialog 挂载时由 FocusScope 接管焦点，会覆盖 input 的 autoFocus；
+  // 通过 onOpenAutoFocus 阻止默认行为并手动聚焦输入框
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const description = useCallback((): string => {
     switch (mutation.type) {
@@ -140,7 +143,13 @@ export function FileMutationDialog({ sessionId, mutation, onClose, onCommitted }
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose() }}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent
+        className="sm:max-w-sm"
+        onOpenAutoFocus={e => {
+          e.preventDefault()
+          inputRef.current?.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{TITLES[mutation.type]}</DialogTitle>
           <DialogDescription>{description()}</DialogDescription>
@@ -158,7 +167,7 @@ export function FileMutationDialog({ sessionId, mutation, onClose, onCommitted }
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <Input
-              autoFocus
+              ref={inputRef}
               value={name}
               onChange={e => {
                 setName(e.target.value)
