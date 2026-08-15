@@ -151,7 +151,8 @@ export class GitRepository {
           const refs = decorations
             .split(',')
             .map(r => r.trim())
-            .filter(r => r && r !== 'HEAD')
+            // 剔除远程符号 HEAD（origin/HEAD 指向 origin/master，纯间接层），VS Code 同样过滤
+            .filter(r => r && r !== 'HEAD' && !/^[^/]+\/HEAD$/.test(r))
             .map(r => r.replace(/^HEAD -> /, ''))
           return { hash, shortHash, message, author, email, date, parents, refs }
         })

@@ -16,7 +16,7 @@ import { useSessionStore, findSession } from '@/features/session/stores/session-
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { useShallow } from 'zustand/react/shallow'
 import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue'
-import { computeIdeaGraphLayout, ROW_H } from '@/features/git/lib/git-graph-utils'
+import { computeIdeaGraphLayout, ROW_H, sortRefs } from '@/features/git/lib/git-graph-utils'
 import { useTabStore } from '@/features/session/stores/tab-store'
 import { GitGraphSvg } from './GitGraphSvg'
 import { GitGraphRow } from './GitGraphRow'
@@ -275,8 +275,9 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
     [filteredCommits, logData?.head, baseBranch, expandedRows],
   )
 
+  // 只取本地分支，远程分支（origin/x）不参与本地判定，用于 ref 分类/图标
   const localBranchNames = useMemo(
-    () => new Set(logData?.branches.map(b => b.name) ?? []),
+    () => new Set((logData?.branches ?? []).filter(b => !b.isRemote).map(b => b.name)),
     [logData],
   )
 
@@ -484,8 +485,11 @@ export function GitGraphPanel({ sessionId }: GitGraphPanelProps) {
             {selectedCommit.refs.filter(r => r && r !== 'HEAD').length > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">Refs:</span>
-                <div className="flex gap-1.5">
-                  {selectedCommit.refs.filter(r => r && r !== 'HEAD').map(ref => (
+                <div className="flex flex-wrap gap-1.5">
+                  {sortRefs(
+                    selectedCommit.refs.filter(r => r && r !== 'HEAD'),
+                    localBranchNames,
+                  ).map(ref => (
                     <Badge key={ref} variant="outline" className="h-4 px-1 text-[10px]">
                       {ref.startsWith('tag:') ? ref.replace('tag: ', '') : ref}
                     </Badge>

@@ -263,3 +263,43 @@ export function relativeTime(iso: string): string {
 export function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + '…' : s
 }
+
+/** ref 类型：本地分支 / 远程分支 / tag */
+export type RefKind = 'branch' | 'remote' | 'tag'
+
+/**
+ * 分类 ref：`tag: ` 前缀 → tag；在本地分支集合中 → branch；否则视为 remote。
+ * 依赖 GitGraphPanel 传入的 localBranchNames（仅本地分支），用于图标与分组。
+ */
+export function classifyRef(ref: string, localBranchNames: Set<string>): RefKind {
+  if (ref.startsWith('tag:')) return 'tag'
+  if (localBranchNames.has(ref)) return 'branch'
+  return 'remote'
+}
+
+/** 排序优先级（VS Code compareSourceControlHistoryItemRef：branch → remote → tag） */
+const REF_KIND_ORDER: Record<RefKind, number> = { branch: 0, remote: 1, tag: 2 }
+
+/**
+ * VS Code 风格排序：本地分支 → 远程分支 → tag，组内字母序。
+ * tag 比较时忽略 `tag: ` 前缀。不修改入参，返回新数组。
+ */
+export function sortRefs(refs: string[], localBranchNames: Set<string>): string[] {
+  return [...refs].sort((a, b) => {
+    const ka = classifyRef(a, localBranchNames)
+    const kb = classifyRef(b, localBranchNames)
+    if (ka !== kb) return REF_KIND_ORDER[ka] - REF_KIND_ORDER[kb]
+    const na = ka === 'tag' ? a.replace('tag: ', '') : a
+    const nb = kb === 'tag' ? b.replace('tag: ', '') : b
+    return na.localeCompare(nb)
+  })
+}
+
+/** 按类型分组 ref，返回三个固定 key 的数组（空时均为 []） */
+export function groupRefsByKind(refs: string[], localBranchNames: Set<string>): Record<RefKind, string[]> {
+  const groups: Record<RefKind, string[]> = { branch: [], remote: [], tag: [] }
+  for (const ref of refs) {
+    groups[classifyRef(ref, localBranchNames)].push(ref)
+  }
+  return groups
+}

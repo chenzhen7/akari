@@ -8,6 +8,9 @@ import {
   cy,
   relativeTime,
   truncate,
+  classifyRef,
+  sortRefs,
+  groupRefsByKind,
   LANE_COLORS,
   ROW_H,
   LANE_W,
@@ -167,5 +170,65 @@ describe('truncate', () => {
 
   it('truncates long strings with ellipsis', () => {
     expect(truncate('hello world', 6)).toBe('hello…')
+  })
+})
+
+describe('classifyRef', () => {
+  const local = new Set(['main', 'dev', 'feature/foo'])
+
+  it('recognizes tag prefix as tag', () => {
+    expect(classifyRef('tag: v0.9.0', local)).toBe('tag')
+  })
+
+  it('recognizes local branches (including names with slashes)', () => {
+    expect(classifyRef('main', local)).toBe('branch')
+    expect(classifyRef('feature/foo', local)).toBe('branch')
+  })
+
+  it('treats refs outside local branch set as remote', () => {
+    expect(classifyRef('origin/main', local)).toBe('remote')
+    expect(classifyRef('upstream/dev', local)).toBe('remote')
+  })
+})
+
+describe('sortRefs', () => {
+  const local = new Set(['main', 'dev'])
+
+  it('puts branches before remotes and tags last (VS Code order)', () => {
+    const refs = ['tag: v0.9.0', 'origin/main', 'dev', 'main']
+    expect(sortRefs(refs, local)).toEqual(['dev', 'main', 'origin/main', 'tag: v0.9.0'])
+  })
+
+  it('sorts alphabetically within each kind', () => {
+    const refs = ['tag: v0.9.0', 'tag: v0.8.0', 'origin/main', 'origin/feature', 'dev', 'main']
+    expect(sortRefs(refs, local)).toEqual([
+      'dev', 'main',
+      'origin/feature', 'origin/main',
+      'tag: v0.8.0', 'tag: v0.9.0',
+    ])
+  })
+
+  it('returns a new array without mutating the input', () => {
+    const refs = ['main', 'tag: v0.9.0']
+    const result = sortRefs(refs, local)
+    expect(result).not.toBe(refs)
+    expect(refs).toEqual(['main', 'tag: v0.9.0'])
+  })
+})
+
+describe('groupRefsByKind', () => {
+  const local = new Set(['main'])
+
+  it('returns empty arrays for empty input', () => {
+    expect(groupRefsByKind([], local)).toEqual({ branch: [], remote: [], tag: [] })
+  })
+
+  it('groups refs by type', () => {
+    const refs = ['tag: v0.9.0', 'origin/main', 'main', 'tag: v0.8.0']
+    expect(groupRefsByKind(refs, local)).toEqual({
+      branch: ['main'],
+      remote: ['origin/main'],
+      tag: ['tag: v0.9.0', 'tag: v0.8.0'],
+    })
   })
 })

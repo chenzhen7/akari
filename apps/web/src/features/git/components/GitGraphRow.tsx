@@ -10,8 +10,8 @@ import {
   ContextMenuSeparator,
   ContextMenuLabel,
 } from '@/shared/components/ui/context-menu'
-import type { IdeaGraphNode } from '@/features/git/lib/git-graph-utils'
-import { ROW_H, truncate } from '@/features/git/lib/git-graph-utils'
+import type { IdeaGraphNode, RefKind } from '@/features/git/lib/git-graph-utils'
+import { ROW_H, truncate, classifyRef, sortRefs, groupRefsByKind } from '@/features/git/lib/git-graph-utils'
 import { cn } from '@/shared/lib/utils'
 
 interface RefBadgeProps {
@@ -24,8 +24,9 @@ interface RefBadgeProps {
 }
 
 function RefBadge({ ref, isHead, nodeColor, localBranchNames, fullName }: RefBadgeProps) {
-  const isRemote = ref.includes('/') && !localBranchNames.has(ref)
-  const isTag = ref.startsWith('tag:')
+  const kind = classifyRef(ref, localBranchNames)
+  const isRemote = kind === 'remote'
+  const isTag = kind === 'tag'
   const label = isTag ? ref.replace('tag: ', '') : ref
   const Icon = isTag ? Tag : isRemote ? Globe : isHead ? CircleDot : GitBranch
 
@@ -41,6 +42,21 @@ function RefBadge({ ref, isHead, nodeColor, localBranchNames, fullName }: RefBad
     >
       <Icon className="h-3 w-3 shrink-0" />
       {fullName ? label : truncate(label, 14)}
+    </Badge>
+  )
+}
+
+/** VS Code 次要胶囊：只渲染类型图标 + 数量（>1 时），完整名称在 tooltip 展示 */
+function RefGroupPill({ kind, refs }: { kind: RefKind; refs: string[] }) {
+  const Icon = kind === 'tag' ? Tag : kind === 'remote' ? Globe : GitBranch
+  const count = refs.length
+  return (
+    <Badge
+      variant="secondary"
+      className="inline-flex h-5 shrink-0 items-center gap-1 px-1.5 text-[11px]"
+    >
+      <Icon className="h-3 w-3 shrink-0" />
+      {count > 1 && <span className="leading-none">{count}</span>}
     </Badge>
   )
 }
@@ -75,9 +91,11 @@ export function GitGraphRow({
   onCreateBranch,
 }: GitGraphRowProps) {
   const branchRefs = commit.refs.filter(r => r && r !== 'HEAD')
-  const hasRefs = branchRefs.length > 0
-  const firstRef = branchRefs[0]
-  const extraCount = branchRefs.length - 1
+  // VS Code 风格排序：本地分支 → 远程分支 → tag
+  const orderedRefs = sortRefs(branchRefs, localBranchNames)
+  const hasRefs = orderedRefs.length > 0
+  const primary = orderedRefs[0]
+  const groups = groupRefsByKind(orderedRefs.slice(1), localBranchNames)
 
   return (
     <ContextMenu>
@@ -128,21 +146,25 @@ export function GitGraphRow({
                 </Badge>
               )}
 
-              {hasRefs && firstRef && (
+              {hasRefs && primary && (
                 <Tooltip delayDuration={400}>
                   <TooltipTrigger asChild>
                     <div className="ml-auto flex shrink-0 items-center gap-1">
                       <RefBadge
-                        ref={firstRef}
+                        ref={primary}
                         isHead={isHead}
                         nodeColor={node?.color}
                         localBranchNames={localBranchNames}
                       />
 
-                      {extraCount > 0 && (
-                        <Badge variant="outline" className="h-5 px-1.5 text-[11px]">
-                          +{extraCount}
-                        </Badge>
+                      {groups.branch.length > 0 && (
+                        <RefGroupPill kind="branch" refs={groups.branch} />
+                      )}
+                      {groups.remote.length > 0 && (
+                        <RefGroupPill kind="remote" refs={groups.remote} />
+                      )}
+                      {groups.tag.length > 0 && (
+                        <RefGroupPill kind="tag" refs={groups.tag} />
                       )}
                     </div>
                   </TooltipTrigger>
@@ -151,7 +173,7 @@ export function GitGraphRow({
                     className="flex max-w-sm flex-wrap gap-1 border bg-popover p-1.5 text-[11px] text-popover-foreground shadow-md"
                     arrowClassName="bg-popover fill-popover"
                   >
-                    {branchRefs.map((ref, ri) => (
+                    {orderedRefs.map((ref, ri) => (
                       <RefBadge
                         key={ri}
                         ref={ref}
