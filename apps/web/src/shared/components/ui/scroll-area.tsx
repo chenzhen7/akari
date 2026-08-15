@@ -18,7 +18,12 @@ function ScrollArea({
     >
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
+        className={cn(
+          "size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1",
+          // Radix 会给 Viewport 的内容包一层 display:table 的 div，table 布局会按内容宽度扩张，
+          // 导致内部 flex 行的 truncate 失效、列表出现横向滚动条；这里改回 block 让宽度受容器约束。
+          "[&>div]:block!",
+        )}
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
