@@ -272,15 +272,16 @@ export interface AgentAdapter {
 
 **ClaudeAdapter Hook 行为**：
 
+只注入 `PermissionRequest` 和 `Stop` 两个 HTTP Hook，用于会话**未读红点提醒**，不再驱动会话状态机流转：
+
 | Hook 事件 | 行为 |
 | :--- | :--- |
-| `PermissionRequest` | 记录审批日志（当前**不阻塞** Claude Code 原生权限流程） |
-| `SessionStart` | `initializing` → `idle` |
-| `UserPromptSubmit` | `paused` / `waiting` / `idle` → `running` |
-| `Stop` | `running` / `waiting` → `idle`，并广播 `session:lastMessage` |
-| `StopFailure` | `running` / `paused` / `waiting` → `failed` |
+| `PermissionRequest` | 记录审批日志（**不阻塞** Claude Code 原生权限流程），广播 `session:unread` |
+| `Stop` | 广播 `session:unread`；`last_assistant_message` 非空时更新并广播 `session:lastMessage` |
 
-> **历史说明**：早期版本通过终端输出解析 `[CHECKPOINT]` / `[APPROVAL_REQUIRED]` 魔法字符串驱动状态机，该机制已完全废弃，改为 HTTP Hook 单轨驱动。
+前端收到 `session:unread` 后在侧边栏会话列表显示红点（内存态，不持久化），用户选中该会话时自动清除。会话状态（`idle` / `archived` 等）仅由用户操作（归档/恢复/看板拖拽）、`initSession` 和 `terminal:exit` 驱动。
+
+> **历史说明**：早期版本通过终端输出解析 `[CHECKPOINT]` / `[APPROVAL_REQUIRED]` 魔法字符串驱动状态机，该机制已完全废弃；此后曾用 HTTP Hook 驱动状态流转（SessionStart / UserPromptSubmit / StopFailure 等），现已简化为仅保留未读提醒。
 
 ---
 
@@ -348,5 +349,5 @@ export const AGENT_CONFIG: Record<AgentType, AgentConfig> = {
 - [docs/设计文档.md](docs/设计文档.md) — 完整产品架构、数据模型、视图设计、代码示例
 - [.claude/rules/error-handling.md](.claude/rules/error-handling.md) — **异常处理规范**：禁止吞异常、前端用 toast 暴露错误、状态机用守卫代替 try/catch
 - [docs/claude code 的hook参考.md](docs/claude%20code%20%E7%9A%84hook%E5%8F%82%E8%80%83.md) — Claude Code 的 hook 参考
-- [docs/状态变化机制.md](docs/状态变化机制.md) — 基于 HTTP Hook 的状态流转机制
+- [docs/状态变化机制.md](docs/状态变化机制.md) — 会话状态流转与 Hook 未读提醒机制
 - [docs/开发计划/phase-8-基于Hooks的Agent状态流程机制改造计划.md](docs/开发计划/phase-8-基于Hooks的Agent状态流程机制改造计划.md) — Phase 8 HTTP Hook 改造详情

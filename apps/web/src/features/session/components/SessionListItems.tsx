@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from 'react'
 import { cn } from '@/shared/lib/utils'
 import { useSessionStore } from '@/features/session/stores/session-store'
+import { useIsUnread } from '@/features/session/stores/unread-store'
 import { useNavigationStore } from '@/shared/stores/navigation-store'
 import { useWorkspaceStore } from '@/features/workspace/stores/workspace-store'
 import { Button } from '@/shared/components/ui/button'
@@ -41,6 +42,13 @@ function SessionDiffBadge({ additions, deletions }: { additions: number; deletio
       {deletions > 0 && <span className="text-red-500">-{deletions}</span>}
     </div>
   )
+}
+
+/** 未读红点：PermissionRequest / Stop Hook 触发，选中会话后自动消失 */
+function UnreadDot({ sessionId }: { sessionId: string }) {
+  const isUnread = useIsUnread(sessionId)
+  if (!isUnread) return null
+  return <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
 }
 
 interface SessionItemProps {
@@ -104,7 +112,10 @@ export const SessionItem = memo(function SessionItem({
                 <StatusIcon status={session.status} />
                 <p className="truncate text-sm font-medium">{session.name}</p>
               </div>
-              {(additions > 0 || deletions > 0) && <SessionDiffBadge additions={additions} deletions={deletions} />}
+              <div className="flex shrink-0 items-center gap-2">
+                <UnreadDot sessionId={session.id} />
+                {(additions > 0 || deletions > 0) && <SessionDiffBadge additions={additions} deletions={deletions} />}
+              </div>
             </div>
 
             <div className="flex items-center justify-between gap-1 pl-4">
@@ -223,7 +234,10 @@ export const MainSessionItem = memo(function MainSessionItem({
               <p className="truncate text-sm">{session.name}</p>
               <span className="flex h-3 items-center text-xs text-muted-foreground shrink-0">*</span>
             </div>
-            {(additions > 0 || deletions > 0) && <SessionDiffBadge additions={additions} deletions={deletions} />}
+            <div className="flex shrink-0 items-center gap-2">
+              <UnreadDot sessionId={session.id} />
+              {(additions > 0 || deletions > 0) && <SessionDiffBadge additions={additions} deletions={deletions} />}
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-1 pl-4">

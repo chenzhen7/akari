@@ -2,6 +2,7 @@ import type { AgentSession, ServerMessage } from '@akari/shared-types'
 import { terminalBus } from '@/features/terminal/lib/terminalBus'
 import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
 import { useSessionStore, findSession } from '@/features/session/stores/session-store'
+import { useUnreadStore } from '@/features/session/stores/unread-store'
 import { useNavigationStore } from '@/shared/stores/navigation-store'
 import { useConnectionStore } from '@/features/terminal/stores/connection-store'
 import { useWorkspaceStore, mergeWorkspaces } from '@/features/workspace/stores/workspace-store'
@@ -35,6 +36,7 @@ export function handleServerMessage(msg: ServerMessage): void {
     case 'session:deleted': {
       useWorkspaceStore.getState().removeSession(msg.payload.id)
       useSessionStore.getState().clearGitLog(msg.payload.id)
+      useUnreadStore.getState().markRead(msg.payload.id)
       // 若被删的恰是当前选中会话，重选当前工作区第一个会话
       const ws = useWorkspaceStore.getState()
       const wsId = ws.currentWorkspace?.id
@@ -86,6 +88,12 @@ export function handleServerMessage(msg: ServerMessage): void {
       useWorkspaceStore.getState().updateSession(msg.payload.id, {
         lastAiMessage: msg.payload.lastAiMessage,
       })
+      break
+    case 'session:unread':
+      // 当前正在查看的会话不标未读
+      if (msg.payload.id !== useNavigationStore.getState().sessionId) {
+        useUnreadStore.getState().markUnread(msg.payload.id)
+      }
       break
     case 'tab:created': {
       const ws = useWorkspaceStore.getState()

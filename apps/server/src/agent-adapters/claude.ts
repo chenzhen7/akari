@@ -17,10 +17,11 @@ interface HookGroup {
   hooks: HttpHook[]
 }
 
-type HookEventName = 'PermissionRequest' | 'SessionStart' | 'Stop' | 'StopFailure' | 'UserPromptSubmit'
+type HookEventName = 'PermissionRequest' | 'Stop'
 
 interface ClaudeSettings {
-  hooks?: Partial<Record<HookEventName, HookGroup[]>>
+  // 读取已有配置时允许任意事件名（旧版本注入的 SessionStart/UserPromptSubmit/StopFailure 需清理）
+  hooks?: Record<string, HookGroup[]>
   allowedHttpHookUrls?: string[]
 }
 
@@ -48,34 +49,26 @@ async function writeClaudeSettings(worktreePath: string, sessionId: string): Pro
     // 若文件不存在或内容非法，默认为空对象
   }
 
-  const hooks: Partial<Record<HookEventName, HookGroup[]>> = { ...existingSettings.hooks }
-  const hookEvents: HookEventName[] = ['PermissionRequest', 'SessionStart', 'Stop', 'StopFailure', 'UserPromptSubmit']
+  const hookEvents: HookEventName[] = ['PermissionRequest', 'Stop']
 
+  // 先从已有配置中剔除指向本服务的 hook（含已废弃事件上的残留），再按当前事件列表重新注入，
+  // 保证幂等且不遗留旧事件
+  const hooks: Record<string, HookGroup[]> = {}
+  for (const [eventName, groups] of Object.entries(existingSettings.hooks ?? {})) {
+    if (!Array.isArray(groups)) continue
+    const cleaned = groups
+      .filter(isHookGroup)
+      .map(group => ({
+        ...group,
+        hooks: group.hooks.filter(h => !(h.type === 'http' && h.url === hookUrl)),
+      }))
+      .filter(group => group.hooks.length > 0)
+    if (cleaned.length > 0) {
+      hooks[eventName] = cleaned
+    }
+  }
   for (const event of hookEvents) {
-    const eventHooksArray = hooks[event] ?? []
-    if (!Array.isArray(eventHooksArray)) {
-      hooks[event] = []
-      continue
-    }
-
-    // 检查我们的 hookUrl 是否已存在，避免重复添加
-    let alreadyExists = false
-    for (const item of eventHooksArray) {
-      if (isHookGroup(item)) {
-        for (const h of item.hooks) {
-          if (h.type === 'http' && h.url === hookUrl) {
-            alreadyExists = true
-            break
-          }
-        }
-      }
-      if (alreadyExists) break
-    }
-
-    if (!alreadyExists) {
-      eventHooksArray.push({ hooks: [{ type: 'http', url: hookUrl }] })
-      hooks[event] = eventHooksArray
-    }
+    hooks[event] = [...(hooks[event] ?? []), { hooks: [{ type: 'http', url: hookUrl }] }]
   }
 
   existingSettings.hooks = hooks

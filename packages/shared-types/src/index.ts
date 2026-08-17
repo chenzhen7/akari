@@ -187,6 +187,7 @@ export type ServerMessage =
   | { event: 'sessions:list'; payload: AgentSession[] }
   | { event: 'git:log-updated'; payload: { sessionId: string } & GitLogResponse }
   | { event: 'session:lastMessage'; payload: { id: string; lastAiMessage: string } }
+  | { event: 'session:unread'; payload: { id: string } }
   | { event: 'canvas:edges'; payload: CanvasEdge[] }
   | { event: 'tab:created'; payload: { sessionId: string; tab: SessionTab } }
   | { event: 'tab:closed'; payload: { sessionId: string; tabId: string } }
@@ -207,26 +208,17 @@ export type ClientMessage =
   | { event: 'terminal:create'; payload: { sessionId: string; agentType?: AgentType; bypassPermissions?: boolean } }
   | { event: 'subscribe:workspace'; payload: { workspaceId: string } }
 
-// ─── Phase 8: HTTP Hook Event Types ──────────────────────────────────────────
+// ─── HTTP Hook Event Types ───────────────────────────────────────────────────
+// 只保留 PermissionRequest / Stop 两个事件，用于会话「未读红点」提醒；
+// Hook 不再驱动会话状态机流转。
 
 export type HookEventName =
-  | 'SessionStart'
-  | 'PreToolUse'
-  | 'PostToolUse'
   | 'PermissionRequest'
-  | 'TaskCreated'
-  | 'TaskCompleted'
   | 'Stop'
-  | 'StopFailure'
-  | 'UserPromptSubmit'
 
 interface HookEventBase {
   hook_event_name: HookEventName
   session_id: string
-}
-
-export interface SessionStartPayload extends HookEventBase {
-  hook_event_name: 'SessionStart'
 }
 
 export interface PermissionRequestPayload extends HookEventBase {
@@ -235,46 +227,14 @@ export interface PermissionRequestPayload extends HookEventBase {
   tool_input: Record<string, unknown>
 }
 
-export interface PostToolUsePayload extends HookEventBase {
-  hook_event_name: 'PostToolUse'
-  tool_name: string
-  tool_input: Record<string, unknown>
-  tool_response?: unknown
-}
-
-export interface TaskCreatedPayload extends HookEventBase {
-  hook_event_name: 'TaskCreated'
-  description?: string
-}
-
-export interface TaskCompletedPayload extends HookEventBase {
-  hook_event_name: 'TaskCompleted'
-  description?: string
-}
-
 export interface StopPayload extends HookEventBase {
   hook_event_name: 'Stop'
   last_assistant_message: string
 }
 
-export interface StopFailurePayload extends HookEventBase {
-  hook_event_name: 'StopFailure'
-  error?: string
-}
-
-export interface UserPromptSubmitPayload extends HookEventBase {
-  hook_event_name: 'UserPromptSubmit'
-}
-
 export type HookEvent =
-  | SessionStartPayload
   | PermissionRequestPayload
-  | PostToolUsePayload
-  | TaskCreatedPayload
-  | TaskCompletedPayload
   | StopPayload
-  | StopFailurePayload
-  | UserPromptSubmitPayload
 
 export interface HookResponse {
   hookSpecificOutput?: {
