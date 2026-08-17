@@ -1,6 +1,5 @@
 import { memo } from 'react'
 import { ArrowDown, ArrowUp, CheckCircle2, FolderGit2, GitBranch } from 'lucide-react'
-import { cn } from '@/shared/lib/utils'
 import { sessionDiffTotals } from '@/features/session/lib/session-ui'
 import { StatusIcon } from '@/features/session/components/SessionStatusIcon'
 import { getAgentConfig } from '@/shared/lib/agent-config'
@@ -10,22 +9,7 @@ interface SessionHoverCardProps {
   session: AgentSession
 }
 
-/** 分支 pill：mono 描边小徽章，对齐 Codex 的分支展示 */
-function BranchChip({ name, muted }: { name: string; muted?: boolean }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex min-w-0 max-w-[45%] items-center rounded-md border border-border/60 bg-muted/40 px-1.5 py-px font-mono text-[10px] leading-4',
-        muted ? 'text-muted-foreground' : 'text-foreground/80'
-      )}
-    >
-      <span className="truncate">{name}</span>
-    </span>
-  )
-}
-
-/**
- * 悬停会话时弹出的信息面板（分支 / 标题 / git 信息）。
+/** 悬停会话时弹出的信息面板（分支 / 标题 / git 信息）。
  * 领先/落后仅对比分支上游 @{upstream}，无上游时不展示该区块。
  */
 export const SessionHoverCard = memo(function SessionHoverCard({ session }: SessionHoverCardProps) {
@@ -45,19 +29,7 @@ export const SessionHoverCard = memo(function SessionHoverCard({ session }: Sess
         <AgentIcon className="h-3.5 w-3.5 shrink-0" style={{ color }} />
       </div>
 
-      {/* 分支 → 基准 */}
-      <div className="mt-2 flex items-center gap-1.5">
-        <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
-        <BranchChip name={session.branchName || '—'} />
-        {!session.isMain && session.baseBranch && (
-          <>
-            <span className="shrink-0 text-[10px] text-muted-foreground/60">→</span>
-            <BranchChip name={session.baseBranch} muted />
-          </>
-        )}
-      </div>
-
-      {/* Git 状态：diff 统计 + 领先/落后，tabular-nums 对齐 */}
+      {/* Git 状态：diff 统计 + 领先/落后 */}
       {(hasDiff || hasUpstream) && (
         <div className="mt-2.5 flex items-center gap-3 font-mono text-[11px] tabular-nums">
           {hasDiff && (
@@ -91,9 +63,6 @@ export const SessionHoverCard = memo(function SessionHoverCard({ session }: Sess
               )}
             </span>
           )}
-          {hasUpstream && (
-            <span className="ml-auto truncate text-[10px] text-muted-foreground/70">相对 {ab!.ref}</span>
-          )}
         </div>
       )}
 
@@ -104,11 +73,22 @@ export const SessionHoverCard = memo(function SessionHoverCard({ session }: Sess
         </p>
       )}
 
+      {/* 分支（放在仓库路径上方，样式与路径一致，无徽章） */}
+      <div className="mt-2.5 flex items-start gap-1.5 text-xs text-muted-foreground/70">
+        <GitBranch className="mt-0.5 h-3 w-3 shrink-0" />
+        <div className="min-w-0 break-all font-mono">
+          {session.branchName || '—'}
+          {!session.isMain && session.baseBranch && (
+            <span className="text-muted-foreground/50"> → {session.baseBranch}</span>
+          )}
+        </div>
+      </div>
+
       {/* worktree 路径 */}
       {session.worktreePath && (
-        <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-          <FolderGit2 className="h-3 w-3 shrink-0" />
-          <span className="min-w-0 truncate font-mono" title={session.worktreePath}>
+        <div className="mt-1.5 flex items-start gap-1.5 text-xs text-muted-foreground/70">
+          <FolderGit2 className="mt-0.5 h-3 w-3 shrink-0" />
+          <span className="min-w-0 break-all font-mono" title={session.worktreePath}>
             {session.worktreePath}
           </span>
         </div>
