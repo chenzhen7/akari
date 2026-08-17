@@ -4,7 +4,7 @@ import type { DiffFile } from '@akari/shared-types'
 import type { editor } from 'monaco-editor'
 import { detectLanguage } from '@/shared/lib/language-utils'
 import { apiClient } from '@/shared/lib/api-client'
-import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
+import { fileUpdateBus, isContentChange } from '@/shared/lib/fileUpdateBus'
 import { useMonacoTheme } from '@/shared/hooks/useMonacoTheme'
 import { useAbsoluteFilePath } from '@/shared/hooks/useAbsoluteFilePath'
 import { EditorContainer } from '@/shared/components/EditorContainer'
@@ -71,6 +71,7 @@ export const DiffViewer = memo(function DiffViewer({
     if (commitHash) return
     return fileUpdateBus.on(sessionId, (event) => {
       if (event.filePath !== filePath) return
+      if (!isContentChange(event)) return // 文件被删除（重命名/移动旧路径）时重拉必然 404，跳过
       apiClient
         .get<{ original: string; modified: string }>(`/sessions/${sessionId}/diff-content`, {
           params: { file: filePath },

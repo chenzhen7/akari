@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DiffHunk } from '@akari/shared-types'
 import { apiClient } from '@/shared/lib/api-client'
-import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
+import { fileUpdateBus, isContentChange } from '@/shared/lib/fileUpdateBus'
 
 export interface UseFileDiffHunksResult {
   hunks: DiffHunk[]
@@ -81,6 +81,7 @@ export function useFileDiffHunks(sessionId: string, filePath: string): UseFileDi
     let timer: ReturnType<typeof setTimeout> | null = null
     const unsubscribe = fileUpdateBus.on(sessionId, (payload) => {
       if (payload.filePath !== filePath) return
+      if (!isContentChange(payload)) return // 文件被删除（重命名/移动旧路径）时重拉必然 404，跳过
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         abortRef.current?.abort()

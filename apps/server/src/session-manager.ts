@@ -454,10 +454,38 @@ export class SessionManager {
     await this.fileService.createFile(session.worktreePath, filePath)
   }
 
+  /**
+   * 重命名/移动成功后，把打开的 file/diff 标签指向的路径同步到新路径（VSCode FileEditorInput.rename 语义），
+   * 避免标签仍指向已不存在的旧路径，导致 watcher 广播 unlink 后反复拉取失败弹 toast。
+   * fromPath 为目录时，其下所有已打开的文件标签一并迁移。
+   */
+  private retargetTabsOnRename(sessionId: string, fromPath: string, toPath: string): void {
+    const session = this.getSession(sessionId)
+    if (!session) return
+    const prefix = fromPath + '/'
+    let changed = false
+    const updatedTabs = session.tabs.map(tab => {
+      if ((tab.type !== 'file' && tab.type !== 'diff') || !tab.filePath) return tab
+      let newPath: string | undefined
+      if (tab.filePath === fromPath) {
+        newPath = toPath
+      } else if (tab.filePath.startsWith(prefix)) {
+        newPath = toPath + tab.filePath.slice(fromPath.length)
+      }
+      if (newPath === undefined || newPath === tab.filePath) return tab
+      changed = true
+      return { ...tab, filePath: newPath, label: newPath.split('/').pop() ?? newPath }
+    })
+    if (!changed) return
+    this.sessionRepository.updateTabs(sessionId, updatedTabs, session.activeTabId)
+    this.broadcast({ event: 'tabs:sync', payload: { sessionId, tabs: updatedTabs, activeTabId: session.activeTabId } })
+  }
+
   async renamePath(sessionId: string, fromPath: string, toPath: string): Promise<void> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
     await this.fileService.renamePath(session.worktreePath, fromPath, toPath)
+    this.retargetTabsOnRename(sessionId, fromPath, toPath)
   }
 
   async deletePath(sessionId: string, targetPath: string): Promise<void> {
@@ -475,7 +503,9 @@ export class SessionManager {
   async movePath(sessionId: string, source: string, targetDir: string): Promise<string> {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
-    return this.fileService.movePath(session.worktreePath, source, targetDir)
+    const newPath = await this.fileService.movePath(session.worktreePath, source, targetDir)
+    this.retargetTabsOnRename(sessionId, source, newPath)
+    return newPath
   }
 
   async restoreSessions(): Promise<void> {

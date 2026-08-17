@@ -36,6 +36,17 @@ export class TabService implements ITabService {
     const session = this.getSession(sessionId)
     if (!session) throw new Error(`Session not found: ${sessionId}`)
 
+    // 同一文件已打开时不重复建 tab，直接激活既有标签（VSCode 语义）。
+    // 覆盖「文件移动后重定向标签 与 前端 onOpenFile 新建标签」之间的竞态，防止出现重复标签。
+    if (type === 'file' && filePath) {
+      const existing = session.tabs.find(t => t.type === 'file' && t.filePath === filePath)
+      if (existing) {
+        this.sessionRepository.updateActiveTab(sessionId, existing.id)
+        this.broadcast({ event: 'tab:activated', payload: { sessionId, tabId: existing.id } })
+        return existing
+      }
+    }
+
     const tabId = nanoid(6)
     let terminalId: string | undefined
     let resolvedType: SessionTab['type'] = type

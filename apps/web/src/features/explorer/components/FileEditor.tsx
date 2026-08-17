@@ -6,7 +6,7 @@ import type { FileDiffLine } from '@akari/shared-types'
 import type { editor } from 'monaco-editor'
 import { apiClient } from '@/shared/lib/api-client'
 import { detectLanguage } from '@/shared/lib/language-utils'
-import { fileUpdateBus } from '@/shared/lib/fileUpdateBus'
+import { fileUpdateBus, isContentChange } from '@/shared/lib/fileUpdateBus'
 import { useMonacoTheme } from '@/shared/hooks/useMonacoTheme'
 import { useAbsoluteFilePath } from '@/shared/hooks/useAbsoluteFilePath'
 import { EditorContainer } from '@/shared/components/EditorContainer'
@@ -60,6 +60,10 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   const diffDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mouseDownLineRef = useRef<number | null>(null)
   const editorDisposablesRef = useRef<{ dispose: () => void }[]>([])
+  /** 同 tab 因重命名/移动导致 filePath 变化时携带的未保存内容（含其 original），消费一次即清空 */
+  const carriedContentRef = useRef<{ content: string; original: string } | null>(null)
+  /** 卸载时 flush 保存的延迟定时器：被下一轮 effect 取消 → 说明是 filePath 变化而非真卸载 */
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const changes = useMemo(() => (diffLines ? buildQuickDiffChanges(diffLines) : []), [diffLines])
   const changesRef = useRef(changes)
   const peekRef = useRef(peek)
@@ -121,14 +125,29 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
 
   useEffect(() => {
     if (!filePath || !sessionId) return
-    setLoading(true)
-    setError(null)
-    setContent('')
-    setOriginalContent('')
+
     setDiffLines(null)
     setPeek(null)
     setMode('source')
     decorationsRef.current?.clear()
+
+    // 同 tab 因重命名/移动导致 filePath 变化、且旧路径有未保存内容时：携带脏内容到新路径，
+    // 避免向已不存在的旧路径提交（404）。VSCode FileEditorInput 重命名同样保留未保存编辑。
+    const carried = carriedContentRef.current
+    carriedContentRef.current = null
+    if (carried) {
+      setLoading(false)
+      setError(null)
+      setContent(carried.content)
+      setOriginalContent(carried.original)
+      void fetchDiffLines()
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setContent('')
+    setOriginalContent('')
 
     const clickKey = `file:${filePath}`
     const fetchKey = `fetch:${filePath}`
@@ -172,6 +191,7 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
     let timer: ReturnType<typeof setTimeout> | null = null
     const unsubscribe = fileUpdateBus.on(sessionId, (event) => {
       if (event.filePath !== filePath) return
+      if (!isContentChange(event)) return // 文件被删除（重命名/移动旧路径）时重拉必然 404，跳过
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         timer = null
@@ -222,19 +242,32 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
   // Cleanup on unmount or filePath change. Flush pending edits before clearing
   // the debounce timer so switching tabs cannot drop the latest keystrokes.
   useEffect(() => {
+    // 新一轮挂载或 filePath 变化时，取消上一轮 flush 定时器：
+    // 定时器若未被取消才说明组件真正卸载，此时才向当前路径提交保存。
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current)
+      flushTimerRef.current = null
+    }
     return () => {
       if (autoSaveTimer.current) {
         clearTimeout(autoSaveTimer.current)
         autoSaveTimer.current = null
       }
       if (isDirtyRef.current && contentRef.current !== originalContentRef.current) {
-        apiClient.post(`/sessions/${sessionId}/file-content`, {
-          path: filePath,
-          content: contentRef.current,
-        }, { toast: '保存失败' })
-          .catch((err: unknown) => {
-            console.error('[FileEditor] flush save on unmount failed:', err)
-          })
+        // 延迟到下一轮 effect：真卸载时定时器触发并提交；filePath 变化（重命名/移动）时
+        // 下一轮 body 取消定时器，脏内容改由加载 effect 携带到新路径。
+        carriedContentRef.current = { content: contentRef.current, original: originalContentRef.current }
+        flushTimerRef.current = setTimeout(() => {
+          flushTimerRef.current = null
+          carriedContentRef.current = null
+          apiClient.post(`/sessions/${sessionId}/file-content`, {
+            path: filePath,
+            content: contentRef.current,
+          }, { toast: '保存失败' })
+            .catch((err: unknown) => {
+              console.error('[FileEditor] flush save on unmount failed:', err)
+            })
+        }, 0)
       }
       if (diffDebounceRef.current) {
         clearTimeout(diffDebounceRef.current)
@@ -446,6 +479,7 @@ export const FileEditor = memo(function FileEditor({ sessionId, workspaceId, wor
       {/* 预览模式下 Monaco 仍保持挂载（display:none），切回源码无需重新挂载 */}
       <div className={cn('h-full', mode === 'preview' && 'hidden')}>
         <MonacoEditor
+          key={filePath}
           height="100%"
           language={detectLanguage(filePath)}
           value={content}
