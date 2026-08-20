@@ -13,7 +13,9 @@ function ScrollArea({
   return (
     <ScrollAreaPrimitive.Root
       data-slot="scroll-area"
-      className={cn("relative", className)}
+      // overflow-hidden 是 shadcn 官方默认值，不能省：缺了它，flex-1 的 ScrollArea
+      // 作为 flex 子项会以内容高度为最小高度被撑大，Viewport 永不溢出，滚动条不出现。
+      className={cn("relative overflow-hidden", className)}
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
