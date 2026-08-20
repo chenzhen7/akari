@@ -5,6 +5,7 @@ import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/components/ui/button'
 import { Checkbox } from '@/shared/components/ui/checkbox'
 import { useDiffReviewStore } from '../stores/diff-review-store'
+import { highlightCodeLines } from '../lib/diff-highlight'
 
 export interface DiffFileReviewCardProps {
   sessionId: string
@@ -86,7 +87,7 @@ function statusLabel(status?: DiffFile['status']): string {
   return '修改'
 }
 
-function DiffLineRow({ line }: { line: DiffLine }) {
+function DiffLineRow({ line, html }: { line: DiffLine; html?: string }) {
   return (
     <div
       className={cn(
@@ -111,9 +112,17 @@ function DiffLineRow({ line }: { line: DiffLine }) {
       >
         {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}
       </span>
-      <pre className="min-w-0 flex-1 select-text whitespace-pre-wrap break-all px-2 py-0.5 text-foreground/90">
-        {line.content}
-      </pre>
+      {html === undefined ? (
+        <pre className="min-w-0 flex-1 select-text whitespace-pre-wrap break-all px-2 py-0.5 text-foreground/90">
+          {line.content}
+        </pre>
+      ) : (
+        <pre
+          className="min-w-0 flex-1 select-text whitespace-pre-wrap break-all px-2 py-0.5 text-foreground/90"
+          // html 来自 highlight.js（内部已转义源码），安全；空行用 &nbsp; 保持行高
+          dangerouslySetInnerHTML={{ __html: html === '' ? '&nbsp;' : html }}
+        />
+      )}
     </div>
   )
 }
@@ -181,11 +190,21 @@ export const DiffFileReviewCard = forwardRef<HTMLDivElement, DiffFileReviewCardP
   }
 
   const renderedHunks = useMemo(() => {
-    return hunks.map((hunk) => ({
-      hunk,
-      items: buildFoldedItems(hunk.lines, CONTEXT_FOLD_THRESHOLD, CONTEXT_FOLD_BUFFER),
-    }))
-  }, [hunks])
+    return hunks.map((hunk) => {
+      const highlighted = highlightCodeLines(
+        hunk.lines.map((line) => line.content),
+        filePath,
+      )
+      const htmlByLine = highlighted
+        ? new Map(hunk.lines.map((line, i) => [line, highlighted[i] ?? ''] as const))
+        : null
+      return {
+        hunk,
+        htmlByLine,
+        items: buildFoldedItems(hunk.lines, CONTEXT_FOLD_THRESHOLD, CONTEXT_FOLD_BUFFER),
+      }
+    })
+  }, [hunks, filePath])
 
   return (
     <div
@@ -278,12 +297,12 @@ export const DiffFileReviewCard = forwardRef<HTMLDivElement, DiffFileReviewCardP
       </div>
 
       {bodyExpanded && (
-        <div className="rounded-b-lg font-mono text-[11px]">
+        <div className="rounded-b-lg font-mono text-xs">
           {loading && hunks.length === 0 && (
-            <div className="px-3 py-4 text-center text-[11px] text-muted-foreground">加载 diff 中…</div>
+            <div className="px-3 py-4 text-center text-muted-foreground">加载 diff 中…</div>
           )}
           {!loading && error && (
-            <div className="flex items-center justify-center gap-2 px-3 py-4 text-center text-[11px] text-red-400">
+            <div className="flex items-center justify-center gap-2 px-3 py-4 text-center text-red-400">
               <span>加载失败：{error}</span>
               <button
                 className="text-muted-foreground underline hover:text-foreground"
@@ -294,9 +313,9 @@ export const DiffFileReviewCard = forwardRef<HTMLDivElement, DiffFileReviewCardP
             </div>
           )}
           {!loading && !error && hunks.length === 0 && (
-            <div className="px-3 py-4 text-center text-[11px] text-muted-foreground">无 diff 内容</div>
+            <div className="px-3 py-4 text-center text-muted-foreground">无 diff 内容</div>
           )}
-          {renderedHunks.map(({ hunk, items }, hunkIndex) => {
+          {renderedHunks.map(({ hunk, htmlByLine, items }, hunkIndex) => {
             let globalFoldIndex = 0
             for (let i = 0; i < hunkIndex; i++) {
               globalFoldIndex += renderedHunks[i]?.items.filter((item) => item.type === 'fold').length ?? 0
@@ -304,7 +323,7 @@ export const DiffFileReviewCard = forwardRef<HTMLDivElement, DiffFileReviewCardP
 
             return (
               <div key={hunk.id} className="border-b border-border/30 last:border-b-0">
-                <div className="sticky top-0 z-10 bg-muted/60 px-3 py-1 text-[10px] text-muted-foreground">
+                <div className="sticky top-0 z-10 bg-muted/60 px-3 py-1 text-[11px] text-muted-foreground">
                   @@ -{hunk.oldStart},{hunk.oldCount} +{hunk.newStart},{hunk.newCount} @@{hunk.header}
                 </div>
                 <div>
@@ -315,7 +334,7 @@ export const DiffFileReviewCard = forwardRef<HTMLDivElement, DiffFileReviewCardP
                       return (
                         <div key={`fold-${idx}`}>
                           <button
-                            className="flex w-full items-center justify-center gap-1 py-1 text-[10px] text-muted-foreground hover:bg-muted/50"
+                            className="flex w-full items-center justify-center gap-1 py-1 text-[11px] text-muted-foreground hover:bg-muted/50"
                             onClick={() => handleToggleFold(foldIndex)}
                           >
                             {expanded ? (
@@ -325,13 +344,13 @@ export const DiffFileReviewCard = forwardRef<HTMLDivElement, DiffFileReviewCardP
                             )}
                           </button>
                           {expanded && item.lines.map((line, lineIdx) => (
-                            <DiffLineRow key={`fold-line-${idx}-${lineIdx}`} line={line} />
+                            <DiffLineRow key={`fold-line-${idx}-${lineIdx}`} line={line} html={htmlByLine?.get(line)} />
                           ))}
                         </div>
                       )
                     }
 
-                    return <DiffLineRow key={`line-${idx}`} line={item.line} />
+                    return <DiffLineRow key={`line-${idx}`} line={item.line} html={htmlByLine?.get(item.line)} />
                   })}
                 </div>
               </div>
