@@ -12,6 +12,13 @@ import { WorkspaceService } from './services/workspace.service.js'
 import { CanvasEdgeStore } from './infrastructure/db/canvas-edge-store.js'
 import { WorkspaceSessionRegistryService } from './services/workspace-session-registry.service.js'
 import { perfLog, perfNow } from './perf-log.js'
+import {
+  buildAllowedOrigins,
+  hasValidAuthToken,
+  isCorsOriginAllowed,
+  isPublicStaticRequest,
+  isRequestOriginAllowed,
+} from './security/local-security.js'
 
 import websocketPlugin from './plugins/websocket.js'
 import staticPlugin from './plugins/static.js'
@@ -36,10 +43,40 @@ const DATA_DIR = process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(__d
 fs.mkdirSync(DATA_DIR, { recursive: true })
 fs.mkdirSync(REPO_ROOT, { recursive: true })
 
-const fastify = Fastify({ logger: { level: 'info' } })
+const fastify = Fastify({
+  logger: {
+    level: 'info',
+    redact: ['req.headers.authorization', 'req.headers.cookie'],
+  },
+})
 
-await fastify.register(fastifyCors, { origin: true })
+const allowedOrigins = buildAllowedOrigins(
+  process.env.PORT,
+  process.env.AKARI_ALLOWED_ORIGINS,
+  !process.env.WEB_DIST_PATH,
+)
+const authToken = process.env.AKARI_AUTH_TOKEN
+
+await fastify.register(fastifyCors, {
+  credentials: true,
+  origin(origin, callback) {
+    callback(null, isCorsOriginAllowed(origin, allowedOrigins))
+  },
+})
 await fastify.register(fastifyWebsocket)
+
+fastify.addHook('onRequest', async (request, reply) => {
+  if (!isRequestOriginAllowed(request.headers.origin, request.headers.host, allowedOrigins)) {
+    return reply.status(403).send({ error: 'origin is not allowed' })
+  }
+  if (
+    authToken
+    && !isPublicStaticRequest(request.method, request.url)
+    && !hasValidAuthToken(request.headers.authorization, request.headers.cookie, authToken)
+  ) {
+    return reply.status(401).send({ error: 'authentication required' })
+  }
+})
 
 const db = new Database(join(DATA_DIR, 'akari.db'))
 const workspaceManager = new WorkspaceService(db)
@@ -234,7 +271,7 @@ if (process.env.WEB_DIST_PATH) {
 }
 
 const PORT = Number(process.env.PORT ?? 3001)
-const HOST = process.env.HOST ?? '0.0.0.0'
+const HOST = process.env.HOST ?? '127.0.0.1'
 
 try {
   await fastify.listen({ port: PORT, host: HOST })

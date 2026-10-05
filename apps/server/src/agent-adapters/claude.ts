@@ -5,12 +5,24 @@ import { SHELL_STARTUP_DELAY_MS } from './base.js'
 
 const HOOK_URL = (sessionId: string): string => {
   const port = process.env['PORT'] ?? '3001'
-  return `http://localhost:${port}/sessions/${sessionId}/hooks`
+  return `http://127.0.0.1:${port}/sessions/${sessionId}/hooks`
+}
+
+function isAkariHookUrl(url: string, sessionId: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1')
+      && parsed.pathname === `/sessions/${sessionId}/hooks`
+  } catch {
+    return false
+  }
 }
 
 interface HttpHook {
   type: 'http'
   url: string
+  headers?: Record<string, string>
+  allowedEnvVars?: string[]
 }
 
 interface HookGroup {
@@ -60,7 +72,7 @@ async function writeClaudeSettings(worktreePath: string, sessionId: string): Pro
       .filter(isHookGroup)
       .map(group => ({
         ...group,
-        hooks: group.hooks.filter(h => !(h.type === 'http' && h.url === hookUrl)),
+        hooks: group.hooks.filter(h => !(h.type === 'http' && isAkariHookUrl(h.url, sessionId))),
       }))
       .filter(group => group.hooks.length > 0)
     if (cleaned.length > 0) {
@@ -68,16 +80,23 @@ async function writeClaudeSettings(worktreePath: string, sessionId: string): Pro
     }
   }
   for (const event of hookEvents) {
-    hooks[event] = [...(hooks[event] ?? []), { hooks: [{ type: 'http', url: hookUrl }] }]
+    const hook: HttpHook = { type: 'http', url: hookUrl }
+    if (process.env['AKARI_AUTH_TOKEN']) {
+      hook.headers = { Authorization: 'Bearer $AKARI_AUTH_TOKEN' }
+      hook.allowedEnvVars = ['AKARI_AUTH_TOKEN']
+    }
+    hooks[event] = [...(hooks[event] ?? []), { hooks: [hook] }]
   }
 
   existingSettings.hooks = hooks
 
   // 允许 HTTP hook 回调到 Akari 后端，否则 Claude Code 会静默阻止本地 HTTP hooks
+  const port = process.env['PORT'] ?? '3001'
+  const oldAllowedUrlPattern = `http://localhost:${port}/*`
   const allowedHttpHookUrls = Array.isArray(existingSettings.allowedHttpHookUrls)
-    ? existingSettings.allowedHttpHookUrls.filter((url): url is string => typeof url === 'string')
+    ? existingSettings.allowedHttpHookUrls.filter((url): url is string => typeof url === 'string' && url !== oldAllowedUrlPattern)
     : []
-  const allowedUrlPattern = `http://localhost:${process.env['PORT'] ?? '3001'}/*`
+  const allowedUrlPattern = `http://127.0.0.1:${port}/*`
   if (!allowedHttpHookUrls.includes(allowedUrlPattern)) {
     allowedHttpHookUrls.push(allowedUrlPattern)
   }

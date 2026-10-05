@@ -1,5 +1,5 @@
-import { mkdir, access, constants, cp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, dirname, join, relative, resolve, sep } from 'node:path'
+import { mkdir, access, constants, cp, lstat, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { FileNode } from '@akari/shared-types'
 import { splitCopyName, buildCopyName } from './copy-name.js'
 
@@ -73,9 +73,8 @@ export class FileSystemService implements IFileSystemService {
 
   assertPathInWorktree(worktreePath: string, filePath: string): string {
     const resolvedFile = resolve(filePath)
-    const allowedBase = this.isAgentWorktree(worktreePath) ? resolve(worktreePath) : resolve(this.repoRoot)
-    const isInside = resolvedFile === allowedBase || resolvedFile.startsWith(allowedBase + sep)
-    if (!isInside) {
+    const allowedBase = this.getAllowedBase(worktreePath)
+    if (!this.isDescendantOrSelf(allowedBase, resolvedFile)) {
       throw new Error(`invalid file path: ${filePath}`)
     }
     return resolvedFile
@@ -83,6 +82,7 @@ export class FileSystemService implements IFileSystemService {
 
   async listFiles(cwd: string, relativePath: string): Promise<FileNode[]> {
     const targetPath = join(cwd, relativePath)
+    await this.assertCanonicalPathInWorktree(cwd, targetPath)
 
     try {
       const entries = await readdir(targetPath, { withFileTypes: true })
@@ -113,6 +113,7 @@ export class FileSystemService implements IFileSystemService {
 
   async readFileContent(cwd: string, filePath: string): Promise<string> {
     const fullPath = await this.resolveFilePath(filePath, cwd)
+    await this.assertCanonicalPathInWorktree(cwd, fullPath)
 
     const stats = await access(fullPath, constants.F_OK)
       .then(() => true)
@@ -124,7 +125,7 @@ export class FileSystemService implements IFileSystemService {
 
   async readRawFile(cwd: string, filePath: string): Promise<Buffer> {
     const fullPath = await this.resolveFilePath(filePath, cwd)
-    this.assertPathInWorktree(cwd, fullPath)
+    await this.assertCanonicalPathInWorktree(cwd, fullPath)
 
     const stats = await access(fullPath, constants.F_OK)
       .then(() => true)
@@ -136,14 +137,16 @@ export class FileSystemService implements IFileSystemService {
 
   async writeFileContent(cwd: string, filePath: string, content: string): Promise<void> {
     const fullPath = this.resolveWritePath(filePath, cwd)
+    await this.assertCanonicalPathInWorktree(cwd, fullPath)
 
     await mkdir(dirname(fullPath), { recursive: true })
     await writeFile(fullPath, content, 'utf8')
   }
 
   async writeBinaryFile(cwd: string, targetDir: string, fileName: string, data: Buffer): Promise<string> {
+    this.assertFileName(fileName)
     const destFull = await this.resolveUniquePath(cwd, targetDir, fileName, false)
-    this.assertPathInWorktree(cwd, destFull)
+    await this.assertCanonicalPathInWorktree(cwd, destFull)
     await mkdir(dirname(destFull), { recursive: true })
     await writeFile(destFull, data)
     return this.toRelPath(cwd, destFull)
@@ -155,20 +158,63 @@ export class FileSystemService implements IFileSystemService {
       .catch(() => false)
   }
 
+  private async pathEntryExists(filePath: string): Promise<boolean> {
+    return lstat(filePath)
+      .then(() => true)
+      .catch(() => false)
+  }
+
   private getAllowedBase(cwd: string): string {
     return this.isAgentWorktree(cwd) ? resolve(cwd) : resolve(this.repoRoot)
   }
 
+  private assertFileName(fileName: string): void {
+    if (!fileName || fileName === '.' || fileName === '..' || fileName.includes('/') || fileName.includes('\\') || fileName.includes('\0')) {
+      throw new Error(`invalid file name: ${fileName}`)
+    }
+  }
+
+  /**
+   * Lexical validation blocks `..` and absolute-path escapes. Resolving the
+   * nearest existing ancestor also blocks symlinks (including broken links)
+   * that would redirect a later read or write outside the allowed root.
+   */
+  private async assertCanonicalPathInWorktree(cwd: string, filePath: string): Promise<string> {
+    const resolvedFile = this.assertPathInWorktree(cwd, filePath)
+    const allowedBase = this.getAllowedBase(cwd)
+    const canonicalBase = await realpath(allowedBase)
+
+    let existingAncestor = resolvedFile
+    while (!(await this.pathEntryExists(existingAncestor))) {
+      const parent = dirname(existingAncestor)
+      if (parent === existingAncestor || !this.isDescendantOrSelf(allowedBase, parent)) {
+        throw new Error(`invalid file path: ${filePath}`)
+      }
+      existingAncestor = parent
+    }
+
+    let canonicalAncestor: string
+    try {
+      canonicalAncestor = await realpath(existingAncestor)
+    } catch {
+      throw new Error(`invalid file path: ${filePath}`)
+    }
+    if (!this.isDescendantOrSelf(canonicalBase, canonicalAncestor)) {
+      throw new Error(`invalid file path: ${filePath}`)
+    }
+    return resolvedFile
+  }
+
   async createDirectory(cwd: string, dirPath: string): Promise<void> {
     const fullPath = this.resolveWritePath(dirPath, cwd)
-    this.assertPathInWorktree(cwd, fullPath)
+    await this.assertCanonicalPathInWorktree(cwd, fullPath)
     if (await this.pathExists(fullPath)) throw new Error(`已存在同名文件或文件夹：${dirPath}`)
     await mkdir(fullPath, { recursive: true })
   }
 
   async createFile(cwd: string, filePath: string): Promise<void> {
     const fullPath = this.resolveWritePath(filePath, cwd)
-    this.assertPathInWorktree(cwd, fullPath)
+    await this.assertCanonicalPathInWorktree(cwd, fullPath)
     if (await this.pathExists(fullPath)) throw new Error(`已存在同名文件或文件夹：${filePath}`)
     await mkdir(dirname(fullPath), { recursive: true })
     await writeFile(fullPath, '', 'utf8')
@@ -177,8 +223,8 @@ export class FileSystemService implements IFileSystemService {
   async renamePath(cwd: string, fromPath: string, toPath: string): Promise<void> {
     const fullFrom = this.resolveWritePath(fromPath, cwd)
     const fullTo = this.resolveWritePath(toPath, cwd)
-    this.assertPathInWorktree(cwd, fullFrom)
-    this.assertPathInWorktree(cwd, fullTo)
+    await this.assertCanonicalPathInWorktree(cwd, fullFrom)
+    await this.assertCanonicalPathInWorktree(cwd, fullTo)
     if (resolve(fullFrom) === this.getAllowedBase(cwd)) throw new Error('不能重命名根目录')
     if (fullFrom === fullTo) return
     if (!(await this.pathExists(fullFrom))) throw new Error(`文件或文件夹不存在：${fromPath}`)
@@ -188,7 +234,7 @@ export class FileSystemService implements IFileSystemService {
 
   async deletePath(cwd: string, targetPath: string): Promise<void> {
     const fullPath = this.resolveWritePath(targetPath, cwd)
-    this.assertPathInWorktree(cwd, fullPath)
+    await this.assertCanonicalPathInWorktree(cwd, fullPath)
     if (resolve(fullPath) === this.getAllowedBase(cwd)) throw new Error('不能删除根目录')
     if (!(await this.pathExists(fullPath))) throw new Error(`文件或文件夹不存在：${targetPath}`)
     await rm(fullPath, { recursive: true })
@@ -198,18 +244,24 @@ export class FileSystemService implements IFileSystemService {
   private isDescendantOrSelf(parentAbs: string, childAbs: string): boolean {
     const p = resolve(parentAbs)
     const c = resolve(childAbs)
-    return c === p || c.startsWith(p + sep)
+    const fromParent = relative(p, c)
+    return fromParent === ''
+      || (!isAbsolute(fromParent) && fromParent !== '..' && !fromParent.startsWith(`..${sep}`))
   }
 
   /** 目标名已存在时循环加 copy 后缀，返回真实 FS 上不存在的目标绝对路径 */
   private async resolveUniquePath(cwd: string, targetDir: string, sourceName: string, isDirectory: boolean): Promise<string> {
     const targetBase = this.resolveWritePath(targetDir, cwd)
+    await this.assertCanonicalPathInWorktree(cwd, targetBase)
     const candidate = (name: string) => join(targetBase, name)
-    if (!(await this.pathExists(candidate(sourceName)))) return candidate(sourceName)
+    const initialCandidate = candidate(sourceName)
+    await this.assertCanonicalPathInWorktree(cwd, initialCandidate)
+    if (!(await this.pathExists(initialCandidate))) return initialCandidate
     const { stem, ext } = splitCopyName(sourceName, isDirectory)
     let n = 1
     for (;;) {
       const full = candidate(buildCopyName(stem, ext, n))
+      await this.assertCanonicalPathInWorktree(cwd, full)
       if (!(await this.pathExists(full))) return full
       n++
     }
@@ -223,8 +275,8 @@ export class FileSystemService implements IFileSystemService {
   async copyPath(cwd: string, source: string, targetDir: string): Promise<string> {
     const fullSource = this.resolveWritePath(source, cwd)
     const fullTargetDir = this.resolveWritePath(targetDir, cwd)
-    this.assertPathInWorktree(cwd, fullSource)
-    this.assertPathInWorktree(cwd, fullTargetDir)
+    await this.assertCanonicalPathInWorktree(cwd, fullSource)
+    await this.assertCanonicalPathInWorktree(cwd, fullTargetDir)
     if (!(await this.pathExists(fullSource))) throw new Error(`文件或文件夹不存在：${source}`)
     if (await this.isDescendantOrSelf(fullSource, fullTargetDir)) throw new Error('不能复制到自身或其子目录中')
     const isDirectory = (await stat(fullSource)).isDirectory()
@@ -236,8 +288,8 @@ export class FileSystemService implements IFileSystemService {
   async movePath(cwd: string, source: string, targetDir: string): Promise<string> {
     const fullSource = this.resolveWritePath(source, cwd)
     const fullTargetDir = this.resolveWritePath(targetDir, cwd)
-    this.assertPathInWorktree(cwd, fullSource)
-    this.assertPathInWorktree(cwd, fullTargetDir)
+    await this.assertCanonicalPathInWorktree(cwd, fullSource)
+    await this.assertCanonicalPathInWorktree(cwd, fullTargetDir)
     if (!(await this.pathExists(fullSource))) throw new Error(`文件或文件夹不存在：${source}`)
     if (resolve(fullSource) === resolve(cwd)) throw new Error('不能移动根目录')
     if (await this.isDescendantOrSelf(fullSource, fullTargetDir)) throw new Error('不能移动到自身或其子目录中')

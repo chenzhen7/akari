@@ -1,7 +1,8 @@
-import { app, BrowserWindow, dialog, shell, Menu, ipcMain, clipboard } from 'electron'
+import { app, BrowserWindow, dialog, shell, Menu, ipcMain, clipboard, session } from 'electron'
 import log from 'electron-log/main'
 import path from 'node:path'
 import fs from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { WindowManager } from './window-manager.js'
 import { WindowStateStore } from './window-state-store.js'
@@ -20,6 +21,7 @@ const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('-
 
 let serverProcess: ChildProcess | null = null
 let serverPort: number | null = null
+let serverAuthToken: string | null = null
 let windowManager: WindowManager | null = null
 let windowStateStore: WindowStateStore | null = null
 
@@ -38,7 +40,7 @@ function getServerUrl(): string {
   if (isDev) {
     return 'http://localhost:5173'
   }
-  return `http://localhost:${serverPort ?? 43917}`
+  return `http://127.0.0.1:${serverPort ?? 43917}`
 }
 
 function findServerEntry(): string | null {
@@ -81,6 +83,7 @@ async function startServer(): Promise<number> {
   }
 
   const userData = app.getPath('userData')
+  serverAuthToken = randomBytes(32).toString('base64url')
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     // 固定一个不常见端口，保证重启后端口不变。
@@ -90,6 +93,7 @@ async function startServer(): Promise<number> {
     REPO_ROOT: userData,
     DATA_DIR: path.join(userData, 'data'),
     WEB_DIST_PATH: webDistPath,
+    AKARI_AUTH_TOKEN: serverAuthToken,
   }
 
   return new Promise((resolve, reject) => {
@@ -160,7 +164,8 @@ function getApiBasePath(): string {
 }
 
 async function fetchWorkspaces(): Promise<WorkspaceSummary[]> {
-  const res = await fetch(`${getServerUrl()}${getApiBasePath()}`)
+  const headers = serverAuthToken ? { Authorization: `Bearer ${serverAuthToken}` } : undefined
+  const res = await fetch(`${getServerUrl()}${getApiBasePath()}`, { headers })
   if (!res.ok) {
     throw new Error(`无法获取工作区列表：HTTP ${res.status}`)
   }
@@ -227,6 +232,15 @@ async function main(): Promise<void> {
   if (!isDev) {
     try {
       await startServer()
+      if (!serverAuthToken) throw new Error('Server authentication token was not initialized')
+      await session.defaultSession.cookies.set({
+        url: getServerUrl(),
+        name: 'akari_session',
+        value: serverAuthToken,
+        path: '/',
+        httpOnly: true,
+        sameSite: 'strict',
+      })
     } catch (err) {
       dialog.showErrorBox('启动失败', err instanceof Error ? err.message : String(err))
       app.quit()
