@@ -165,6 +165,17 @@ export class SessionRepository {
       this.db.exec('ALTER TABLE sessions ADD COLUMN ahead_behind TEXT')
     }
 
+    // 一次性迁移：workspace 概念引入前的 session 没有 workspace_id，归入第一个工作区。
+    // 必须放在建表之后执行：全新安装时 sessions 表在此之前并不存在。
+    const firstWorkspace = this.db
+      .prepare('SELECT id FROM workspaces ORDER BY pinned DESC, last_opened_at DESC LIMIT 1')
+      .get() as { id: string } | undefined
+    if (firstWorkspace) {
+      this.db
+        .prepare("UPDATE sessions SET workspace_id = ? WHERE workspace_id = '' OR workspace_id IS NULL")
+        .run(firstWorkspace.id)
+    }
+
     // Migration: 把旧数据中 type 为 'claude' 的标签页统一改为通用 'agent'
     const rows = this.db.prepare('SELECT id, tabs FROM sessions').all() as { id: string; tabs: string }[]
     for (const row of rows) {

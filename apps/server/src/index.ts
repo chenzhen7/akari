@@ -147,12 +147,6 @@ const workspaceSessionRegistry = new WorkspaceSessionRegistryService({
   },
 })
 
-// 迁移旧数据：将无 workspace_id 的 session 关联到第一个工作区（任意一个即可，因为后续访问都会按 workspace 隔离）
-const firstWorkspace = workspaceManager.listWorkspaces()[0]
-if (firstWorkspace) {
-  db.prepare("UPDATE sessions SET workspace_id = ? WHERE workspace_id = '' OR workspace_id IS NULL").run(firstWorkspace.id)
-}
-
 const canvasEdgeStore = new CanvasEdgeStore(db)
 
 fastify.decorate('db', db)
